@@ -14,10 +14,21 @@ class OtaEntity(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, mgr: OtaManager, key: str, name: str) -> None:
+    def __init__(self, mgr: OtaManager, key: str, name: str, radio: bool = False) -> None:
         self.mgr = mgr
         self._attr_unique_id = f"{mgr.address}_{key}"
         self._attr_name = name
+        if radio:
+            # радио-настройки BLE (окна рекламы, авто-окно) — отдельное под-устройство «… Radio»:
+            # на странице датчика оно видно в «Связанных устройствах», свои сущности — отдельной группой
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{mgr.address}_radio")},
+                name=f"{mgr.name} Radio",
+                model="BLE radio settings",
+                via_device=(DOMAIN, mgr.address),
+                configuration_url="homeassistant://move-sensor-ble-ota-docs",
+            )
+            return
         # connections совпадает с устройством BTHome — сущности появятся на его странице
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mgr.address)},
