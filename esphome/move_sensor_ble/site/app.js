@@ -290,7 +290,11 @@
     (function wait() {
       setTimeout(function () {
         var now = str("text_sensor/Wi-Fi SSID");
-        if (lastMsg > t0 + 5000 && now && (!want || now === want)) { setWBusy(false); wstat("Готово: " + now); }
+        if (lastMsg > t0 + 5000 && now && (!want || now === want)) {
+          setWBusy(false); var ok = "Готово: " + now; wstat(ok);
+          // успех — показать «Готово» 2 с и закрыть окно (если его не открыли/не трогали заново)
+          setTimeout(function () { if (!wBusy && $("ms-wstat").textContent === ok) closeWifi(); }, 2000);
+        }
         else if (Date.now() - t0 < 45000) wait();
         else { setWBusy(false); wstat(lastMsg > t0 + 5000 ? "Не подключилось — осталась прежняя сеть" : "Связь с датчиком потеряна — проверьте сеть"); }
       }, 2500);
