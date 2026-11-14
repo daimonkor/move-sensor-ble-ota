@@ -796,6 +796,11 @@ script:
                    ms::occupied, ms::pir_held,
                    (ms::occupied && !ms::keep_pending()) ? (long long) ms::remaining_ms() : -1LL);
           id(wake_reason).publish_state(why);
+          // 2026-11-15: проснулись, а «занято» ещё держится (RTC) — восстановить состояние сущности.
+          // Иначе после сна Occupancy без значения: BTHome не кладёт её в пакеты, сайт и ESPHome
+          // показывают «нет движения», хотя датчик считает «занято» и ждёт Keep time.
+          if (cause != ESP_SLEEP_WAKEUP_UNDEFINED && ms::occupied && !id(occupancy).has_state())
+            id(occupancy).publish_state(true);
           // Короткий импульс (кнопка, короткий PIR) успевает закончиться, пока плата
           // грузится (~0.3-0.5 с). Поэтому пробуждение от PIR-пина считаем движением,
           // даже если к этому моменту на пине уже LOW.
@@ -898,6 +903,13 @@ script:
                   lambda: "return !id(occupancy).has_state();"
                 then:
                   - lambda: "id(send_state).execute(false, false);"
+      # пакета в этом пробуждении нет (например «motion again» при занято), а срок отчёта
+      # о климате прошёл — шлём текущее состояние + климат, без мигания (2026-11-14)
+      - lambda: |-
+          if (!id(tx_pending) && ms::climate_due(ms::climate_interval_ms(id(climate_interval).state))) {
+            ESP_LOGI("ms", "climate report due -> send (occupied=%d)", ms::occupied);
+            id(send_state).execute(ms::occupied, false);
+          }
       - script.execute: go_sleep
 
   # Опрос температуры/влажности (SHT41)
@@ -918,6 +930,7 @@ script:
           // SHT41 отвечает через ~10 мс,
           // значения попадут в пакет в пределах tx_window
           id(climate_read).execute();
+          ms::climate_last_ms = ms::now_ms();   // климат уходит в этом пакете
           id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
           id(occupancy).publish_state(state);
           id(tx_pending) = true;
@@ -1004,7 +1017,7 @@ script:
                       args: ["(unsigned) (ms::HELD_SAFETY_MS / 1000)"]
                   - deep_sleep.enter:
                       id: ds
-                      sleep_duration: !lambda "return ms::HELD_SAFETY_MS;"
+                      sleep_duration: !lambda "return ms::cap_sleep_ms(ms::HELD_SAFETY_MS, ms::climate_interval_ms(id(climate_interval).state));"
                 else:
                   - if:
                       condition:
@@ -1017,7 +1030,11 @@ script:
                             id: ds
                             sleep_duration: !lambda |-
                               int64_t r = ms::remaining_ms();
-                              return (uint32_t) (r < 100 ? 100 : r);
+                              if (r < 100) r = 100;
+                              // не дольше срока отчёта о климате (иначе при частых «motion again» климат стоит)
+                              int64_t c = ms::climate_left_ms(ms::climate_interval_ms(id(climate_interval).state));
+                              if (c < r) r = c < 1000 ? 1000 : c;
+                              return (uint32_t) r;
                       else:
                         # движения нет: спим до PIR, но не дольше Climate report interval —
                         # по таймеру проснёмся и отправим температуру/влажность

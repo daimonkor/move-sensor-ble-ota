@@ -8,6 +8,7 @@
 #include <driver/gpio.h>
 #include <sys/time.h>
 #include <cstdint>
+#include <cmath>
 
 namespace ms {
 
@@ -51,6 +52,40 @@ static inline bool test_mode() { return test_until_ms > now_ms(); }
 // окно рекламы на время быстрого теста (0 = как в прошивке, ${tx_window}) — замер, сколько окна хватает прокси
 static RTC_DATA_ATTR uint32_t test_tx_ms = 0;
 static inline uint32_t tx_window_ms(uint32_t def_ms) { return (test_mode() && test_tx_ms) ? test_tx_ms : def_ms; }
+
+
+// ---- Отчёт о климате не реже Climate report interval (2026-11-14).
+// Раньше климат уходил только на переходах занято/свободно и по таймеру в режиме «свободно».
+// Пока «занято» и PIR повторно срабатывал (motion again), пакетов не было вовсе — температура
+// и влажность стояли 7-14 мин. Теперь время последней отправки хранится в RTC, на каждом
+// пробуждении проверяем срок, а сон в режиме «занято» ограничен сроком следующего отчёта.
+static RTC_DATA_ATTR int64_t climate_last_ms = 0;   // 0 = после холодного старта ещё не слали
+// интервал отчёта в мс (минуты из настройки; быстрый тест — 30 с; 0 = отчёт выключен)
+static inline uint32_t climate_interval_ms(float minutes) {
+  if (test_mode()) return TEST_WAKE_MS;
+  if (std::isnan(minutes) || minutes < 1.0f) return 0;
+  return (uint32_t) (minutes * 60000.0f);
+}
+// пора слать (допуск 2 с: пробуждение по таймеру + загрузка не должны пропустить срок)
+static inline bool climate_due(uint32_t ci) {
+  if (ci == 0) return false;
+  if (climate_last_ms == 0) return true;
+  return now_ms() - climate_last_ms >= (int64_t) ci - 2000;
+}
+// сколько мс до следующего отчёта (INT64_MAX — отчёт выключен)
+static inline int64_t climate_left_ms(uint32_t ci) {
+  if (ci == 0) return INT64_MAX;
+  if (climate_last_ms == 0) return 0;
+  int64_t left = climate_last_ms + (int64_t) ci - now_ms();
+  return left < 0 ? 0 : left;
+}
+// длительность сна: не дольше, чем до отчёта о климате (минимум 1 с)
+static inline uint32_t cap_sleep_ms(int64_t want_ms, uint32_t ci) {
+  int64_t c = climate_left_ms(ci);
+  int64_t d = want_ms < c ? want_ms : c;
+  if (d < 1000) d = 1000;
+  return (uint32_t) d;
+}
 
 
 // ---- Батарея (2026-11-14). Процент считаем по напряжению ПОКОЯ, а не под нагрузкой.
