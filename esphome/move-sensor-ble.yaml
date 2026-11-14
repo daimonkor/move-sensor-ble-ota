@@ -34,10 +34,12 @@ substitutions:
   vbat_divider: "2.0"      # начальное значение "Voltage factor": делитель 1М+1М (1:1) = 2.0 (на пинах реально 3.29 В, АЦП видит 1.647 В — сходится)
                            # дальше множитель меняется в HA (сервисный режим), хранится во флеше
   # Сколько не спим после публикации, чтобы приёмник успел услышать пакет.
-  # Должно быть больше периода сканирования приёмника: у esphome-bluetooth-proxy
-  # сейчас interval 4200 мс / window 420 мс -> нужно > 4.2 с.
-  # Если ускорить сканирование прокси (например 320/100 мс), сюда можно ставить 500ms.
+  # Должно быть больше паузы в сканировании приёмника. esphome-bluetooth-proxy с 2026-11-14
+  # на настройках ESPHome по умолчанию (interval 320 мс, window = interval) — слушает почти
+  # всё время; было 4200/420 (паузы 3,8 с), отсюда 4500ms. Короче окно — меньше расход:
+  # замер нужного окна — быстрый тест с tx_window_ms (сервис move_sensor_ble_ota.fast_test).
   tx_window: 4500ms
+  tx_window_ms: "4500"     # то же в мс для лямбд (быстрый тест может временно заменить окно)
   led_gpio: "10"           # D10
   sda_gpio: "6"            # D4
   scl_gpio: "7"            # D5
@@ -95,9 +97,11 @@ esphome:
               id(wifi_reset_blink).execute();
             });
             // быстрый тест по BLE (команда 0x13): просыпаться раз в 30 с, выключится сам через N мин
-            id(bth_ota).set_test_mode_callback([](uint8_t minutes) {
+            id(bth_ota).set_test_mode_callback([](uint8_t minutes, uint16_t tx_ms) {
               ms::test_until_ms = minutes ? ms::now_ms() + (int64_t) minutes * 60000 : 0;
-              ESP_LOGW("ms", "fast test mode: %s", minutes ? "ON" : "OFF");
+              ms::test_tx_ms = minutes ? tx_ms : 0;   // 0 = окно из прошивки (${tx_window})
+              ESP_LOGW("ms", "fast test mode: %s, tx_window %u ms", minutes ? "ON" : "OFF",
+                       (unsigned) ms::tx_window_ms(${tx_window_ms}));
             });
     - priority: -100
       then:
@@ -223,6 +227,11 @@ globals:
     type: bool
     restore_value: false
     initial_value: "false"
+  # в этом окне ушёл пакет «движение/пусто» -> Motion window, иначе Climate window
+  - id: tx_motion
+    type: bool
+    restore_value: false
+    initial_value: "false"
   # сервисный режим включён переключателем на D2 (а не холодным стартом / из HA)
   - id: service_by_switch
     type: bool
@@ -254,6 +263,8 @@ bthome:
       climate_interval: climate_interval
       voltage_factor: vbat_factor
       led: debug_led_enable
+      motion_window: motion_window
+      climate_window: climate_window
   trigger_based: true        # HA не помечает спящее устройство как unavailable
   # Быстрая реклама: пакет каждые 20-30 мс, пока плата не спит. Приёмник слушает
   # эфир короткими окнами, редкие пакеты (раз в 1 с) в окно почти не попадают.
@@ -584,6 +595,38 @@ number:
     restore_value: true
     mode: box
 
+  # Окна рекламы после пакета (2026-11-14), мс: сколько не спим, чтобы прокси услышал пакет
+  # и интеграция успела подключиться (OTA/настройки). Пакет «движение/пусто» — Motion window,
+  # климат и остальное — Climate window. Интеграция HA подбирает их сама по RSSI (Auto advertising
+  # window) и шлёт по BLE. Замер: при RSSI −56 и прокси на настройках по умолчанию 0 потерь даже
+  # при 300 мс. Было фиксированно ${tx_window}.
+  - platform: template
+    id: motion_window
+    name: "Motion window"
+    icon: mdi:broadcast
+    entity_category: config
+    unit_of_measurement: ms
+    min_value: 300
+    max_value: 5000
+    step: 100
+    initial_value: 1000
+    optimistic: true
+    restore_value: true
+    mode: box
+  - platform: template
+    id: climate_window
+    name: "Climate window"
+    icon: mdi:access-point
+    entity_category: config
+    unit_of_measurement: ms
+    min_value: 300
+    max_value: 5000
+    step: 100
+    initial_value: 2000
+    optimistic: true
+    restore_value: true
+    mode: box
+
 output:
   - platform: gpio
     id: dbg_led
@@ -831,6 +874,7 @@ script:
           id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
           id(occupancy).publish_state(state);
           id(tx_pending) = true;
+          if (led) id(tx_motion) = true;   // led = реальное событие (занято / освободилось)
           if (led) id(blink).execute(state ? 1 : 2);
 
   # Уход в сон (в сервисном режиме ничего не делает)
@@ -847,8 +891,13 @@ script:
                 condition:
                   lambda: "return id(tx_pending);"
                 then:
-                  - delay: ${tx_window}
-                  - lambda: "id(tx_pending) = false;"
+                  # Motion/Climate window (настройки, их подбирает интеграция); в быстром тесте —
+                  # окно из команды TEST_MODE (замер окна для прокси)
+                  - delay: !lambda |-
+                      float w = id(tx_motion) ? id(motion_window).state : id(climate_window).state;
+                      uint32_t def_ms = std::isnan(w) ? ${tx_window_ms} : (uint32_t) w;
+                      return ms::tx_window_ms(def_ms);
+                  - lambda: "id(tx_pending) = false; id(tx_motion) = false;"
             # после загрузки НЕ от сна (питание, ресет, OTA) не засыпаем раньше 15 с аптайма,
             # чтобы safe_mode успел подтвердить прошивку (boot_is_good_after: 15s).
             # Пробуждения от PIR/таймера сюда не попадают — батарея не тратится.

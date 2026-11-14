@@ -477,8 +477,9 @@ void BleOta::handle_command_() {
       } else if (!this->test_mode_cb_) {
         r[1] = ST_STATE;
       } else {
-        ESP_LOGW(TAG, "TEST_MODE %u min over BLE", (unsigned) r[2]);
-        this->test_mode_cb_(r[2]);
+        const uint16_t tx_ms = len >= 4 ? (uint16_t) (c[2] | (c[3] << 8)) : 0;
+        ESP_LOGW(TAG, "TEST_MODE %u min, tx_window %u ms over BLE", (unsigned) r[2], (unsigned) tx_ms);
+        this->test_mode_cb_(r[2], tx_ms);
         r[1] = ST_OK;
       }
       this->reply_(r, 3);
@@ -631,7 +632,7 @@ void BleOta::handle_command_() {
           this->reply_(r, 2);
           break;
         }
-        this->settings_apply_(c + 2, c[1]);
+        this->settings_apply_(c + 2, c[1], len - 2);
       }
       size_t n = this->settings_pack_(r + 2);
       this->reply_(r, 2 + n);
@@ -676,7 +677,7 @@ static void num_set(number::Number *n, uint16_t raw, float scale, const char *wh
 }
 #endif
 
-// detect_ms keep_s climate_min led vfactor*1000  — 9 байт
+// detect_ms keep_s climate_min led vfactor*1000 motion_win_ms climate_win_ms — 13 байт (старые — 9)
 size_t BleOta::settings_pack_(uint8_t *out) {
 #ifdef BLE_OTA_SETTINGS
   uint16_t d = num_u16(this->detect_delay_, 1.0f);
@@ -684,8 +685,10 @@ size_t BleOta::settings_pack_(uint8_t *out) {
   uint16_t ci = num_u16(this->climate_interval_, 1.0f);
   uint16_t vf = num_u16(this->voltage_factor_, SCALE_VFACTOR);
   uint8_t led = this->led_ == nullptr ? 255 : (this->led_->state ? 1 : 0);
+  uint16_t mw = num_u16(this->motion_window_, 1.0f);
+  uint16_t cw = num_u16(this->climate_window_, 1.0f);
 #else
-  uint16_t d = 0xFFFF, k = 0xFFFF, ci = 0xFFFF, vf = 0xFFFF;
+  uint16_t d = 0xFFFF, k = 0xFFFF, ci = 0xFFFF, vf = 0xFFFF, mw = 0xFFFF, cw = 0xFFFF;
   uint8_t led = 255;
 #endif
   out[0] = d & 0xFF;
@@ -697,10 +700,14 @@ size_t BleOta::settings_pack_(uint8_t *out) {
   out[6] = led;
   out[7] = vf & 0xFF;
   out[8] = vf >> 8;
-  return 9;
+  out[9] = mw & 0xFF;
+  out[10] = mw >> 8;
+  out[11] = cw & 0xFF;
+  out[12] = cw >> 8;
+  return 13;
 }
 
-void BleOta::settings_apply_(const uint8_t *p, uint8_t mask) {
+void BleOta::settings_apply_(const uint8_t *p, uint8_t mask, size_t len) {
 #ifdef BLE_OTA_SETTINGS
   const uint16_t d = p[0] | (p[1] << 8);
   const uint16_t k = p[2] | (p[3] << 8);
@@ -722,6 +729,14 @@ void BleOta::settings_apply_(const uint8_t *p, uint8_t mask) {
   }
   if (mask & 0x10)
     num_set(this->voltage_factor_, vf, SCALE_VFACTOR, "voltage factor");
+  if (len >= 13) {  // окна рекламы (новая интеграция шлёт 13 байт; старая — 9)
+    const uint16_t mw = p[9] | (p[10] << 8);
+    const uint16_t cw = p[11] | (p[12] << 8);
+    if (mask & 0x20)
+      num_set(this->motion_window_, mw, 1.0f, "motion window, ms");
+    if (mask & 0x40)
+      num_set(this->climate_window_, cw, 1.0f, "climate window, ms");
+  }
 #else
   ESP_LOGW(TAG, "settings not compiled in (no number/switch)");
 #endif

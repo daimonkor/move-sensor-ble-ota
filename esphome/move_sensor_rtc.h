@@ -48,6 +48,9 @@ static inline void keep_start(int keep_s) { off_deadline_ms = now_ms() + (int64_
 static RTC_DATA_ATTR int64_t test_until_ms = 0;
 static constexpr uint32_t TEST_WAKE_MS = 30000;
 static inline bool test_mode() { return test_until_ms > now_ms(); }
+// окно рекламы на время быстрого теста (0 = как в прошивке, ${tx_window}) — замер, сколько окна хватает прокси
+static RTC_DATA_ATTR uint32_t test_tx_ms = 0;
+static inline uint32_t tx_window_ms(uint32_t def_ms) { return (test_mode() && test_tx_ms) ? test_tx_ms : def_ms; }
 
 
 // ---- Батарея (2026-11-14). Процент считаем по напряжению ПОКОЯ, а не под нагрузкой.

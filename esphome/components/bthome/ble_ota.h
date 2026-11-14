@@ -23,17 +23,19 @@
 //     0x12 WIFI_RESET (после авторизации) -> 0x92 st                                 (2026-11-14)
 //       Сбросить сохранённую сеть Wi-Fi на сеть из прошивки. Выполняет колбэк из YAML
 //       (set_wifi_reset_callback); нет колбэка -> st 10.
-//     0x13 TEST_MODE minutes:u8 (после авторизации) -> 0x93 st minutes                (2026-11-14)
+//     0x13 TEST_MODE minutes:u8 [tx_window_ms:u16] (после авторизации) -> 0x93 st minutes  (2026-11-14)
+//       tx_window_ms (необязательно, 0 = как в прошивке): окно рекламы после пакета на время теста
 //       Быстрый тест: без движения просыпаться раз в 30 с, а не по Climate interval; само
 //       выключается через minutes мин (0 = выключить). Колбэк из YAML (set_test_mode_callback).
 //   DATA (write without response): offset:u32 + данные. Принимается только кусок с
 //     offset == уже принятому. Блок = 4096 байт; после записи блока во флеш —
 //     notify в CTRL: 0x84 st written:u32. Клиент шлёт следующий блок только после ACK.
 //   Настройки (2026-11-14, после авторизации; значения u16, 0xFFFF = нет значения, led 255 = нет):
-//     0x10 GET                                   -> 0x90 st detect_ms keep_s climate_min led vfactor*1000
-//     0x11 SET mask detect_ms keep_s climate_min led vfactor*1000
+//     0x10 GET                                   -> 0x90 st detect_ms keep_s climate_min led vfactor*1000 motion_win_ms climate_win_ms
+//     0x11 SET mask detect_ms keep_s climate_min led vfactor*1000 [motion_win_ms climate_win_ms]
 //                                                -> 0x91 st (фактические значения после применения, как 0x90)
-//       mask: bit0 detect delay, bit1 keep time, bit2 climate interval, bit3 LED, bit4 voltage factor
+//       mask: bit0 detect delay, bit1 keep time, bit2 climate interval, bit3 LED, bit4 voltage factor,
+//             bit5 motion window, bit6 climate window (окна — только если пришли все 13 байт; 2026-11-14)
 //       применяются через number/switch из YAML — сохраняются во флеш (restore_value) как из сервисного режима
 //   st: 0 ok, 1 нет авторизации, 2 батарея ниже порога, 3 неверный размер,
 //       4 ошибка esp_ota_begin, 5 ошибка записи, 6 чужой/битый образ,
@@ -80,7 +82,7 @@ class BleOta : public Component {
   void set_build_version(const std::string &v) { this->build_version_ = v; }
   // сброс Wi-Fi на сеть из прошивки по команде 0x12 — логика в YAML (флаг + save_wifi_sta)
   void set_wifi_reset_callback(std::function<void()> cb) { this->wifi_reset_cb_ = std::move(cb); }
-  void set_test_mode_callback(std::function<void(uint8_t)> cb) { this->test_mode_cb_ = std::move(cb); }
+  void set_test_mode_callback(std::function<void(uint8_t, uint16_t)> cb) { this->test_mode_cb_ = std::move(cb); }
 
 #ifdef BLE_OTA_SETTINGS
   // настройки, которые HA может менять через окно BLE
@@ -89,6 +91,8 @@ class BleOta : public Component {
   void set_climate_interval(number::Number *n) { this->climate_interval_ = n; }
   void set_voltage_factor(number::Number *n) { this->voltage_factor_ = n; }
   void set_led(switch_::Switch *s) { this->led_ = s; }
+  void set_motion_window(number::Number *n) { this->motion_window_ = n; }
+  void set_climate_window(number::Number *n) { this->climate_window_ = n; }
 #endif
 
   // занят: есть подключение, идёт приём или ждём перезагрузку — спать нельзя
@@ -125,7 +129,7 @@ class BleOta : public Component {
   void reset_session_();
   size_t settings_pack_(uint8_t *out);
   void diag_boot_();  // посчитать причину сброса этой загрузки (NVS)
-  void settings_apply_(const uint8_t *p, uint8_t mask);
+  void settings_apply_(const uint8_t *p, uint8_t mask, size_t len);
 
 #ifdef BLE_OTA_SETTINGS
   number::Number *detect_delay_{nullptr};
@@ -133,13 +137,15 @@ class BleOta : public Component {
   number::Number *climate_interval_{nullptr};
   number::Number *voltage_factor_{nullptr};
   switch_::Switch *led_{nullptr};
+  number::Number *motion_window_{nullptr};
+  number::Number *climate_window_{nullptr};
 #endif
 
   BTHome *parent_{nullptr};
   std::string key_;
   std::string build_version_;
   std::function<void()> wifi_reset_cb_;
-  std::function<void(uint8_t)> test_mode_cb_;
+  std::function<void(uint8_t, uint16_t)> test_mode_cb_;
   int min_battery_{30};
   int battery_pct_{-1};
 

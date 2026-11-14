@@ -51,6 +51,9 @@ OTA_SETTINGS = {
     "climate_interval": ("number", "set_climate_interval"),
     "voltage_factor": ("number", "set_voltage_factor"),
     "led": ("switch", "set_led"),
+    # окна рекламы после пакета (2026-11-14), мс — авто-подбор в интеграции по RSSI
+    "motion_window": ("number", "set_motion_window"),
+    "climate_window": ("number", "set_climate_window"),
 }
 
 # Configuration constants
