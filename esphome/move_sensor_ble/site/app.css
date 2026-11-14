@@ -189,3 +189,10 @@ body{background:#f4f5f8}
 #ms .wbtn:disabled,#ms .sbox input:disabled{opacity:.5;cursor:default}
 #ms .sstat{margin:0;min-height:18px;font-size:13px;font-weight:600;color:var(--acc-deep)}
 
+
+/* ── мобильный тап/фокус: без прямоугольной подсветки, обводка по радиусу кнопки ── */
+#ms button,#ms a,#ms input,#ms .ib{-webkit-tap-highlight-color:transparent}
+#ms button:focus:not(:focus-visible),#ms .ib:focus:not(:focus-visible){outline:none}
+#ms .nets button,#ms .wbtn{transition:transform .12s,filter .12s}
+#ms .nets button:active:not(:disabled),#ms .wbtn:active:not(:disabled){transform:scale(.98);filter:brightness(.92)}
+#ms .nets button:focus-visible,#ms .wbtn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
