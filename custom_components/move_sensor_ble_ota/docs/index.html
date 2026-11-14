@@ -124,6 +124,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 .t-sky{color:#0284c7;background:#0ea5e91c} .t-slate{color:#475569;background:#64748b1f}
 @media (prefers-color-scheme:dark){ .t-slate{color:#94a3b8} }
 .mylinks{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px}.mylinks img{height:32px;display:block}
+.lang{display:inline-flex;margin-top:14px;border:1px solid rgba(255,255,255,.35);border-radius:999px;overflow:hidden}.lang a{padding:5px 14px;color:#fff;text-decoration:none;font-weight:600;font-size:13px}.lang a.on{background:rgba(255,255,255,.25)}
 </style>
 </head>
 <body>
@@ -176,11 +177,12 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.3.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.9.1</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
       </div>
+      <div class="lang"><a href="index.html?lang=ru" class="on" data-lang="ru">RU</a><a href="index.en.html" data-lang="en">EN</a></div>
     </div>
   </div>
 </header>
@@ -512,6 +514,21 @@ curl -X POST -H "Authorization: Bearer $HA_TOKEN" \
 </footer>
 
 </main>
+<script>
+/* Язык / language: явный выбор запоминается; без выбора — язык пользователя HA (или браузера). */
+(function(){
+  var K='move_sensor_ble_ota_docs_lang';
+  document.querySelectorAll('.lang a').forEach(function(a){a.addEventListener('click',function(){try{localStorage.setItem(K,a.dataset.lang)}catch(e){}})});
+  if(!document.documentElement.lang.startsWith('ru'))return;
+  if(/[?&]lang=ru/.test(location.search))return;
+  var saved=null;try{saved=localStorage.getItem(K)}catch(e){}
+  if(saved==='ru')return;
+  var l='';
+  try{var ha=window.parent.document.querySelector('home-assistant');l=(ha&&ha.hass&&ha.hass.language)||''}catch(e){}
+  if(!l)l=navigator.language||'';
+  if(saved==='en'||!/^(ru|uk|be)/i.test(l))location.replace('index.en.html'+location.hash);
+})();
+</script>
 <script>
 /* Кнопки My Home Assistant: страница открыта в iframe-панели HA (sandbox без top-navigation),
    поэтому переходим так же, как сам фронтенд HA: pushState в родителе + событие location-changed. */
