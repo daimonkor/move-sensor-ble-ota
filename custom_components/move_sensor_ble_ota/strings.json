@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Move Sensor BLE OTA",
+        "description": "BLE OTA for the motion sensor via Bluetooth proxies. Leave the key empty to read move_sensor_ble_ota_key from /config/esphome/secrets.yaml.",
+        "data": {
+          "address": "Sensor Bluetooth address",
+          "name": "Name",
+          "key": "OTA key",
+          "firmware_dir": "Firmware folder (.bin)"
+        }
+      }
+    },
+    "error": {
+      "bad_address": "Invalid Bluetooth address"
+    },
+    "abort": {
+      "already_configured": "This sensor is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Move Sensor BLE OTA",
+        "menu_options": {
+          "upload": "Upload firmware (.bin)",
+          "settings": "Options (key, firmware folder)"
+        }
+      },
+      "upload": {
+        "title": "Upload firmware",
+        "description": "Pick a .bin built by ESPHome (OTA format or factory). It is checked, saved to the firmware folder and — if enabled — flashed at the next sensor wake (PIR or telemetry).",
+        "data": {
+          "firmware": "Firmware file (.bin)",
+          "start": "Start BLE flashing right away"
+        }
+      },
+      "settings": {
+        "data": {
+          "key": "OTA key (empty = from secrets.yaml)",
+          "firmware_dir": "Firmware folder (.bin)"
+        }
+      }
+    },
+    "error": {
+      "bad_firmware": "Firmware rejected: {error}"
+    },
+    "abort": {
+      "firmware_uploaded": "Uploaded {file}: project {project}, version {version}, {size} KB{factory}. Flashing started: {started}. Progress: «OTA status» / «OTA progress» on the device page.",
+      "not_loaded": "Integration is not loaded — restart Home Assistant."
+    }
+  },
+  "services": {
+    "flash": {
+      "name": "Flash firmware over BLE",
+      "description": "Wait for the sensor wake window and flash the firmware over BLE.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        },
+        "file": {
+          "name": "File",
+          "description": "File name in the firmware folder or absolute path. Empty = newest .bin."
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "How long to wait for the wake window, minutes."
+        }
+      }
+    },
+    "cancel": {
+      "name": "Cancel BLE OTA",
+      "description": "Stop waiting / flashing.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        }
+      }
+    },
+    "read_settings": {
+      "name": "Read sensor settings over BLE",
+      "description": "Read actual settings from the sensor at the next wake window.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        }
+      }
+    },
+    "build_and_flash": {
+      "name": "Build & flash firmware over BLE",
+      "description": "Compile the ESPHome YAML in the ESPHome Builder add-on, save the OTA .bin to the firmware folder and flash it over BLE in the next wake window.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        },
+        "configuration": {
+          "name": "ESPHome YAML",
+          "description": "File in /config/esphome (default move-sensor-ble.yaml)."
+        },
+        "start": {
+          "name": "Flash after build",
+          "description": "Off = only build and save the .bin."
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "How long to wait for the wake window, minutes."
+        }
+      }
+    },
+    "reset_wifi": {
+      "name": "Reset Wi-Fi to default over BLE",
+      "description": "In the next wake window tell the sensor to drop the saved Wi-Fi network and use the one from the firmware (applied when service mode is entered).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        }
+      }
+    },
+    "fast_test": {
+      "name": "Fast test (debug)",
+      "description": "Debug only: the sensor wakes every 30 s for N minutes when there is no motion (0 = off).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "0 = turn off."
+        }
+      }
+    }
+  }
+}

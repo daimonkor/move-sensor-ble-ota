@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Move Sensor BLE OTA",
+        "description": "Прошивка датчика движения по BLE через Bluetooth-прокси. Ключ можно не вводить — возьмётся move_sensor_ble_ota_key из /config/esphome/secrets.yaml.",
+        "data": {
+          "address": "Bluetooth-адрес датчика",
+          "name": "Имя",
+          "key": "Ключ OTA",
+          "firmware_dir": "Папка с прошивками (.bin)"
+        }
+      }
+    },
+    "error": {
+      "bad_address": "Неверный Bluetooth-адрес"
+    },
+    "abort": {
+      "already_configured": "Этот датчик уже добавлен"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Move Sensor BLE OTA",
+        "menu_options": {
+          "upload": "Загрузить прошивку (.bin)",
+          "settings": "Параметры (ключ, папка прошивок)"
+        }
+      },
+      "upload": {
+        "title": "Загрузка прошивки",
+        "description": "Выбери .bin из сборки ESPHome (OTA format или factory). Файл проверяется, кладётся в папку прошивок и, если включено, прошивается при ближайшем пробуждении датчика (PIR или телеметрия).",
+        "data": {
+          "firmware": "Файл прошивки (.bin)",
+          "start": "Сразу запустить прошивку по BLE"
+        }
+      },
+      "settings": {
+        "data": {
+          "key": "Ключ OTA (пусто = из secrets.yaml)",
+          "firmware_dir": "Папка с прошивками (.bin)"
+        }
+      }
+    },
+    "error": {
+      "bad_firmware": "Прошивка не принята: {error}"
+    },
+    "abort": {
+      "firmware_uploaded": "Загружено {file}: проект {project}, версия {version}, {size} КБ{factory}. Прошивка запущена: {started}. Ход — «OTA status» / «OTA progress» на странице устройства.",
+      "not_loaded": "Интеграция не загружена — перезапусти Home Assistant."
+    }
+  },
+  "services": {
+    "flash": {
+      "name": "Прошить по BLE",
+      "description": "Дождаться окна пробуждения датчика и залить прошивку по BLE.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Датчик",
+          "description": "Нужно, только если датчиков несколько."
+        },
+        "file": {
+          "name": "Файл",
+          "description": "Имя файла в папке прошивок или полный путь. Пусто — самый свежий .bin."
+        },
+        "timeout": {
+          "name": "Таймаут",
+          "description": "Сколько ждать окна пробуждения, минут."
+        }
+      }
+    },
+    "cancel": {
+      "name": "Отменить BLE OTA",
+      "description": "Прекратить ожидание / прошивку.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Датчик",
+          "description": "Нужно, только если датчиков несколько."
+        }
+      }
+    },
+    "read_settings": {
+      "name": "Прочитать настройки датчика по BLE",
+      "description": "Прочитать фактические настройки с датчика в ближайшее окно пробуждения.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Датчик",
+          "description": "Нужно, только если датчиков несколько."
+        }
+      }
+    },
+    "build_and_flash": {
+      "name": "Собрать и прошить по BLE",
+      "description": "Собрать YAML в аддоне ESPHome Builder, положить OTA .bin в папку прошивок и прошить датчик по BLE в ближайшее окно пробуждения.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Датчик",
+          "description": "Нужно, только если датчиков несколько."
+        },
+        "configuration": {
+          "name": "YAML ESPHome",
+          "description": "Файл в /config/esphome (по умолчанию move-sensor-ble.yaml)."
+        },
+        "start": {
+          "name": "Прошить после сборки",
+          "description": "Выкл — только собрать и сохранить .bin."
+        },
+        "timeout": {
+          "name": "Таймаут",
+          "description": "Сколько ждать окна пробуждения, минут."
+        }
+      }
+    },
+    "reset_wifi": {
+      "name": "Сбросить Wi-Fi по BLE",
+      "description": "В ближайшее окно пробуждения датчик забудет сохранённую сеть Wi-Fi и вернётся к сети из прошивки (применится при входе в сервисный режим).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Датчик",
+          "description": "Нужно, только если датчиков несколько."
+        }
+      }
+    },
+    "fast_test": {
+      "name": "Быстрый тест (отладка)",
+      "description": "Только для отладки: без движения датчик просыпается раз в 30 с в течение N минут (0 — выключить).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Датчик",
+          "description": "Нужно, только если датчиков несколько."
+        },
+        "minutes": {
+          "name": "Минуты",
+          "description": "0 — выключить."
+        }
+      }
+    }
+  }
+}

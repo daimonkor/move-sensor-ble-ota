@@ -1,0 +1,102 @@
+"""Константы интеграции Move Sensor BLE OTA."""
+
+DOMAIN = "move_sensor_ble_ota"
+
+CONF_ADDRESS = "address"
+CONF_KEY = "key"
+CONF_FIRMWARE_DIR = "firmware_dir"
+
+DEFAULT_NAME = "Move Sensor BLE"
+DEFAULT_FIRMWARE_DIR = "/config/esphome/ota"
+# если ключ в настройках пустой — берём его отсюда (тот же, что в прошивке)
+SECRETS_PATH = "/config/esphome/secrets.yaml"
+SECRET_NAME = "move_sensor_ble_ota_key"
+
+# GATT-сервис прошивки (components/bthome/ble_ota.h)
+SVC_UUID = "6d730001-626c-6f74-4d6f-766553656e73"
+CTRL_UUID = "6d730002-626c-6f74-4d6f-766553656e73"
+DATA_UUID = "6d730003-626c-6f74-4d6f-766553656e73"
+
+CMD_HELLO = 0x01
+CMD_AUTH = 0x02
+CMD_BEGIN = 0x03
+CMD_END = 0x05
+CMD_ABORT = 0x06
+CMD_STATUS = 0x07
+CMD_INFO = 0x08
+CMD_DIAG = 0x09   # счётчики сбросов (2026-11-14), см. ble_ota.h
+CMD_WIFI_RESET = 0x12  # сброс Wi-Fi на сеть из прошивки (2026-11-14)
+CMD_TEST_MODE = 0x13   # быстрый тест: просыпаться раз в 30 с, выключится сам (2026-11-14)
+TEST_MODE_MIN = 30     # на сколько минут включать быстрый тест
+CMD_GET_SETTINGS = 0x10
+CMD_SET_SETTINGS = 0x11
+RSP_ACK = 0x84
+
+# коды статуса датчика -> текст
+DEVICE_STATUS = {
+    0: "ok",
+    1: "нет авторизации (неверный ключ)",
+    2: "батарея ниже порога — OTA отклонена",
+    3: "неверный размер образа",
+    4: "ошибка esp_ota_begin",
+    5: "ошибка записи во флеш",
+    6: "чужой или битый образ (не move-sensor-ble)",
+    7: "CRC не совпал",
+    8: "образ не прошёл проверку (esp_ota_end)",
+    9: "не удалось выбрать раздел загрузки",
+    10: "неверное состояние/команда",
+}
+
+# состояния менеджера (сенсор «OTA status»)
+ST_IDLE = "idle"
+ST_BUILDING = "building"        # сборка прошивки в аддоне ESPHome (build_and_flash)
+ST_WAITING = "waiting"          # ждём окно (пробуждение датчика)
+ST_CONNECTING = "connecting"
+ST_FLASHING = "flashing"
+ST_SUCCESS = "success"
+ST_ERROR = "error"
+ST_CANCELLED = "cancelled"
+
+SIGNAL_UPDATE = f"{DOMAIN}_update_{{}}"
+
+SERVICE_FLASH = "flash"
+SERVICE_BUILD_FLASH = "build_and_flash"
+ATTR_CONFIGURATION = "configuration"
+ATTR_START = "start"
+DEFAULT_ESPHOME_CONFIG = "move-sensor-ble.yaml"   # YAML в /config/esphome
+SERVICE_CANCEL = "cancel"
+ATTR_FILE = "file"
+ATTR_TIMEOUT = "timeout"
+ATTR_ENTRY_ID = "config_entry_id"
+DEFAULT_TIMEOUT_MIN = 180
+
+# ---- настройки, которые передаются датчику в окно пробуждения
+# key: (name, min, max, step, unit, icon); led — переключатель
+SETTINGS = {
+    "detect_delay": ("Detect delay", 0, 5000, 50, "ms", "mdi:timer-sand"),
+    "keep_time": ("Keep time", 5, 600, 5, "s", "mdi:timer-outline"),
+    "climate_interval": ("Climate report interval", 0, 240, 1, "min", "mdi:thermometer-auto"),
+    "voltage_factor": ("Voltage factor", 1.5, 2.5, 0.001, None, "mdi:division"),
+    "led": ("Motion tracking LED", None, None, None, None, "mdi:led-on"),
+}
+# статус настроек (сенсор «Settings status»)
+SST_UNKNOWN = "unknown"      # ещё ни разу не читали с датчика
+SST_PENDING = "pending"      # есть изменения, ждут окна
+SST_APPLIED = "applied"      # датчик подтвердил
+SST_ERROR = "error"
+SERVICE_READ_SETTINGS = "read_settings"
+SERVICE_RESET_WIFI = "reset_wifi"
+SERVICE_FAST_TEST = "fast_test"   # отладка: просыпаться раз в 30 с N минут (0 = выкл), без UI
+
+# ---- диагностика сбросов (DIAG). Порядок счётчиков — как в ответе 0x89.
+DIAG_FIELDS = ("power_on", "brownout", "panic", "watchdog", "software", "other")
+# esp_reset_reason_t (ESP-IDF 5.x) -> текст для «Last reset reason»
+RESET_REASONS = {
+    0: "unknown", 1: "power on", 2: "reset pin", 3: "software", 4: "panic",
+    5: "watchdog (int)", 6: "watchdog (task)", 7: "watchdog", 8: "deep sleep",
+    9: "brownout", 10: "sdio", 11: "usb", 12: "jtag", 13: "efuse",
+    14: "power glitch", 15: "cpu lockup",
+}
+# BTHome: сервис-данные и Wake count (count_uint16, 0x3D) — по его сбросу видно перезагрузку
+BTHOME_UUID_FULL = "0000fcd2-0000-1000-8000-00805f9b34fb"
+BTHOME_WAKE_COUNT_ID = 0x3D

@@ -1,0 +1,1025 @@
+# Move Sensor BLE — батарейный датчик движения, BTHome v2 (BLE) + deep sleep
+# Плата: Seeed XIAO ESP32-C3
+#
+# Подключение (все кнопки/сигналы активны по HIGH):
+#   D1 / GPIO3  — сигнал PIR: SR602 OUT -> R1 1 кОм -> D1, C1 10 мкФ на GND
+#   D2 / GPIO4  — сервисный ПЕРЕКЛЮЧАТЕЛЬ с фиксацией (GPIO4 <-> 3V3):
+#                замкнут = сервисный режим (не спит, Wi-Fi/OTA/настройки), разомкнут = работа и сон
+#   D0 / GPIO2  — АЦП батареи (Seeed wiki check_battery_voltage): BAT+ --[1M]--+--[1M]-- GND,
+#                середина на A0/GPIO2, 100 нФ с A0 на GND ОБЯЗАТЕЛЬНО (делитель высокоомный, ~2 мкА).
+#                BAT+ — площадка снизу платы (BAT- не используется, «-» АКБ в B1 -> GND).
+#   D10 / GPIO10 — индикатор срабатываний: D10 -> R4 100 Ом -> синий LED -> GND.
+#                1 вспышка = отправлено "занято", 2 = "свободно". Только отслеживание срабатываний,
+#                режимы (сервис/сон) светодиодом не показываются.
+#                Отключается выключателем "Motion tracking LED" в HA (по умолчанию включён, выбор хранится во флеше).
+#   D4 / GPIO6  — I2C SDA  \ датчик температуры/влажности SHT41 (модуль 10x13 на крышке, адрес 0x44):
+#   D5 / GPIO7  — I2C SCL  /  VIN -> 3V3, GND -> GND. Подтяжки I2C — на модуле (проверь у своего).
+#                Без датчика прошивка работает как раньше: температура/влажность просто не шлются.
+#                Для SHT31-D: platform: sht3xd вместо sht4x (остальное то же).
+#   На обе кнопки желательна внешняя подтяжка к GND 10–100 кОм.
+#
+# Режимы:
+#   Обычный  — спит, просыпается от PIR/таймера, шлёт BTHome, засыпает. Wi-Fi выключен.
+#   Сервис   — переключатель на D2 включён: не спит, Wi-Fi + API + OTA + логи + веб-страница, без таймаута.
+#              Выключил переключатель - сразу рабочий режим и сон.
+#              Режим задаёт только положение переключателя, в том числе после потери питания:
+#              включён - Wi-Fi поднимается, выключен - Wi-Fi не включается вообще.
+
+substitutions:
+  name: move-sensor-ble
+  friendly_name: Move Sensor BLE
+  pir_gpio: "3"            # D1
+  service_gpio: "4"        # D2
+  vbat_gpio: "2"           # D0 / A0
+  vbat_divider: "2.0"      # начальное значение "Voltage factor": делитель 1М+1М (1:1) = 2.0 (на пинах реально 3.29 В, АЦП видит 1.647 В — сходится)
+                           # дальше множитель меняется в HA (сервисный режим), хранится во флеше
+  # Сколько не спим после публикации, чтобы приёмник успел услышать пакет.
+  # Должно быть больше периода сканирования приёмника: у esphome-bluetooth-proxy
+  # сейчас interval 4200 мс / window 420 мс -> нужно > 4.2 с.
+  # Если ускорить сканирование прокси (например 320/100 мс), сюда можно ставить 500ms.
+  tx_window: 4500ms
+  led_gpio: "10"           # D10
+  sda_gpio: "6"            # D4
+  scl_gpio: "7"            # D5
+  # сущность HA с RSSI этого датчика (устройство BTHome -> Signal strength);
+  # поправь после добавления BTHome-устройства в HA, если имя отличается
+  ble_rssi_entity: sensor.move_sensor_ble_signal_strength
+  # Сброс Wi-Fi переключателем: включить сервисный режим wifi_reset_toggles раз подряд, первое и
+  # последнее включения не дальше wifi_reset_window_ms -> сохранённая сеть сбрасывается на сеть
+  # из прошивки (secrets.yaml) БЕЗ отката, LED мигает 6 раз. Считается и через сон (RTC).
+  wifi_reset_toggles: "5"
+  wifi_reset_window_ms: "20000"
+  # сеть из прошивки — для сброса (лямбда не умеет !secret напрямую)
+  fw_wifi_ssid: !secret wifi_ssid
+  fw_wifi_password: !secret wifi_password
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - move_sensor_rtc.h
+    - move_sensor_ble/ms_ap.h     # своя точка доступа + DNS + лендинг (как у весов и батареи)
+  on_boot:
+    # первым делом снимаем удержание пина LED, которое ставится перед сном
+    - priority: 1000
+      then:
+        - lambda: |-
+            gpio_hold_dis((gpio_num_t) ${led_gpio});
+            // IDF держит (gpio_hold) пины пробуждения с подтяжкой на время сна; снимаем, чтобы
+            // binary_sensor pir_raw снова поставил свою (pulldown) — иначе после пробуждения
+            // по LOW на D1 осталась бы подтяжка вверх
+            gpio_hold_dis((gpio_num_t) ${pir_gpio});
+    # замер батареи ДО запуска радио: АЦП уже готов (600), BLE (350) и Wi-Fi (250) ещё нет —
+    # это почти напряжение покоя, по нему и считается процент (см. move_sensor_rtc.h)
+    - priority: 550
+      then:
+        - lambda: |-
+            ms::bat_phase = 1;
+            id(vbat).update();
+            ms::bat_phase = 2;
+            // версия сборки (как «Build Version») — HA читает её по BLE (move_sensor_ble_ota)
+            id(build_version_text).update();
+            id(bth_ota).set_build_version(id(build_version_text).state);
+            // 2026-11-14: сброс Wi-Fi на сеть из прошивки по BLE (команда 0x12 от интеграции HA).
+            // В рабочем режиме Wi-Fi выключен — ставим флаг (NVS), сброс при входе в сервисный режим;
+            // если уже в сервисном — сразу. LED: 6 вспышек — команда принята.
+            id(bth_ota).set_wifi_reset_callback([]() {
+              if (id(service_mode)) {
+                id(wifi_reset_pending) = false;
+                ESP_LOGW("ms", "Wi-Fi RESET over BLE: saved network -> firmware network (now)");
+                wifi::global_wifi_component->save_wifi_sta("${fw_wifi_ssid}", "${fw_wifi_password}");
+              } else {
+                id(wifi_reset_pending) = true;
+                ESP_LOGW("ms", "Wi-Fi RESET over BLE: will apply on next service mode");
+              }
+              id(wifi_reset_blink).execute();
+            });
+            // быстрый тест по BLE (команда 0x13): просыпаться раз в 30 с, выключится сам через N мин
+            id(bth_ota).set_test_mode_callback([](uint8_t minutes) {
+              ms::test_until_ms = minutes ? ms::now_ms() + (int64_t) minutes * 60000 : 0;
+              ESP_LOGW("ms", "fast test mode: %s", minutes ? "ON" : "OFF");
+            });
+    - priority: -100
+      then:
+        # точка доступа: SSID/пароль берём из wifi: -> ap:
+        - lambda: |-
+            ms_ap::setup([](std::string &ssid, std::string &pass) {
+              auto ap = wifi::global_wifi_component->get_ap();
+              auto s = ap.get_ssid();
+              auto p = ap.get_password();
+              ssid.assign(s.c_str(), s.size());
+              pass.assign(p.c_str(), p.size());
+            });
+        - script.execute: boot_dispatch
+
+esp32:
+  board: seeed_xiao_esp32c3
+  variant: esp32c3
+  cpu_frequency: 80MHZ
+  framework:
+    type: esp-idf
+
+external_components:
+  # локальная копия dz0ny/esphome-bthome (commit 49d5850) с патчем:
+  # packet_id и счётчик шифрования хранятся в RTC-памяти и переживают deep sleep
+  - source:
+      type: local
+      path: components
+    components: [bthome]
+
+logger:
+  # 2026-11-14: в прошивку компилируется всё до DEBUG, но на старте уровень INFO —
+  # в рабочем режиме на каждом пробуждении не уходят десятки DEBUG-строк в USB-JTAG.
+  # DEBUG включается только в сервисном режиме (service_enter), при выходе — снова INFO.
+  level: DEBUG
+  initial_level: INFO
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  enable_on_boot: false     # в обычном режиме Wi-Fi не включается вообще
+  fast_connect: true
+  reboot_timeout: 0s
+  # Своя точка доступа (2026-11-11, move_sensor_ble/ms_ap.h) — как у весов и батареи Deye:
+  # живёт весь сервисный режим параллельно с роутером (APSTA), свой DNS и лендинг
+  # «Войти в сеть» -> сайт датчика / «Wi-Fi роутера». В рабочем режиме Wi-Fi выключен целиком.
+  # captive_portal не ставим: он показывал бы свою страницу вместо сайта датчика.
+  ap:
+    ssid: "Move-Sensor-BLE"
+    password: !secret move_sensor_ap_password
+    # адрес вне частных диапазонов (ms_ap.h, AP_IP_B): иначе Android не показывает окно входа
+    manual_ip:
+      static_ip: 100.64.4.1
+      gateway: 100.64.4.1
+      subnet: 255.255.255.0
+
+# Настройка домашней сети с сайта: New Wi-Fi SSID/Password, Reconnect, Scan, Reset to firmware
+packages:
+  wifi_setup: !include move_sensor_ble/wifi_setup.yaml
+
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+
+# Откат прошивки (как в весах и CAN-шине): новая прошивка считается рабочей, если
+# проработала boot_is_good_after без краша. Если упала/перезагрузилась раньше —
+# загрузчик ESP-IDF возвращает предыдущую (esp32: framework: advanced:
+# enable_ota_rollback, по умолчанию true; загрузчик с откатом прошивается только по USB).
+# 10 таких сбоев подряд -> safe mode на 5 мин (только Wi-Fi + OTA).
+# Сон: с ESPHome 2026.8 штатный уход в deep sleep тоже подтверждает загрузку, поэтому
+# в go_sleep после холодного старта/OTA ждём до 15 с аптайма — прошивка честно проходит проверку.
+safe_mode:
+  boot_is_good_after: 15s
+  num_attempts: 10
+  reboot_timeout: 5min
+
+# Веб-интерфейс для отладки: состояния, настройки и лог в браузере.
+# Доступен только когда поднят Wi-Fi, то есть в сервисном режиме (переключатель на D2):
+# через свою точку «Move-Sensor-BLE» — http://100.64.4.1/ (доменное имя на лендинге не работает),
+# из домашней сети — по IP датчика или http://move-sensor-ble.local. В рабочем режиме и во сне Wi-Fi выключен,
+# поэтому страница недоступна и радио на неё не тратится.
+web_server:
+  port: 80
+  version: 3
+  # Сайт датчика (2026-11-11): /0.js = site_bundle.js — своя панель «Датчик» (движение,
+  # температура, влажность, батарея, сигнал, диагностика; без истории) + вкладка «Устройство»
+  # со штатным интерфейсом v3, вшитым в бандл (интернет не нужен). Собирать:
+  #   node move_sensor_ble/site/build.js   (исходники — move_sensor_ble/site/)
+  # js_url: "" — не тянуть www.js с CDN. НЕ ставить local: true — тогда главная не грузит /0.js.
+  js_url: ""
+  js_include: move_sensor_ble/site_bundle.js
+
+# -------------------------------------------------------------------- I2C
+i2c:
+  sda: GPIO${sda_gpio}
+  scl: GPIO${scl_gpio}
+  scan: false          # 2026-11-14: скан шины выключен (SHT41 найден, лишнее время на каждом пробуждении)
+  frequency: 100kHz
+  timeout: 50ms        # зависшая шина не должна держать плату проснувшейся
+
+# ---------------------------------------------------------------- deep sleep
+deep_sleep:
+  id: ds
+  # run_duration не задан: засыпаем только сами, через deep_sleep.enter
+  # wakeup_pin НЕ задаём (2026-11-14): пробуждение по PIR (D1) настраивает go_sleep сам —
+  # по HIGH (новое движение) или по LOW (отпускание PIR), по одному замеру уровня перед сном.
+  # Встроенный INVERT_WAKEUP делает похожее, но читает пин отдельно от нашей логики.
+
+globals:
+  # сброс Wi-Fi переключателем набран — выполнить после wifi.enable (service_enter)
+  # restore_value (2026-11-14): флаг может поставить BLE-команда в рабочем режиме — должен дожить
+  # (во флеше) до следующего входа в сервисный режим
+  - id: wifi_reset_pending
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: service_mode
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: tx_pending
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # сервисный режим включён переключателем на D2 (а не холодным стартом / из HA)
+  - id: service_by_switch
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # проснулись от PIR-пина: само пробуждение и есть "движение"
+  - id: woke_by_pir
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+# ------------------------------------------------------------------ BTHome
+bthome:
+  id: bth
+  ble_stack: nimble
+  # OTA по BLE (2026-11-14, components/bthome/ble_ota.*): пока датчик не спит (окно отправки
+  # после PIR / таймера телеметрии), реклама подключаемая. Интеграция HA move_sensor_ble_ota
+  # подключается через Bluetooth-прокси, авторизуется ключом и льёт firmware.bin.
+  # Пока клиент подключён или идёт прошивка — датчик не засыпает (go_sleep).
+  ble_ota:
+    id: bth_ota
+    key: !secret move_sensor_ble_ota_key
+    min_battery: 30          # ниже — OTA отклоняется (флеш + радио на подсевшем LiPo)
+    # Настройки, которые HA (move_sensor_ble_ota) меняет через то же окно, без сервисного режима.
+    # Применяются как из сервисного режима: проверка min/max, сохранение во флеш, on_value.
+    settings:
+      detect_delay: detect_delay
+      keep_time: keep_time
+      climate_interval: climate_interval
+      voltage_factor: vbat_factor
+      led: debug_led_enable
+  trigger_based: true        # HA не помечает спящее устройство как unavailable
+  # Быстрая реклама: пакет каждые 20-30 мс, пока плата не спит. Приёмник слушает
+  # эфир короткими окнами, редкие пакеты (раз в 1 с) в окно почти не попадают.
+  min_interval: 20ms
+  max_interval: 30ms
+  retransmit_count: 0        # при такой частоте повторы не нужны
+  sensors:
+    - type: battery
+      id: battery_pct
+    - type: voltage
+      id: vbat
+    - type: count_uint16
+      id: wake_counter
+    - type: temperature
+      id: env_temp
+    - type: humidity
+      id: env_hum
+    # Пакет: 10 (заголовок + packet id) + 14 (сенсоры) + 4 (бинарные) = 28 из 31 байта.
+    # Счётчики сбросов (brownout/panic/watchdog) в BTHome НЕ идут — их читает интеграция
+    # move_sensor_ble_ota командой DIAG (components/bthome/ble_ota.*), 2026-11-14.
+  binary_sensors:
+    - type: occupancy
+      id: occupancy
+    - type: battery_low
+      id: battery_low
+
+# ----------------------------------------------------------------- сенсоры
+sensor:
+  - platform: adc
+    id: vbat
+    name: "Voltage"
+    icon: mdi:flash-triangle-outline
+    pin: GPIO${vbat_gpio}
+    attenuation: 12db
+    samples: 16
+    update_interval: never
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 2
+    filters:
+      - lambda: "return x * id(vbat_factor).state;"
+    on_value:
+      then:
+        - lambda: |-
+            // Процент — по напряжению покоя (кривая LiPo, ms::lipo_pct), а не линейно.
+            if (ms::bat_phase == 0) return;   // замер до старта (восстановление Voltage factor) — мимо
+            float v = x;
+            if (ms::bat_phase == 1) {
+              ms::bat_v_boot = v;             // без радио: это и есть покой
+            } else if (id(service_mode)) {
+              // под Wi-Fi: один раз меряем просадку относительно замера без радио
+              if (ms::bat_sag < 0 && ms::bat_v_boot > 0) {
+                float s = ms::bat_v_boot - v;
+                ms::bat_sag = s < 0 ? 0 : (s > 0.15f ? 0.15f : s);
+                ESP_LOGI("bat", "Wi-Fi sag %.3f V (no radio %.3f, Wi-Fi %.3f)", ms::bat_sag, ms::bat_v_boot, v);
+              }
+              if (ms::bat_sag > 0) v += ms::bat_sag;
+            }
+            // сглаживание; скачок > 0.1 В (зарядка, другой аккумулятор) — принимаем сразу
+            if (ms::bat_vf <= 0 || fabsf(v - ms::bat_vf) > 0.10f) ms::bat_vf = v;
+            else ms::bat_vf += 0.3f * (v - ms::bat_vf);
+            int p = (int) roundf(ms::lipo_pct(ms::bat_vf));
+            // без зарядки процент только падает: рост меньше 5 % — шум/отдых батареи, игнор
+            if (ms::bat_pct >= 0 && p > ms::bat_pct && p < ms::bat_pct + 5) p = ms::bat_pct;
+            ms::bat_pct = p;
+            // разряжена: <= 10 % (~3.69 В покоя), снимаем флаг только от 15 %
+            if (p <= 10) ms::bat_low = true;
+            else if (p >= 15) ms::bat_low = false;
+            ESP_LOGI("bat", "measured %.3f V -> rest %.3f V (avg %.3f) -> %d %%%s",
+                     x, v, ms::bat_vf, p, ms::bat_low ? " LOW" : "");
+            id(battery_pct).publish_state(p);
+            id(bth_ota).set_battery_percent(p);   // порог для BLE OTA
+            id(battery_low).publish_state(ms::bat_low);
+            id(vbat_rest).publish_state(ms::bat_vf);
+
+  # сырое напряжение на пине D0, БЕЗ пересчёта делителя (АЦП как есть) — для отладки.
+  # Обновляется вместе с Voltage. Видно по API (сервисный режим), в BTHome не уходит.
+  - platform: copy
+    source_id: vbat
+    name: "D0 raw voltage"
+    icon: mdi:sine-wave
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    filters:
+      - lambda: "return x / id(vbat_factor).state;"
+
+  # напряжение покоя (сглаженное, с поправкой на просадку под Wi-Fi) — по нему считается Battery.
+  # Только API/сайт (сервисный режим), в BTHome не уходит.
+  - platform: template
+    id: vbat_rest
+    name: "Battery rest voltage"
+    icon: mdi:battery-heart-variant
+    unit_of_measurement: "V"
+    device_class: voltage
+    entity_category: diagnostic
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    id: battery_pct
+    name: "Battery"
+    icon: mdi:battery-high
+    unit_of_measurement: "%"
+    device_class: battery
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    id: wake_counter
+    name: "Wake count"
+    icon: mdi:counter
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+
+  # ---- температура и влажность (SHT41). Опрос только вручную, через script climate_read:
+  # при каждой отправке пакета (send_state) и раз в 5 с в сервисном режиме.
+  # Измерение ~10 мс, во сне 0.08 мкА.
+  # В сервисном режиме Wi-Fi греет плату — температура завышена на 1-3 °C, это нормально.
+  # 2026-11-14: «Simulate climate» удалён — всегда реальный SHT41.
+  - platform: sht4x
+    id: sht
+    address: 0x44
+    precision: High
+    heater_max_duty: 0.0     # встроенный нагреватель выключен
+    update_interval: never
+    temperature:
+      id: sht_temp
+      on_value:
+        - lambda: "id(env_temp).publish_state(x);"
+    humidity:
+      id: sht_hum
+      on_value:
+        - lambda: "id(env_hum).publish_state(x);"
+
+  # то, что уходит в BTHome и в API (значения SHT41)
+  - platform: template
+    id: env_temp
+    name: "Temperature"
+    icon: mdi:thermometer
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    id: env_hum
+    name: "Humidity"
+    icon: mdi:water-percent
+    unit_of_measurement: "%"
+    device_class: humidity
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  # ---- уровень сигнала: Wi-Fi (работает только в сервисном режиме)
+  - platform: wifi_signal
+    id: wifi_rssi
+    name: "WiFi RSSI"
+    icon: mdi:wifi-strength-3
+    update_interval: 10s
+    entity_category: diagnostic
+
+  - platform: copy
+    source_id: wifi_rssi
+    name: "WiFi Signal"
+    icon: mdi:wifi
+    unit_of_measurement: "%"
+    device_class: ""
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      # как в остальных проектах: -90 dBm = 0 %, -30 dBm = 100 %
+      - lambda: |-
+          const float rssi_min = -90.0f;
+          const float rssi_max = -30.0f;
+          return clamp((x - rssi_min) * 100.0f / (rssi_max - rssi_min), 0.0f, 100.0f);
+
+  # ---- уровень сигнала: Bluetooth
+  # Свой BLE-сигнал датчик измерить не может (он только передаёт) — RSSI меряет
+  # приёмник. Берём его из HA: сущность "Signal strength" устройства BTHome.
+  # Обновляется только в сервисном режиме (нужен API). Имя сущности — в substitutions.
+  - platform: homeassistant
+    id: ble_rssi
+    name: "BLE RSSI"
+    icon: mdi:bluetooth-audio
+    entity_id: ${ble_rssi_entity}
+    unit_of_measurement: "dBm"
+    device_class: signal_strength
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  - platform: copy
+    source_id: ble_rssi
+    name: "BLE Signal"
+    icon: mdi:bluetooth
+    unit_of_measurement: "%"
+    device_class: ""
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      # как в остальных проектах: -90 dBm = 0 %, -30 dBm = 100 %
+      - lambda: |-
+          const float rssi_min = -90.0f;
+          const float rssi_max = -30.0f;
+          return clamp((x - rssi_min) * 100.0f / (rssi_max - rssi_min), 0.0f, 100.0f);
+
+binary_sensor:
+  # сырой сигнал PIR (сейчас кнопка)
+  - platform: gpio
+    id: pir_raw
+    internal: true
+    pin:
+      number: GPIO${pir_gpio}
+      # allow_other_uses убран (2026-11-14): deep_sleep больше не держит D1 — сенсор снова на прерываниях
+      mode:
+        input: true
+        pulldown: true
+    on_press:
+      - script.execute: motion_eval
+    # PIR отпустил, пока плата не спит (например, в окне отправки) — Keep time с этого момента
+    on_release:
+      - lambda: |-
+          if (ms::occupied && ms::keep_pending()) {
+            ms::keep_start((int) id(keep_time).state);
+            ESP_LOGI("ms", "pir released (awake), OFF in %d s", (int) id(keep_time).state);
+          }
+
+  # сервисная кнопка
+  - platform: gpio
+    id: service_btn
+    internal: true
+    pin:
+      number: GPIO${service_gpio}
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on_off: 30ms
+    # Переключатель с фиксацией: замкнут на 3V3 = сервисный режим, разомкнут = работа/сон.
+    # Обрабатывается по УРОВНЮ в interval ниже (а не по on_press/on_release): если плата
+    # проснулась или включилась с уже замкнутым переключателем, фронта нажатия нет.
+
+  # итоговое состояние, которое уходит в BTHome и в API
+  - platform: template
+    id: occupancy
+    name: "Occupancy"
+    icon: mdi:motion-sensor
+    device_class: occupancy
+
+  - platform: template
+    id: battery_low
+    name: "Battery low"
+    icon: mdi:battery-alert-variant-outline
+    device_class: battery
+
+  # сервисный режим только для чтения: включается и выключается ТОЛЬКО переключателем SW2 (D2)
+  - platform: template
+    id: service_state
+    name: "Service mode"
+    icon: mdi:cog-transfer
+    entity_category: diagnostic
+    lambda: "return id(service_mode);"
+
+# ------------------------------------------------- настройки (сервисный режим)
+number:
+  # Множитель делителя батареи: Voltage = напряжение на D0 × Voltage factor.
+  # Подгонка: Voltage factor = U_тестера_на_BAT+ / "D0 raw voltage".
+  - platform: template
+    id: vbat_factor
+    name: "Voltage factor"
+    icon: mdi:division
+    entity_category: config
+    min_value: 1.5
+    max_value: 2.5
+    step: 0.001
+    initial_value: ${vbat_divider}
+    optimistic: true
+    restore_value: true
+    mode: box
+    on_value:
+      - lambda: "id(vbat).update();"
+
+  - platform: template
+    id: detect_delay
+    name: "Detect delay"
+    icon: mdi:timer-outline
+    entity_category: config
+    unit_of_measurement: ms
+    min_value: 0
+    max_value: 5000
+    step: 50
+    initial_value: 100
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    id: keep_time
+    name: "Keep time"
+    icon: mdi:timer-sand
+    entity_category: config
+    unit_of_measurement: s
+    min_value: 5
+    max_value: 600
+    step: 5
+    initial_value: 30
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  # Как часто просыпаться по таймеру и слать температуру/влажность, когда движения нет.
+  # 0 = не просыпаться (данные уходят только вместе с событиями движения).
+  # Каждое пробуждение = tx_window бодрствования, это главный расход батареи.
+  - platform: template
+    id: climate_interval
+    name: "Climate report interval"
+    icon: mdi:thermometer-lines
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 0
+    max_value: 240
+    step: 1
+    initial_value: 30
+    optimistic: true
+    restore_value: true
+    mode: box
+
+output:
+  - platform: gpio
+    id: dbg_led
+    pin: GPIO${led_gpio}
+
+switch:
+  - platform: template
+    id: debug_led_enable
+    name: "Motion tracking LED"   # LED только для отслеживания срабатываний
+    icon: mdi:motion-sensor
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_off:
+      - output.turn_off: dbg_led
+
+text_sensor:
+  # Версии — как в остальных проектах (esphome-bluetooth-proxy.yaml): видно, какая прошивка
+  # реально стоит (например, если OTA откатилась). Только API/веб (сервисный режим), в BTHome не идут.
+  - platform: version
+    name: "ESPHome Version"
+    id: esphome_version_text
+    hide_timestamp: true   # без "built ..." — время сборки уже в Build Version
+    entity_category: diagnostic
+
+  # Номер сборки vГГГГ.ММ.ДД.ЧЧММСС — из времени сборки ESPHome (см. lambda).
+  # Константа сборки: публикуется при входе в сервисный режим (script service_enter).
+  - platform: template
+    name: "Build Version"
+    id: build_version_text
+    icon: mdi:wrench
+    entity_category: diagnostic
+    update_interval: never
+    # 2026-11-14: время сборки берём у ESPHome (App.get_build_time_string, обновляется при КАЖДОЙ
+    # компиляции, местное время с поясом). __DATE__/__TIME__ в main.cpp меняется только когда меняется
+    # сам main.cpp — правка одного .cpp компонента (ble_ota.cpp) оставляла старую версию.
+    lambda: |-
+      char bt[Application::BUILD_TIME_STR_SIZE];   // "2026-11-14 03:43:46 +0200"
+      App.get_build_time_string(bt);
+      int year = 0, month = 0, day = 0, hh = 0, mm = 0, ss = 0;
+      sscanf(bt, "%d-%d-%d %d:%d:%d", &year, &month, &day, &hh, &mm, &ss);
+      // + 8 hex SHA-256 образа (2026-11-14): время сборки ESPHome меняется только при правке YAML,
+      // а правка .h/.cpp (компоненты, includes) давала тот же номер — теперь версия уникальна всегда
+      const uint8_t *sha = esp_app_get_description()->app_elf_sha256;
+      char buf[40];
+      snprintf(buf, sizeof(buf), "v%04d.%02d.%02d.%02d%02d%02d-%02x%02x%02x%02x", year, month, day, hh, mm, ss,
+               sha[0], sha[1], sha[2], sha[3]);
+      return {std::string(buf)};
+
+  - platform: template
+    id: wake_reason
+    name: "Wake reason"
+    icon: mdi:sleep-off
+    entity_category: diagnostic
+    update_interval: never
+
+# в сервисном режиме шлём свежий пакет каждые 5 с -> в HA обновляется RSSI
+interval:
+  # сервисный переключатель: следим за уровнем на D2
+  - interval: 200ms
+    then:
+      - lambda: |-
+          const bool sw = id(service_btn).state;
+          if (sw && !id(service_by_switch)) {
+            id(service_by_switch) = true;
+            id(service_enter).execute();
+          } else if (!sw && id(service_by_switch)) {
+            id(service_by_switch) = false;
+            id(service_exit).execute();
+          }
+  # точка доступа: держать APSTA, отвечать DNS, лендинг. Только в сервисном режиме —
+  # в рабочем Wi-Fi выключен, и Keeper не должен его поднимать.
+  - interval: 250ms
+    then:
+      - lambda: "if (id(service_mode)) ms_ap::tick();"
+  - interval: 5s
+    then:
+      - if:
+          condition:
+            lambda: "return id(service_mode);"
+          then:
+            - lambda: |-
+                id(vbat).update();
+                id(climate_read).execute();
+                id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+
+# ------------------------------------------------------------------ логика
+script:
+  # Что нас разбудило и в каком режиме работаем
+  - id: boot_dispatch
+    then:
+      - lambda: |-
+          ms::wake_count++;
+          auto cause = esp_sleep_get_wakeup_cause();
+          uint64_t pins = esp_sleep_get_gpio_wakeup_status();
+          bool by_service = (cause == ESP_SLEEP_WAKEUP_GPIO) && (pins & (1ULL << ${service_gpio}));
+          const char *why = "cold boot";
+          // не от сна — уточняем причину сброса (только текст для Wake reason; счётчики
+          // по причинам ведёт ble_ota в NVS и отдаёт интеграции по DIAG)
+          if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+            const esp_reset_reason_t rr = esp_reset_reason();
+            switch (rr) {
+              case ESP_RST_POWERON:  why = "power on"; break;
+              case ESP_RST_BROWNOUT: why = "brownout"; break;
+              case ESP_RST_SW:       why = "software reset"; break;   // OTA, restart
+              case ESP_RST_PANIC:    why = "panic"; break;
+              case ESP_RST_INT_WDT:
+              case ESP_RST_TASK_WDT:
+              case ESP_RST_WDT:      why = "watchdog"; break;
+              case ESP_RST_EXT:      why = "reset pin"; break;
+              default:               why = "cold boot"; break;
+            }
+            ESP_LOGI("ms", "reset reason: %s (%d)", why, (int) rr);
+          }
+          if (cause == ESP_SLEEP_WAKEUP_TIMER) why = "timer";
+          else if (by_service) why = "service button";
+          else if (cause == ESP_SLEEP_WAKEUP_GPIO) why = "pir";
+          ESP_LOGI("ms", "wake #%u: %s (cause=%d pins=0x%02x) occupied=%d held=%d remaining=%lld ms",
+                   (unsigned) ms::wake_count, why, (int) cause, (unsigned) pins,
+                   ms::occupied, ms::pir_held,
+                   (ms::occupied && !ms::keep_pending()) ? (long long) ms::remaining_ms() : -1LL);
+          id(wake_reason).publish_state(why);
+          // Короткий импульс (кнопка, короткий PIR) успевает закончиться, пока плата
+          // грузится (~0.3-0.5 с). Поэтому пробуждение от PIR-пина считаем движением,
+          // даже если к этому моменту на пине уже LOW.
+          // Исключение (2026-11-14): если спали, ожидая отпускания PIR (pir_held), пробуждение
+          // по D1 — это отпускание (LOW), а не новое движение. Если к этому моменту на D1 снова
+          // HIGH — motion_eval увидит уровень и посчитает это повторным движением.
+          id(woke_by_pir) = (cause == ESP_SLEEP_WAKEUP_GPIO) && !by_service && !ms::pir_held;
+          ms::pir_held = false;   // решается заново перед следующим сном (go_sleep)
+          // Сервисный режим задаёт только переключатель на D2 — и при пробуждении, и при
+          // холодном старте (после потери питания). Уровень читаем прямо с пина: фильтр
+          // binary_sensor к этому моменту ещё не отработал. Выключен -> Wi-Fi не поднимаем.
+          const bool sw_on = gpio_get_level((gpio_num_t) ${service_gpio}) != 0;
+          if (by_service || sw_on) {
+            id(service_by_switch) = true;
+            id(service_enter).execute();
+          }
+      - script.execute: motion_eval
+
+  # Оценка движения. Перезапускается каждым новым фронтом PIR.
+  - id: motion_eval
+    mode: restart
+    then:
+      - script.stop: go_sleep
+      # PIR отпустил во сне / пока грузились (фронта on_release не было) — Keep time с этого момента
+      - lambda: |-
+          if (ms::occupied && ms::keep_pending() && gpio_get_level((gpio_num_t) ${pir_gpio}) == 0) {
+            ms::keep_start((int) id(keep_time).state);
+            ESP_LOGI("ms", "pir released, OFF in %d s", (int) id(keep_time).state);
+          }
+      - if:
+          condition:
+            lambda: "return id(woke_by_pir) || id(pir_raw).state;"
+          then:
+            # задержка на детект: сигнал должен продержаться detect_delay.
+            # После пробуждения от PIR не ждём - движение уже было.
+            - if:
+                condition:
+                  lambda: "return !id(woke_by_pir);"
+                then:
+                  - delay: !lambda "return (uint32_t) id(detect_delay).state;"
+            - if:
+                condition:
+                  lambda: "return id(woke_by_pir) || id(pir_raw).state;"
+                then:
+                  - lambda: |-
+                      id(woke_by_pir) = false;
+                      if (!ms::occupied) {
+                        ms::occupied = true;
+                        ESP_LOGI("ms", "motion confirmed -> ON");
+                        id(send_state).execute(true, true);
+                      } else {
+                        ESP_LOGI("ms", "motion again, keep time restarted");
+                      }
+                  # Keep time считается с отпускания PIR. Рабочий режим: НЕ ждём отпускания
+                  # бодрствуя — ставим «ждём» (KEEP_PENDING), go_sleep уснёт с пробуждением по LOW.
+                  # Сервисный режим (не спит): ждём, как раньше.
+                  - lambda: |-
+                      if (gpio_get_level((gpio_num_t) ${pir_gpio}) == 0) {
+                        ms::keep_start((int) id(keep_time).state);
+                        ESP_LOGI("ms", "pir already released, OFF in %d s", (int) id(keep_time).state);
+                      } else {
+                        ms::off_deadline_ms = ms::KEEP_PENDING;
+                      }
+                  - if:
+                      condition:
+                        lambda: "return id(service_mode) && ms::keep_pending();"
+                      then:
+                        - wait_until:
+                            condition:
+                              lambda: "return !id(pir_raw).state;"
+                            timeout: 10min
+                        - lambda: |-
+                            ms::keep_start((int) id(keep_time).state);
+                            ESP_LOGI("ms", "pir released, OFF in %d s", (int) id(keep_time).state);
+                else:
+                  - logger.log: "pulse shorter than detect delay - ignored"
+      - if:
+          condition:
+            lambda: "return ms::occupied;"
+          then:
+            # в сервисном режиме не спим, а просто ждём дедлайн
+            - if:
+                condition:
+                  lambda: "return id(service_mode) && !ms::keep_pending() && ms::remaining_ms() > 0;"
+                then:
+                  - delay: !lambda "return (uint32_t) ms::remaining_ms();"
+            - if:
+                condition:
+                  lambda: "return !ms::keep_pending() && ms::remaining_ms() <= 0;"
+                then:
+                  - lambda: |-
+                      ms::occupied = false;
+                      ESP_LOGI("ms", "keep time elapsed -> OFF");
+                      id(send_state).execute(false, true);
+          else:
+            # после холодного старта / пробуждения по таймеру климата сообщаем "чисто",
+            # но БЕЗ мигания: это не событие движения
+            - if:
+                condition:
+                  lambda: "return !id(occupancy).has_state();"
+                then:
+                  - lambda: "id(send_state).execute(false, false);"
+      - script.execute: go_sleep
+
+  # Опрос температуры/влажности (SHT41)
+  - id: climate_read
+    then:
+      - component.update: sht
+
+  # Публикация состояния: один BTHome-пакет со всем сразу
+  - id: send_state
+    parameters:
+      state: bool
+      led: bool     # мигать светодиодом (только на реальные события: занято / освободилось)
+    then:
+      - lambda: |-
+          // батарею в рабочем режиме меряем только на старте (до радио, on_boot 550):
+          // под BLE-рекламой напряжение проседает. В сервисном — меряем и тут (с поправкой).
+          if (id(service_mode)) id(vbat).update();
+          // SHT41 отвечает через ~10 мс,
+          // значения попадут в пакет в пределах tx_window
+          id(climate_read).execute();
+          id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+          id(occupancy).publish_state(state);
+          id(tx_pending) = true;
+          if (led) id(blink).execute(state ? 1 : 2);
+
+  # Уход в сон (в сервисном режиме ничего не делает)
+  - id: go_sleep
+    mode: restart
+    then:
+      # новое окно (перезапуск движением) — снова принимаем BLE-подключения (OTA/настройки)
+      - lambda: "id(bth_ota).sleep_unlock();"
+      - if:
+          condition:
+            lambda: "return !id(service_mode);"
+          then:
+            - if:
+                condition:
+                  lambda: "return id(tx_pending);"
+                then:
+                  - delay: ${tx_window}
+                  - lambda: "id(tx_pending) = false;"
+            # после загрузки НЕ от сна (питание, ресет, OTA) не засыпаем раньше 15 с аптайма,
+            # чтобы safe_mode успел подтвердить прошивку (boot_is_good_after: 15s).
+            # Пробуждения от PIR/таймера сюда не попадают — батарея не тратится.
+            - if:
+                condition:
+                  lambda: "return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED && millis() < 15000;"
+                then:
+                  - logger.log:
+                      format: "cold boot: hold sleep %u ms for safe_mode"
+                      args: ["(unsigned) (15000 - millis())"]
+                  - delay: !lambda "return 15000 - millis();"
+            # сервисный переключатель будит по HIGH — засыпать, пока он HIGH, нельзя.
+            # PIR больше не ждём (2026-11-14): при HIGH на D1 спим с пробуждением по LOW.
+            - wait_until:
+                condition:
+                  lambda: "return !id(service_btn).state;"
+                timeout: 30s
+            # BLE OTA/настройки — защёлка ПРЯМО перед сном (2026-11-14): реклама становится
+            # неподключаемой, ждём 300 мс, не успел ли клиент подключиться; подключён — не спим,
+            # пока не отключится (OTA закончится перезагрузкой). Раньше проверка была до ожидания
+            # PIR и клиент успевал подключиться между проверкой и сном — датчик засыпал посреди OTA.
+            - wait_until:
+                condition:
+                  lambda: "return id(bth_ota).sleep_ready();"
+                timeout: 15min
+            - lambda: |-
+                // сервисный переключатель (D2) будит по HIGH
+                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${service_gpio}, ESP_GPIO_WAKEUP_GPIO_HIGH);
+                // PIR (D1): ОДИН замер уровня -> и уровень пробуждения, и флаг pir_held.
+                // HIGH -> будить по LOW (отпускание), LOW -> будить по HIGH (новое движение).
+                // Подтяжку на время сна IDF ставит сам по уровню (LOW-wake -> pull-up), SR602
+                // выход push-pull через R1 1 кОм, так что подтяжка его не перебивает.
+                const bool pir_high = gpio_get_level((gpio_num_t) ${pir_gpio}) != 0;
+                ms::pir_held = pir_high;
+                if (!pir_high && ms::occupied && ms::keep_pending()) {
+                  ms::keep_start((int) id(keep_time).state);   // отпустил прямо перед сном
+                  ESP_LOGI("ms", "pir released before sleep, OFF in %d s", (int) id(keep_time).state);
+                }
+                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${pir_gpio},
+                    pir_high ? ESP_GPIO_WAKEUP_GPIO_LOW : ESP_GPIO_WAKEUP_GPIO_HIGH);
+                // LED во сне: без удержания пин D10 не управляется и LED может светиться
+                // весь сон. Фиксируем LOW и держим до пробуждения (снимается в on_boot).
+                id(dbg_led).turn_off();
+                ESP_LOGI("led", "OFF + hold before deep sleep");
+                gpio_set_level((gpio_num_t) ${led_gpio}, 0);
+                gpio_hold_en((gpio_num_t) ${led_gpio});
+                #if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP && !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
+                gpio_deep_sleep_hold_en();
+                #endif
+            - if:
+                condition:
+                  lambda: "return ms::pir_held;"
+                then:
+                  # PIR держит HIGH: спим до отпускания; страховочный таймер — если PIR залип
+                  - logger.log:
+                      format: "sleep until PIR release (wake on LOW), safety timer %u s"
+                      args: ["(unsigned) (ms::HELD_SAFETY_MS / 1000)"]
+                  - deep_sleep.enter:
+                      id: ds
+                      sleep_duration: !lambda "return ms::HELD_SAFETY_MS;"
+                else:
+                  - if:
+                      condition:
+                        lambda: "return ms::occupied;"
+                      then:
+                        - logger.log:
+                            format: "sleep, timer wake in %lld ms"
+                            args: ["(long long) ms::remaining_ms()"]
+                        - deep_sleep.enter:
+                            id: ds
+                            sleep_duration: !lambda |-
+                              int64_t r = ms::remaining_ms();
+                              return (uint32_t) (r < 100 ? 100 : r);
+                      else:
+                        # движения нет: спим до PIR, но не дольше Climate report interval —
+                        # по таймеру проснёмся и отправим температуру/влажность
+                        - if:
+                            condition:
+                              lambda: "return id(climate_interval).state >= 1.0f || ms::test_mode();"
+                            then:
+                              - logger.log:
+                                  format: "sleep until motion, climate report in %.0f min%s"
+                                  args: ["id(climate_interval).state", "ms::test_mode() ? \" (FAST TEST: 30 s)\" : \"\""]
+                              - deep_sleep.enter:
+                                  id: ds
+                                  sleep_duration: !lambda |-
+                                    if (ms::test_mode()) return ms::TEST_WAKE_MS;
+                                    return (uint32_t) (id(climate_interval).state * 60000.0f);
+                            else:
+                              - logger.log: "sleep until motion"
+                              - deep_sleep.enter:
+                                  id: ds
+
+  - id: service_enter
+    then:
+      - lambda: |-
+          id(service_mode) = true;
+          // счётчик включений переключателя для сброса Wi-Fi (RTC, переживает сон)
+          const int64_t now = ms::now_ms();
+          if (ms::svc_on_count == 0 || now - ms::svc_first_ms > ${wifi_reset_window_ms}) {
+            ms::svc_first_ms = now;
+            ms::svc_on_count = 0;
+          }
+          ms::svc_on_count++;
+          ESP_LOGI("ms", "service mode ON (switch on #%u of ${wifi_reset_toggles} for Wi-Fi reset)",
+                   (unsigned) ms::svc_on_count);
+          if (ms::svc_on_count >= ${wifi_reset_toggles}) {
+            ms::svc_on_count = 0;
+            id(wifi_reset_pending) = true;
+          }
+      - component.update: build_version_text
+      - logger.set_level: DEBUG
+      - script.stop: go_sleep
+      - wifi.enable:
+      - if:
+          condition:
+            lambda: "return id(wifi_reset_pending);"
+          then:
+            - delay: 1s     # дать wifi стартовать после enable
+            - lambda: |-
+                id(wifi_reset_pending) = false;
+                ESP_LOGW("ms", "Wi-Fi RESET by switch: saved network -> firmware network (no rollback)");
+                // пишет в NVS и сразу подключается к сети из прошивки; точка доступа остаётся
+                wifi::global_wifi_component->save_wifi_sta("${fw_wifi_ssid}", "${fw_wifi_password}");
+            - script.execute: wifi_reset_blink
+
+  - id: service_exit
+    then:
+      - lambda: |-
+          id(service_mode) = false;
+          ESP_LOGI("ms", "service mode OFF");
+      - logger.set_level: INFO
+      - wifi.disable:
+      - script.execute: motion_eval
+
+  # индикатор срабатываний: count коротких вспышек (только если включён Motion tracking LED)
+  # подтверждение сброса Wi-Fi: 6 быстрых вспышек, даже если Motion tracking LED выключен
+  - id: wifi_reset_blink
+    then:
+      - repeat:
+          count: 6
+          then:
+            - output.turn_on: dbg_led
+            - delay: 80ms
+            - output.turn_off: dbg_led
+            - delay: 120ms
+
+  - id: blink
+    mode: restart
+    parameters:
+      count: int
+    then:
+      - if:
+          condition:
+            lambda: "return id(debug_led_enable).state;"
+          then:
+            # пауза в темноте перед вспышками, чтобы серию было легко сосчитать
+            - lambda: |-
+                ESP_LOGI("led", "blink start: %d flash(es) [%s], service=%d",
+                         count, count == 1 ? "occupied" : "clear", (int) id(service_mode));
+            - output.turn_off: dbg_led
+            - lambda: 'ESP_LOGD("led", "OFF (pause 400 ms)");'
+            - delay: 400ms
+            - repeat:
+                count: !lambda "return count;"
+                then:
+                  - output.turn_on: dbg_led
+                  - lambda: 'ESP_LOGI("led", "flash ON");'
+                  - delay: 150ms
+                  - output.turn_off: dbg_led
+                  - lambda: 'ESP_LOGD("led", "flash OFF");'
+                  - delay: 250ms
+            - delay: 300ms
+            - lambda: 'ESP_LOGI("led", "blink done");'

@@ -1,0 +1,82 @@
+flash:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+    file:
+      required: false
+      example: move-sensor-ble.ota.bin
+      selector:
+        text:
+    timeout:
+      required: false
+      default: 180
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+cancel:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+read_settings:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+build_and_flash:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+    configuration:
+      required: false
+      default: move-sensor-ble.yaml
+      example: move-sensor-ble.yaml
+      selector:
+        text:
+    start:
+      required: false
+      default: true
+      selector:
+        boolean:
+    timeout:
+      required: false
+      default: 180
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+reset_wifi:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+fast_test:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+    minutes:
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: min
