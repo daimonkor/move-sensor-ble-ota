@@ -152,11 +152,11 @@
       "settings_status": {
         "name": "Статус настроек",
         "state": {
-          "idle": "Нет изменений",
-          "pending": "Ждёт пробуждения датчика",
-          "applied": "Применено",
-          "unknown": "Ещё не прочитаны",
-          "error": "Ошибка"
+          "idle": "Nothing pending",
+          "pending": "Waiting for sensor wake-up",
+          "applied": "Just applied",
+          "unknown": "Not read yet",
+          "error": "Error"
         }
       },
       "firmware_version": {
