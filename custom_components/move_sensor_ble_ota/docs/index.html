@@ -123,6 +123,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 .t-green{color:#16a34a;background:#22c55e1c} .t-amber{color:#d97706;background:#f59e0b1f} .t-red{color:#dc2626;background:#ef44441c}
 .t-sky{color:#0284c7;background:#0ea5e91c} .t-slate{color:#475569;background:#64748b1f}
 @media (prefers-color-scheme:dark){ .t-slate{color:#94a3b8} }
+.mylinks{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px}.mylinks img{height:32px;display:block}
 </style>
 </head>
 <body>
@@ -226,11 +227,15 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
   <p class="lead">Что нужно заранее: интеграция <b>Bluetooth</b> в HA и хотя бы один <b>Bluetooth-прокси ESPHome</b>
     рядом с датчиком (<code>bluetooth_proxy:</code> на ESP32 — активные подключения включены по умолчанию).
     На датчике — прошивка с <code>ble_ota:</code> в блоке <code>bthome:</code>.</p>
+  <div class="mylinks">
+    <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&amp;repository=move-sensor-ble-ota&amp;category=integration" target="_blank" rel="noopener"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Открыть репозиторий в Marketplace"></a>
+    <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota" target="_blank" rel="noopener"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Добавить интеграцию"></a>
+  </div>
   <div class="grid g2">
     <div class="card">
       <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--blue)"><use href="#i-store"/></svg>Из Marketplace (HA 2026.11+)</b>
       <ol class="steps" style="margin-top:10px">
-        <li>Настройки → <b>Marketplace</b> → <b>Добавить по ссылке</b> (или «Пользовательские репозитории»).</li>
+        <li>Кнопка <b>Open your Home Assistant… repository</b> выше откроет репозиторий прямо в Marketplace (до 2026.11 — в HACS). Без кнопки: Настройки → <b>Marketplace</b> → <b>Добавить по ссылке</b>.</li>
         <li>Вставить адрес GitHub-репозитория интеграции, тип <b>Integration</b>.</li>
         <li>Открыть <b>Move Sensor BLE OTA</b> → <b>Установить</b> → перезапустить HA.</li>
         <li>Дальше — «Как настроить». Обновления придут в Marketplace сами при новом релизе.</li>

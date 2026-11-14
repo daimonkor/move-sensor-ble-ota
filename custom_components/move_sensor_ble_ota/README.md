@@ -1,5 +1,11 @@
 # Move Sensor BLE OTA — интеграция Home Assistant
 
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
+[![Release](https://img.shields.io/github/v/release/OWNER/move-sensor-ble-ota)](https://github.com/OWNER/move-sensor-ble-ota/releases)
+
+[![Открыть репозиторий в Marketplace/HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration)
+[![Добавить интеграцию Move Sensor BLE OTA](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota)
+
 Прошивка по воздуху (OTA) и удалённые настройки для батарейного датчика движения
 **Move Sensor BLE** (Seeed XIAO ESP32-C3, ESPHome, BTHome, deep sleep) — **по Bluetooth,
 через Bluetooth-прокси ESPHome**, без Wi-Fi на датчике.
@@ -90,6 +96,25 @@
   Если ESPHome-конфиги лежат не там — ввести ключ в настройках интеграции.
 
 ---
+
+## Установка в один клик
+
+1. Нажать **Open your Home Assistant instance and open a repository…** (кнопка выше) → указать адрес своего HA
+   (один раз, например `http://homeassistant.local:8123`) → HA откроет Marketplace (до 2026.11 — HACS)
+   с этим репозиторием → **Скачать** → перезапустить HA.
+2. Нажать **Add integration** (вторая кнопка) → откроется мастер *Move Sensor BLE OTA*.
+3. Выбрать датчик из списка BTHome-устройств (или ввести Bluetooth-адрес), ключ оставить пустым —
+   возьмётся из `esphome/secrets.yaml`.
+
+Без кнопок: Настройки → **Marketplace** → **Добавить по ссылке** (в HACS: ⋮ → *Custom repositories*) →
+`https://github.com/OWNER/move-sensor-ble-ota`, тип *Integration*.
+
+Ссылки устроены так (их же можно вставлять в форум/Discord):
+
+```
+https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration
+https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota
+```
 
 ## Установка на свой HA (вручную)
 
