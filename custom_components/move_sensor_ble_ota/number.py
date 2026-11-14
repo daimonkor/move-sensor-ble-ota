@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SETTINGS
+from .const import DOMAIN, SETTINGS, WINDOW_KEYS
 from .entity import OtaEntity
 from .ota import OtaError
 
@@ -39,11 +39,21 @@ class SettingNumber(OtaEntity, NumberEntity):
         return self.mgr.value(self.key)
 
     @property
+    def available(self) -> bool:
+        # окна рекламы — только у прошивки, которая их умеет (иначе сущность «недоступна»)
+        if self.key in WINDOW_KEYS:
+            return self.mgr.window_supported
+        return super().available
+
+    @property
     def extra_state_attributes(self) -> dict:
-        return {
+        attrs = {
             "applied_value": self.mgr.applied.get(self.key),
             "pending": self.key in self.mgr.pending(),
         }
+        if self.key in WINDOW_KEYS:
+            attrs |= self.mgr.window_attributes()
+        return attrs
 
     async def async_set_native_value(self, value: float) -> None:
         if self.key != "voltage_factor":

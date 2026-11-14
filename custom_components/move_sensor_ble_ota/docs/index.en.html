@@ -178,7 +178,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.9.5</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.10.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -444,6 +444,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <div><b>Climate report interval (BLE)<span class="kind t-teal">number</span></b><small>How often to send temperature/humidity, min</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-bulb"/></svg></span>
       <div><b>Motion tracking LED (BLE)<span class="kind t-blue">switch</span></b><small>Trigger LED</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Motion / Climate window (BLE)<span class="kind t-sky">number</span></b><small>How long the sensor advertises after a packet, ms. Shorter = longer battery life</small></div></div>
+    <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Auto advertising window<span class="kind t-green">switch</span></b><small>Windows by signal: ≥ −75 dBm 800/1500 ms, ≥ −85 1500/2500, weaker 3000/4500; a missed climate packet makes it longer for 24 h. A manual window turns Auto off</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
       <div><b>Voltage factor (BLE)<span class="kind t-slate">number</span></b><small>Battery divider multiplier (calibrate with a multimeter)</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-cog"/></svg></span>

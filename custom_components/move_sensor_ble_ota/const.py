@@ -78,7 +78,20 @@ SETTINGS = {
     "climate_interval": ("Climate report interval", 0, 240, 1, "min", "mdi:thermometer-auto"),
     "voltage_factor": ("Voltage factor", 1.5, 2.5, 0.001, None, "mdi:division"),
     "led": ("Motion tracking LED", None, None, None, None, "mdi:led-on"),
+    # окно рекламы после пакета (2026-11-14): сколько датчик не спит, чтобы прокси услышал пакет
+    # и интеграция успела подключиться. Авто — интеграция подбирает по RSSI и пропускам (AUTO_WINDOW_LEVELS)
+    "motion_window": ("Motion window", 300, 5000, 100, "ms", "mdi:broadcast"),
+    "climate_window": ("Climate window", 300, 5000, 100, "ms", "mdi:access-point"),
 }
+WINDOW_KEYS = ("motion_window", "climate_window")
+# Авто-окно: уровень по медиане RSSI последних пакетов -> (motion_ms, climate_ms).
+# Замер 2026-11-14 (RSSI −56, прокси на настройках ESPHome по умолчанию): 0 потерь даже при 300 мс,
+# подключение успевало при 600 мс; запас на слабый сигнал — уровни ниже.
+AUTO_WINDOW_LEVELS = [(800, 1500), (1500, 2500), (3000, 4500)]
+AUTO_WINDOW_RSSI = (-75, -85)   # >= -75 -> уровень 0, >= -85 -> 1, ниже -> 2
+AUTO_WINDOW_HYST_DB = 3         # к лучшему уровню — только если сигнал лучше порога на 3 дБ
+AUTO_WINDOW_SAMPLES = 10        # медиана по последним N пакетам (минимум 5)
+AUTO_WINDOW_BOOST_H = 24        # пропущен климат-пакет -> уровень +1 на сутки
 # статус настроек (сенсор «Settings status»)
 SST_UNKNOWN = "unknown"      # ещё ни разу не читали с датчика
 SST_PENDING = "pending"      # есть изменения, ждут окна

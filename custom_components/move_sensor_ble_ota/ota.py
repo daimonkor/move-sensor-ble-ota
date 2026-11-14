@@ -73,6 +73,12 @@ from .const import (
     ST_IDLE,
     ST_SUCCESS,
     ST_WAITING,
+    WINDOW_KEYS,
+    AUTO_WINDOW_LEVELS,
+    AUTO_WINDOW_RSSI,
+    AUTO_WINDOW_HYST_DB,
+    AUTO_WINDOW_SAMPLES,
+    AUTO_WINDOW_BOOST_H,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -88,7 +94,9 @@ RESULT_HOLD_S = 120  # сколько показывать success/error/cancell
 
 # порядок полей настроек в протоколе: detect_ms, keep_s, climate_min (u16), led (u8), vfactor*1000 (u16)
 SETTINGS_FMT = "<HHHBH"
-SETTINGS_MASK = {"detect_delay": 0x01, "keep_time": 0x02, "climate_interval": 0x04, "led": 0x08, "voltage_factor": 0x10}
+SETTINGS_FMT2 = "<HHHBHHH"   # + motion_window_ms, climate_window_ms (прошивка с 2026-11-14)
+SETTINGS_MASK = {"detect_delay": 0x01, "keep_time": 0x02, "climate_interval": 0x04, "led": 0x08, "voltage_factor": 0x10,
+                 "motion_window": 0x20, "climate_window": 0x40}
 
 
 # длины объектов BTHome v2 (байт данных) — только то, что шлёт датчик и соседние типы;
@@ -223,6 +231,12 @@ def unpack_settings(payload: bytes) -> dict:
         out["led"] = bool(led)
     if vf != 0xFFFF:
         out["voltage_factor"] = round(vf / 1000.0, 3)
+    if len(payload) >= struct.calcsize(SETTINGS_FMT2):  # прошивка с окнами рекламы
+        mw, cw = struct.unpack_from("<HH", payload, struct.calcsize(SETTINGS_FMT))
+        if mw != 0xFFFF:
+            out["motion_window"] = mw
+        if cw != 0xFFFF:
+            out["climate_window"] = cw
     return out
 
 
@@ -232,13 +246,16 @@ def pack_settings(values: dict) -> bytes:
         return 0xFFFF if v is None else max(0, min(0xFFFE, int(round(float(v) * scale))))
 
     led = values.get("led")
+    # старая прошивка читает первые 9 байт и не знает битов 0x20/0x40 — хвост ей не мешает
     return struct.pack(
-        SETTINGS_FMT,
+        SETTINGS_FMT2,
         u16("detect_delay"),
         u16("keep_time"),
         u16("climate_interval"),
         255 if led is None else (1 if led else 0),
         u16("voltage_factor", 1000.0),
+        u16("motion_window"),
+        u16("climate_window"),
     )
 
 
@@ -309,6 +326,13 @@ class OtaManager:
         self.occupied: bool | None = None
         self.occupied_since: datetime | None = None
         self.stuck_threshold_min: int = 30
+        # --- авто-окно рекламы (2026-11-14): по RSSI и пропущенным климат-пакетам
+        self.auto_window: bool = True
+        self.rssi_hist: list[int] = []            # RSSI последних пакетов (новый packet id)
+        self.window_level: int | None = None
+        self.window_boost_until: datetime | None = None
+        self.missed_climate: int = 0              # пропущенные климат-пакеты (всего)
+        self._missed_for: str | None = None       # last_seen, за который пропуск уже посчитан
         self._unsub_stuck = None
         self._unsub_passive = None
         self._store: Store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -343,6 +367,12 @@ class OtaManager:
         ts_os = data.get("occupied_since")
         self.occupied_since = dt_util.parse_datetime(ts_os) if ts_os else None
         self.stuck_threshold_min = int(data.get("stuck_threshold_min") or 30)
+        aw = data.get("auto_window") or {}
+        self.auto_window = aw.get("on", True)
+        self.rssi_hist = aw.get("rssi") or []
+        self.window_level = aw.get("level")
+        self.window_boost_until = dt_util.parse_datetime(aw["boost_until"]) if aw.get("boost_until") else None
+        self.missed_climate = int(aw.get("missed") or 0)
         self._roll_day()
         from homeassistant.helpers.event import async_track_time_interval  # noqa: PLC0415
         from datetime import timedelta  # noqa: PLC0415
@@ -380,6 +410,13 @@ class OtaManager:
                 "occupied": self.occupied,
                 "occupied_since": self.occupied_since.isoformat() if self.occupied_since else None,
                 "stuck_threshold_min": self.stuck_threshold_min,
+                "auto_window": {
+                    "on": self.auto_window,
+                    "rssi": self.rssi_hist,
+                    "level": self.window_level,
+                    "boost_until": self.window_boost_until.isoformat() if self.window_boost_until else None,
+                    "missed": self.missed_climate,
+                },
             },
             10.0,
         )
@@ -417,6 +454,14 @@ class OtaManager:
     async def async_set_setting(self, key: str, value) -> None:
         if key not in SETTINGS:
             raise OtaError(f"неизвестная настройка {key}")
+        if key in WINDOW_KEYS and self.auto_window:
+            # ручное окно — авто выключаем, иначе следующий пакет перезапишет выбор
+            self.auto_window = False
+            _LOGGER.info("%s: %s задано вручную — авто-окно выключено", self.name, key)
+        self._queue_setting(key, value)
+        self._ensure_worker()
+
+    def _queue_setting(self, key: str, value) -> None:
         if same_value(key, value, self.applied.get(key)):
             self.desired.pop(key, None)  # вернули как было — ничего слать не нужно
         else:
@@ -425,7 +470,73 @@ class OtaManager:
         self.settings_note = None
         self._save()
         self._notify()
-        self._ensure_worker()
+
+    # ================= авто-окно рекламы =================
+    @property
+    def window_supported(self) -> bool:
+        """Прошивка умеет окна (прочитаны с датчика)."""
+        return "motion_window" in self.applied
+
+    def rssi_median(self) -> float | None:
+        h = self.rssi_hist[-AUTO_WINDOW_SAMPLES:]
+        if len(h) < 5:
+            return None
+        s = sorted(h)
+        n = len(s)
+        return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+
+    def _window_target_level(self) -> int | None:
+        med = self.rssi_median()
+        if med is None:
+            return None
+        hi, lo = AUTO_WINDOW_RSSI
+        raw = 0 if med >= hi else (1 if med >= lo else 2)
+        cur = self.window_level
+        if cur is not None and raw < cur:
+            # к лучшему уровню — только с запасом (гистерезис), чтобы не дёргать датчик
+            thr = hi if raw == 0 else lo
+            if med < thr + AUTO_WINDOW_HYST_DB:
+                raw = cur
+        if self.window_boost_until and self.window_boost_until > dt_util.utcnow():
+            raw = min(raw + 1, len(AUTO_WINDOW_LEVELS) - 1)
+        return raw
+
+    def _auto_window(self) -> None:
+        if not self.auto_window or not self.window_supported:
+            return
+        lvl = self._window_target_level()
+        if lvl is None:
+            return
+        motion, climate = AUTO_WINDOW_LEVELS[lvl]
+        changed = False
+        for key, val in (("motion_window", motion), ("climate_window", climate)):
+            if not same_value(key, val, self.value(key)):
+                self._queue_setting(key, val)
+                changed = True
+        if lvl != self.window_level:
+            _LOGGER.info("%s: авто-окно уровень %s (RSSI медиана %s дБм) -> %s/%s мс",
+                         self.name, lvl, self.rssi_median(), motion, climate)
+            self.window_level = lvl
+            self._save()
+        if changed:
+            self._ensure_worker()
+
+    def window_attributes(self) -> dict:
+        return {
+            "auto": self.auto_window,
+            "level": self.window_level,
+            "rssi_median": self.rssi_median(),
+            "boost_until": self.window_boost_until.isoformat() if self.window_boost_until else None,
+            "missed_climate_packets": self.missed_climate,
+            "supported_by_firmware": self.window_supported,
+        }
+
+    async def async_set_auto_window(self, on: bool) -> None:
+        self.auto_window = on
+        self._save()
+        self._notify()
+        if on:
+            self._auto_window()
 
     async def async_discard_pending(self) -> None:
         self.desired = {}
@@ -662,6 +773,9 @@ class OtaManager:
             return
         self._last_pid = pid
         self._account(parsed, now)
+        if service_info.rssi is not None and service_info.rssi > -127:
+            self.rssi_hist = (self.rssi_hist + [int(service_info.rssi)])[-AUTO_WINDOW_SAMPLES * 2:]
+            self._auto_window()
         self.last_seen = now
         self.last_seen_info = {
             "packet_id": pid,
@@ -762,6 +876,7 @@ class OtaManager:
             self.test_mode.update(state="off", want=False)
             self._save()
             self._notify()
+        self._check_missed_climate()
         stuck = self.pir_stuck
         if stuck != getattr(self, "_stuck_reported", None) or before != self.stats.get("date"):
             if stuck and not getattr(self, "_stuck_reported", False):
@@ -769,6 +884,27 @@ class OtaManager:
             self._stuck_reported = stuck
             self._save()
             self._notify()
+
+    def _check_missed_climate(self) -> None:
+        """Нет пакета дольше 1,8 x Climate report interval (+1 мин) при «пусто» — климат-пакет потерян:
+        окно рекламы на сутки на уровень длиннее (если авто)."""
+        ci = self.value("climate_interval")
+        if not ci or self.last_seen is None or self.occupied or self.test_mode_on:
+            return
+        key = self.last_seen.isoformat()
+        if key == self._missed_for:
+            return
+        from datetime import timedelta  # noqa: PLC0415
+
+        if dt_util.utcnow() - self.last_seen > timedelta(minutes=float(ci) * 1.8 + 1):
+            self._missed_for = key
+            self.missed_climate += 1
+            self.window_boost_until = dt_util.utcnow() + timedelta(hours=AUTO_WINDOW_BOOST_H)
+            _LOGGER.warning("%s: пропущен климат-пакет (нет пакетов %s мин) — окно длиннее на сутки",
+                            self.name, round((dt_util.utcnow() - self.last_seen).total_seconds() / 60))
+            self._save()
+            self._notify()
+            self._auto_window()
 
     def _ensure_worker(self) -> None:
         if not self._has_work():

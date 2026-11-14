@@ -177,7 +177,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.9.5</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.10.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -443,6 +443,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <div><b>Climate report interval (BLE)<span class="kind t-teal">number</span></b><small>Как часто слать температуру/влажность, мин</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-bulb"/></svg></span>
       <div><b>Motion tracking LED (BLE)<span class="kind t-blue">switch</span></b><small>Светодиод срабатываний</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Motion / Climate window (BLE)<span class="kind t-sky">number</span></b><small>Сколько датчик рекламирует после пакета, мс. Короче — дольше батарея</small></div></div>
+    <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Auto advertising window<span class="kind t-green">switch</span></b><small>Окна по уровню сигнала: ≥ −75 дБм 800/1500 мс, ≥ −85 1500/2500, слабее 3000/4500; пропуск климат-пакета — на сутки длиннее. Ручное окно выключает авто</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
       <div><b>Voltage factor (BLE)<span class="kind t-slate">number</span></b><small>Множитель делителя батареи (калибровка по тестеру)</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-cog"/></svg></span>
