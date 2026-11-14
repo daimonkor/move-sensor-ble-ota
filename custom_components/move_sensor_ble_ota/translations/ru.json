@@ -144,13 +144,13 @@
   "entity": {
     "sensor": {
       "ota_status": {
-        "name": "Статус прошивки"
+        "name": "Firmware update status"
       },
       "ota_progress": {
-        "name": "Прогресс прошивки"
+        "name": "Firmware update progress"
       },
       "settings_status": {
-        "name": "Статус настроек",
+        "name": "Settings status",
         "state": {
           "idle": "Nothing pending",
           "pending": "Waiting for sensor wake-up",
@@ -160,87 +160,87 @@
         }
       },
       "firmware_version": {
-        "name": "Версия прошивки"
+        "name": "Firmware version"
       },
       "brownout_count": {
-        "name": "Перезагрузки по питанию"
+        "name": "Brownout resets"
       },
       "crash_count": {
-        "name": "Сбои прошивки"
+        "name": "Firmware crashes"
       },
       "last_reset_reason": {
-        "name": "Причина перезагрузки"
+        "name": "Last reset reason"
       },
       "last_seen": {
-        "name": "Последний пакет"
+        "name": "Last seen"
       },
       "battery_days_left": {
-        "name": "Хватит батареи"
+        "name": "Battery days left"
       },
       "motion_events_today": {
-        "name": "Движений сегодня"
+        "name": "Motion events today"
       },
       "wakes_today": {
-        "name": "Пробуждений с полуночи"
+        "name": "Wakes since midnight"
       }
     },
     "binary_sensor": {
       "pir_stuck": {
-        "name": "PIR залип"
+        "name": "PIR stuck"
       }
     },
     "number": {
       "setting_detect_delay": {
-        "name": "Задержка срабатывания"
+        "name": "Detect delay"
       },
       "setting_keep_time": {
-        "name": "Держать «занято»"
+        "name": "Keep time"
       },
       "setting_climate_interval": {
-        "name": "Интервал климата"
+        "name": "Climate report interval"
       },
       "setting_voltage_factor": {
-        "name": "Коэффициент напряжения"
+        "name": "Voltage factor"
       },
       "setting_motion_window": {
-        "name": "Окно рекламы: движение"
+        "name": "Advertising window: motion"
       },
       "setting_climate_window": {
-        "name": "Окно рекламы: климат"
+        "name": "Advertising window: climate"
       },
       "setting_temp_offset": {
-        "name": "Поправка температуры"
+        "name": "Temperature offset"
       },
       "setting_hum_offset": {
-        "name": "Поправка влажности"
+        "name": "Humidity offset"
       },
       "pir_stuck_threshold": {
-        "name": "PIR залип через"
+        "name": "PIR stuck after"
       }
     },
     "switch": {
       "setting_led": {
-        "name": "Светодиод срабатываний"
+        "name": "Motion LED"
       },
       "auto_window": {
-        "name": "Авто-окно по сигналу"
+        "name": "Auto advertising window"
       }
     },
     "button": {
       "ota_flash": {
-        "name": "Прошить готовый файл"
+        "name": "Flash firmware file"
       },
       "ota_build_flash": {
-        "name": "Собрать и прошить"
+        "name": "Build & flash firmware"
       },
       "ota_cancel": {
-        "name": "Отменить прошивку"
+        "name": "Cancel firmware update"
       },
       "settings_read": {
-        "name": "Прочитать настройки"
+        "name": "Read settings"
       },
       "wifi_reset": {
-        "name": "Сбросить Wi-Fi на заводской"
+        "name": "Reset Wi-Fi to default"
       }
     }
   }
