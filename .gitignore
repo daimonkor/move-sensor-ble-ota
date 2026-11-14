@@ -10,6 +10,5 @@ esphome/move_sensor_ble/site/vendor/node_modules/
 
 # служебные файлы SMB/macOS
 .smbdelete*
-.DS_Store
 ._*
 .nfs*
