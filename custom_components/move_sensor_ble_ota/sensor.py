@@ -36,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class OtaStatusSensor(OtaEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC  # сервисное — в «Диагностику»
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [ST_IDLE, ST_BUILDING, ST_WAITING, ST_CONNECTING, ST_FLASHING, ST_SUCCESS, ST_ERROR, ST_CANCELLED]
     _attr_icon = "mdi:bluetooth-transfer"
@@ -53,6 +54,7 @@ class OtaStatusSensor(OtaEntity, SensorEntity):
 
 
 class OtaProgressSensor(OtaEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC  # сервисное — в «Диагностику»
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:progress-upload"
@@ -232,6 +234,7 @@ class MotionEventsTodaySensor(OtaEntity, SensorEntity):
 
 
 class WakesTodaySensor(OtaEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC  # сервисное — в «Диагностику»
     """Пробуждения за сегодня: всего (по Wake count), с отправкой пакета и тихие (без радио)."""
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING

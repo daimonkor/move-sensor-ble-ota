@@ -17,7 +17,10 @@ class OtaEntity(Entity):
     def __init__(self, mgr: OtaManager, key: str, name: str) -> None:
         self.mgr = mgr
         self._attr_unique_id = f"{mgr.address}_{key}"
-        self._attr_name = name
+        # имя — из translations/<язык>.json (entity.<platform>.<key>.name): по-русски в русском HA;
+        # name — запасной английский, если перевода нет
+        self._attr_translation_key = key
+        self._fallback_name = name
         # connections совпадает с устройством BTHome — сущности появятся на его странице
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mgr.address)},

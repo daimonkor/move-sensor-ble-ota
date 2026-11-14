@@ -140,5 +140,95 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "ota_status": {
+        "name": "Статус прошивки"
+      },
+      "ota_progress": {
+        "name": "Прогресс прошивки"
+      },
+      "settings_status": {
+        "name": "Статус настроек"
+      },
+      "firmware_version": {
+        "name": "Версия прошивки"
+      },
+      "brownout_count": {
+        "name": "Перезагрузки по питанию"
+      },
+      "crash_count": {
+        "name": "Сбои прошивки"
+      },
+      "last_reset_reason": {
+        "name": "Причина перезагрузки"
+      },
+      "last_seen": {
+        "name": "Последний пакет"
+      },
+      "battery_days_left": {
+        "name": "Хватит батареи"
+      },
+      "motion_events_today": {
+        "name": "Движений сегодня"
+      },
+      "wakes_today": {
+        "name": "Пробуждений сегодня"
+      }
+    },
+    "binary_sensor": {
+      "pir_stuck": {
+        "name": "PIR залип"
+      }
+    },
+    "number": {
+      "setting_detect_delay": {
+        "name": "Задержка срабатывания"
+      },
+      "setting_keep_time": {
+        "name": "Держать «занято»"
+      },
+      "setting_climate_interval": {
+        "name": "Интервал климата"
+      },
+      "setting_voltage_factor": {
+        "name": "Коэффициент напряжения"
+      },
+      "setting_motion_window": {
+        "name": "Окно рекламы: движение"
+      },
+      "setting_climate_window": {
+        "name": "Окно рекламы: климат"
+      },
+      "pir_stuck_threshold": {
+        "name": "PIR залип через"
+      }
+    },
+    "switch": {
+      "setting_led": {
+        "name": "Светодиод срабатываний"
+      },
+      "auto_window": {
+        "name": "Авто-окно по сигналу"
+      }
+    },
+    "button": {
+      "ota_flash": {
+        "name": "Прошить готовый файл"
+      },
+      "ota_build_flash": {
+        "name": "Собрать и прошить"
+      },
+      "ota_cancel": {
+        "name": "Отменить прошивку"
+      },
+      "settings_read": {
+        "name": "Прочитать настройки"
+      },
+      "wifi_reset": {
+        "name": "Сбросить Wi-Fi на заводской"
+      }
+    }
   }
 }

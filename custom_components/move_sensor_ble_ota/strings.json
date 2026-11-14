@@ -140,5 +140,95 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "ota_status": {
+        "name": "Firmware update status"
+      },
+      "ota_progress": {
+        "name": "Firmware update progress"
+      },
+      "settings_status": {
+        "name": "Settings status"
+      },
+      "firmware_version": {
+        "name": "Firmware version"
+      },
+      "brownout_count": {
+        "name": "Brownout resets"
+      },
+      "crash_count": {
+        "name": "Firmware crashes"
+      },
+      "last_reset_reason": {
+        "name": "Last reset reason"
+      },
+      "last_seen": {
+        "name": "Last seen"
+      },
+      "battery_days_left": {
+        "name": "Battery days left"
+      },
+      "motion_events_today": {
+        "name": "Motion events today"
+      },
+      "wakes_today": {
+        "name": "Wakes today"
+      }
+    },
+    "binary_sensor": {
+      "pir_stuck": {
+        "name": "PIR stuck"
+      }
+    },
+    "number": {
+      "setting_detect_delay": {
+        "name": "Detect delay"
+      },
+      "setting_keep_time": {
+        "name": "Keep time"
+      },
+      "setting_climate_interval": {
+        "name": "Climate report interval"
+      },
+      "setting_voltage_factor": {
+        "name": "Voltage factor"
+      },
+      "setting_motion_window": {
+        "name": "Advertising window: motion"
+      },
+      "setting_climate_window": {
+        "name": "Advertising window: climate"
+      },
+      "pir_stuck_threshold": {
+        "name": "PIR stuck after"
+      }
+    },
+    "switch": {
+      "setting_led": {
+        "name": "Motion LED"
+      },
+      "auto_window": {
+        "name": "Auto advertising window"
+      }
+    },
+    "button": {
+      "ota_flash": {
+        "name": "Flash firmware file"
+      },
+      "ota_build_flash": {
+        "name": "Build & flash firmware"
+      },
+      "ota_cancel": {
+        "name": "Cancel firmware update"
+      },
+      "settings_read": {
+        "name": "Read settings"
+      },
+      "wifi_reset": {
+        "name": "Reset Wi-Fi to default"
+      }
+    }
   }
 }
