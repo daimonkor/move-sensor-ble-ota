@@ -32,7 +32,7 @@ proxy or the sensor. Wave a hand in front of the sensor to get a window sooner.
 | Entity | Purpose |
 |---|---|
 | **Detect delay / Keep time / Climate report interval / Voltage factor (BLE)**, **Motion tracking LED (BLE)** | Sensor settings, applied at the next wake-up |
-| **Settings status** / **Read settings (BLE)** | `applied` / `pending` / `unknown` / `error`; read the actual settings from the sensor |
+| **Settings status** / **Read settings (BLE)** | `idle` (nothing pending) / `pending` (waiting for wake-up) / `applied` (just applied, back to `idle` after 5 min) / `unknown` / `error`; read the actual settings from the sensor |
 | **Build & flash firmware (BLE)** | Compile `move-sensor-ble.yaml` in the ESPHome Builder add-on and flash it over BLE |
 | **Flash firmware (BLE)** / **Cancel OTA** | Flash the newest `.bin` from the firmware folder / cancel |
 | **OTA status / OTA progress** | `idle → building → waiting → connecting → flashing → success / error / cancelled` |
@@ -66,7 +66,7 @@ The detailed documentation below is in Russian.
 | **Detect delay / Keep time / Climate report interval / Voltage factor (BLE)** | Настройки датчика. Новое значение уходит в ближайшее окно пробуждения |
 | **Motion tracking LED (BLE)** | Вкл/выкл светодиод срабатываний |
 | **Motion window / Climate window (BLE)** + **Auto advertising window** | Сколько датчик рекламирует после пакета: «движение/пусто» и климат. Короче окно — меньше бодрствует, дольше батарея. **Авто** (по умолчанию): по медиане RSSI последних 10 пакетов — ≥ −75 дБм → 800/1500 мс, ≥ −85 → 1500/2500, слабее → 3000/4500 (к лучшему уровню — с запасом 3 дБ); пропущен климат-пакет (нет пакетов дольше 1,8 × Climate interval) — на сутки уровень длиннее. Ручное значение выключает авто. Нужна прошивка с окнами (иначе сущности недоступны). На дашборде Move Sensor BLE — отдельная группа «Радио (BLE)». Замер 2026-11-14: RSSI −56, прокси на настройках ESPHome по умолчанию — 0 потерь даже при 300 мс, подключение успевало при 600 мс |
-| **Settings status** | `applied` — датчик подтвердил; `pending` — ждёт окна (в атрибутах: что именно); `unknown` — ещё не читали; `error` |
+| **Статус настроек** (v1.11.1) | «Нет изменений» (`idle`) — всё на датчике совпадает с HA; «Ждёт пробуждения датчика» (`pending`, в атрибутах — что именно); «Применено» (`applied`) — датчик только что подтвердил, через 5 мин сбрасывается в «Нет изменений»; «Ещё не прочитаны» (`unknown`); «Ошибка» (`error`) |
 | **Read settings (BLE)** | Прочитать фактические настройки с датчика в ближайшее окно |
 | **Build & flash firmware (BLE)** | Собрать `move-sensor-ble.yaml` в аддоне ESPHome Builder и сразу прошить по BLE — одна кнопка, без скачивания файлов |
 | **Flash firmware (BLE)** | Прошить самым свежим `.bin` из папки прошивок |

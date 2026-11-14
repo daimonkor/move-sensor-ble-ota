@@ -150,7 +150,14 @@
         "name": "Firmware update progress"
       },
       "settings_status": {
-        "name": "Settings status"
+        "name": "Settings status",
+        "state": {
+          "idle": "Nothing pending",
+          "pending": "Waiting for sensor wake-up",
+          "applied": "Just applied",
+          "unknown": "Not read yet",
+          "error": "Error"
+        }
       },
       "firmware_version": {
         "name": "Firmware version"

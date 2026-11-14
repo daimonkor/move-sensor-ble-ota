@@ -95,7 +95,9 @@ AUTO_WINDOW_BOOST_H = 24        # пропущен климат-пакет -> у
 # статус настроек (сенсор «Settings status»)
 SST_UNKNOWN = "unknown"      # ещё ни разу не читали с датчика
 SST_PENDING = "pending"      # есть изменения, ждут окна
-SST_APPLIED = "applied"      # датчик подтвердил
+SST_APPLIED = "applied"      # датчик подтвердил (держится SETTINGS_APPLIED_SHOW_MIN, потом -> idle)
+SST_IDLE = "idle"            # ничего не ждёт: всё на датчике совпадает с HA
+SETTINGS_APPLIED_SHOW_MIN = 5
 SST_ERROR = "error"
 SERVICE_READ_SETTINGS = "read_settings"
 SERVICE_RESET_WIFI = "reset_wifi"

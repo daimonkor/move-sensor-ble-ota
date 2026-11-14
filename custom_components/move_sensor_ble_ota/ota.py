@@ -61,6 +61,8 @@ from .const import (
     SETTINGS,
     SIGNAL_UPDATE,
     SST_APPLIED,
+    SST_IDLE,
+    SETTINGS_APPLIED_SHOW_MIN,
     SST_ERROR,
     SST_PENDING,
     SST_UNKNOWN,
@@ -296,6 +298,8 @@ class OtaManager:
         self.desired: dict = {}   # что задано в HA и ещё не подтверждено датчиком
         self.applied: dict = {}   # что датчик подтвердил последним
         self.settings_synced: datetime | None = None
+        self.settings_applied_at: datetime | None = None  # когда датчик подтвердил последние изменения
+        self._last_sst: str | None = None
         self.firmware_version: str | None = None  # версия сборки на датчике (по INFO)
         self.firmware_seen: datetime | None = None
         self.settings_error: str | None = None
@@ -439,13 +443,18 @@ class OtaManager:
             return SST_PENDING
         if not self.applied:
             return SST_UNKNOWN
-        return SST_APPLIED
+        if self.settings_applied_at is not None:
+            from datetime import timedelta  # noqa: PLC0415
+            if dt_util.now() - self.settings_applied_at < timedelta(minutes=SETTINGS_APPLIED_SHOW_MIN):
+                return SST_APPLIED
+        return SST_IDLE
 
     def settings_attributes(self) -> dict:
         return {
             "pending": self.pending(),
             "applied": self.applied,
             "last_sync": self.settings_synced.isoformat() if self.settings_synced else None,
+            "last_applied": self.settings_applied_at.isoformat() if self.settings_applied_at else None,
             "error": self.settings_error,
             "note": self.settings_note,
             "window": self.window_state,
@@ -877,6 +886,11 @@ class OtaManager:
             self._save()
             self._notify()
         self._check_missed_climate()
+        sst = self.settings_status
+        if sst != self._last_sst:
+            # applied -> idle через SETTINGS_APPLIED_SHOW_MIN: обновить сенсор
+            self._last_sst = sst
+            self._notify()
         stuck = self.pir_stuck
         if stuck != getattr(self, "_stuck_reported", None) or before != self.stats.get("date"):
             if stuck and not getattr(self, "_stuck_reported", False):
@@ -1215,6 +1229,8 @@ class OtaManager:
         self.settings_note = "; ".join(notes) or None
         self.settings_error = None
         self.settings_synced = dt_util.now()
+        if pend:
+            self.settings_applied_at = self.settings_synced
         self._save()
         self._notify()
         _LOGGER.info("%s: settings %s: %s%s", self.name, "applied" if pend else "read", actual,

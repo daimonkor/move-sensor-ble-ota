@@ -12,6 +12,7 @@ from .const import (
     DOMAIN,
     SST_APPLIED,
     SST_ERROR,
+    SST_IDLE,
     SST_PENDING,
     SST_UNKNOWN,
     ST_CANCELLED,
@@ -68,10 +69,10 @@ class OtaProgressSensor(OtaEntity, SensorEntity):
 
 
 class SettingsStatusSensor(OtaEntity, SensorEntity):
-    """Применились ли настройки: applied / pending (ждут окна) / unknown / error."""
+    """Настройки: idle (ничего не ждёт) / pending (ждут пробуждения) / applied (только что, 5 мин) / unknown / error."""
 
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = [SST_UNKNOWN, SST_PENDING, SST_APPLIED, SST_ERROR]
+    _attr_options = [SST_IDLE, SST_PENDING, SST_APPLIED, SST_UNKNOWN, SST_ERROR]
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:cog-sync"
 

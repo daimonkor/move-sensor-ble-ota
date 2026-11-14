@@ -177,7 +177,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.11.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.11.1</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -286,7 +286,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <b>После добавления</b>
       <ul style="margin:8px 0 0;padding-left:18px">
         <li>Сущности «… (BLE)» появятся на странице того же устройства, что и BTHome-датчик.</li>
-        <li>При первом пробуждении интеграция прочитает настройки и версию: <span class="chip c-gray">unknown</span> → <span class="chip c-green">applied</span>.</li>
+        <li>При первом пробуждении интеграция прочитает настройки и версию: <span class="chip c-gray">Ещё не прочитаны</span> → <span class="chip c-gray">Нет изменений</span>.</li>
         <li>Поменять ключ или папку: страница интеграции → <b>Настроить → «Параметры»</b>.</li>
         <li>Документация — кнопки «Документация» (страница интеграции) и «Посетить» (страница устройства).</li>
       </ul>
@@ -347,10 +347,11 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
   </table>
   <div class="chips" style="margin-top:14px">
     <b style="margin-right:4px">Settings status:</b>
-    <span class="chip c-gray">unknown</span><span style="color:var(--muted);font-size:13px">ещё не читали</span>
-    <span class="chip c-amber">pending</span><span style="color:var(--muted);font-size:13px">ждёт окна</span>
-    <span class="chip c-green">applied</span><span style="color:var(--muted);font-size:13px">датчик подтвердил</span>
-    <span class="chip c-red">error</span>
+    <span class="chip c-gray">Нет изменений</span><span style="color:var(--muted);font-size:13px">ничего не ждёт</span>
+    <span class="chip c-gray">Ещё не прочитаны</span>
+    <span class="chip c-amber">Ждёт пробуждения датчика</span><span style="color:var(--muted);font-size:13px">в атрибуте pending — что именно</span>
+    <span class="chip c-green">Применено</span><span style="color:var(--muted);font-size:13px">датчик подтвердил; через 5 мин → «Нет изменений»</span>
+    <span class="chip c-red">Ошибка</span>
   </div>
 </section>
 

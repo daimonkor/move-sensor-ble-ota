@@ -178,7 +178,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.11.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.11.1</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -287,7 +287,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <b>After adding</b>
       <ul style="margin:8px 0 0;padding-left:18px">
         <li>The "… (BLE)" entities appear on the same device page as the BTHome sensor.</li>
-        <li>On the first wake-up the integration reads the settings and version: <span class="chip c-gray">unknown</span> → <span class="chip c-green">applied</span>.</li>
+        <li>On the first wake-up the integration reads the settings and version: <span class="chip c-gray">Not read yet</span> → <span class="chip c-gray">Nothing pending</span>.</li>
         <li>To change the key or folder: integration page → <b>Configure → "Options"</b>.</li>
         <li>Documentation — the "Documentation" button (integration page) and "Visit" (device page).</li>
       </ul>
@@ -348,10 +348,11 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
   </table>
   <div class="chips" style="margin-top:14px">
     <b style="margin-right:4px">Settings status:</b>
-    <span class="chip c-gray">unknown</span><span style="color:var(--muted);font-size:13px">not read yet</span>
-    <span class="chip c-amber">pending</span><span style="color:var(--muted);font-size:13px">waiting for a window</span>
-    <span class="chip c-green">applied</span><span style="color:var(--muted);font-size:13px">confirmed by the sensor</span>
-    <span class="chip c-red">error</span>
+    <span class="chip c-gray">Nothing pending</span><span style="color:var(--muted);font-size:13px">sensor matches HA</span>
+    <span class="chip c-gray">Not read yet</span>
+    <span class="chip c-amber">Waiting for sensor wake-up</span><span style="color:var(--muted);font-size:13px">the pending attribute lists what</span>
+    <span class="chip c-green">Just applied</span><span style="color:var(--muted);font-size:13px">confirmed; after 5 min → «Nothing pending»</span>
+    <span class="chip c-red">Error</span>
   </div>
 </section>
 
