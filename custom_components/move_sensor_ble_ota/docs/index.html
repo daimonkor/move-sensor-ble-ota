@@ -228,8 +228,8 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
     рядом с датчиком (<code>bluetooth_proxy:</code> на ESP32 — активные подключения включены по умолчанию).
     На датчике — прошивка с <code>ble_ota:</code> в блоке <code>bthome:</code>.</p>
   <div class="mylinks">
-    <a href="/_my_redirect/hacs_repository?owner=OWNER&amp;repository=move-sensor-ble-ota&amp;category=integration" target="_top"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Открыть репозиторий в Marketplace"></a>
-    <a href="/_my_redirect/config_flow_start?domain=move_sensor_ble_ota" target="_top"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Добавить интеграцию"></a>
+    <a href="/_my_redirect/hacs_repository?owner=OWNER&amp;repository=move-sensor-ble-ota&amp;category=integration" class="ha-nav"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Открыть репозиторий в Marketplace"></a>
+    <a href="/_my_redirect/config_flow_start?domain=move_sensor_ble_ota" class="ha-nav"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Добавить интеграцию"></a>
   </div>
   <div class="grid g2">
     <div class="card">
@@ -512,5 +512,21 @@ curl -X POST -H "Authorization: Bearer $HA_TOKEN" \
 </footer>
 
 </main>
+<script>
+/* Кнопки My Home Assistant: страница открыта в iframe-панели HA (sandbox без top-navigation),
+   поэтому переходим так же, как сам фронтенд HA: pushState в родителе + событие location-changed. */
+document.querySelectorAll('a.ha-nav').forEach(function(a){
+  a.addEventListener('click',function(e){
+    try{
+      var w=window.parent;
+      if(w&&w!==window&&w.location.origin===location.origin){
+        e.preventDefault();
+        w.history.pushState(null,'',a.getAttribute('href'));
+        w.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:false}}));
+      }
+    }catch(err){}
+  });
+});
+</script>
 </body>
 </html>
