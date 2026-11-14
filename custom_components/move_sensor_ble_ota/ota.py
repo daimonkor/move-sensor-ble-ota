@@ -969,9 +969,13 @@ class OtaManager:
         until = dt_util.parse_datetime(t["until"]) if t.get("until") else None
         return t.get("state") == "active" and until is not None and until > dt_util.utcnow()
 
-    async def async_set_test_mode(self, on: bool, minutes: int = TEST_MODE_MIN) -> None:
-        """Быстрый тест (только для отладки, без сущности в UI): просыпаться раз в 30 с."""
+    async def async_set_test_mode(self, on: bool, minutes: int = TEST_MODE_MIN, tx_window_ms: int = 0) -> None:
+        """Быстрый тест (только для отладки, без сущности в UI): просыпаться раз в 30 с.
+
+        tx_window_ms — окно рекламы после пакета на время теста (0 = как в прошивке); старая
+        прошивка лишние байты команды игнорирует."""
         self.test_mode = {"want": on, "minutes": minutes if on else 0, "state": "pending",
+                          "tx_window_ms": tx_window_ms if on else 0,
                           "requested": dt_util.now().isoformat()}
         self._save()
         self._notify()
@@ -980,7 +984,8 @@ class OtaManager:
     async def _send_test_mode(self, command) -> None:
         minutes = int(self.test_mode.get("minutes", TEST_MODE_MIN)) if self.test_mode.get("want") else 0
         try:
-            rsp = await command(bytes([CMD_TEST_MODE, minutes]), timeout=3.0)
+            tx_ms = int(self.test_mode.get("tx_window_ms") or 0) if minutes else 0
+            rsp = await command(bytes([CMD_TEST_MODE, minutes]) + tx_ms.to_bytes(2, "little"), timeout=3.0)
         except asyncio.TimeoutError:
             return
         if rsp[1] == 0:
@@ -989,7 +994,8 @@ class OtaManager:
             self.test_mode.update(state="active" if minutes else "off",
                                   until=(now + timedelta(minutes=minutes)).isoformat() if minutes else None,
                                   error=None)
-            _LOGGER.info("%s: fast test mode %s", self.name, f"ON for {minutes} min" if minutes else "OFF")
+            _LOGGER.info("%s: fast test mode %s", self.name,
+                         f"ON for {minutes} min, tx_window {tx_ms or 'default'} ms" if minutes else "OFF")
         else:
             msg = "прошивка без быстрого теста" if rsp[1] == 10 else DEVICE_STATUS.get(rsp[1], f"status {rsp[1]}")
             self.test_mode.update(state="error", error=msg, want=False)

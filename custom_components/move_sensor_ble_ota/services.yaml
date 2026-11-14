@@ -80,3 +80,12 @@ fast_test:
           min: 0
           max: 120
           unit_of_measurement: min
+    tx_window_ms:
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 100
+          unit_of_measurement: ms

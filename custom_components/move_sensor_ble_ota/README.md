@@ -231,7 +231,7 @@ python3 /config/esphome/tools/ble_ota_flash.py --file x.bin    # прошить 
 | Загрузить `.bin` и сразу прошить | `POST /api/move_sensor_ble_ota/upload?filename=<имя>.bin&start=1` — тело: файл (raw или multipart), токен администратора |
 | Прошить | сервис `move_sensor_ble_ota.flash` (`file`, `timeout` мин, `config_entry_id`) |
 | Отменить | сервис `move_sensor_ble_ota.cancel` |
-| Быстрый тест (отладка) | сервис `move_sensor_ble_ota.fast_test` (`minutes`, 0 = выкл) — без движения датчик просыпается раз в 30 с; в UI сущности нет |
+| Быстрый тест (отладка) | сервис `move_sensor_ble_ota.fast_test` (`minutes`, 0 = выкл; `tx_window_ms` — окно рекламы на время теста, 0 = как в прошивке) — без движения датчик просыпается раз в 30 с; в UI сущности нет. Окно: замер, сколько рекламы хватает прокси (потери = пропуски Wake count) |
 | Прочитать настройки | сервис `move_sensor_ble_ota.read_settings` |
 | Изменить настройку | `number.set_value` / `switch.turn_on/off` на сущностях «… (BLE)» |
 | Состояние | `GET /api/move_sensor_ble_ota/status` |

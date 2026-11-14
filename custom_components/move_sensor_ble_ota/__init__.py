@@ -248,13 +248,15 @@ def _register_services(hass: HomeAssistant) -> None:
     async def fast_test(call: ServiceCall) -> ServiceResponse:
         mgr = _pick(hass, call.data.get(ATTR_ENTRY_ID))
         minutes = call.data["minutes"]
-        await mgr.async_set_test_mode(minutes > 0, minutes)
+        await mgr.async_set_test_mode(minutes > 0, minutes, call.data["tx_window_ms"])
         return {"test_mode": mgr.test_mode}
 
     hass.services.async_register(
         DOMAIN, SERVICE_FAST_TEST, fast_test,
         schema=vol.Schema({vol.Optional(ATTR_ENTRY_ID): cv.string,
-                           vol.Optional("minutes", default=30): vol.All(vol.Coerce(int), vol.Range(min=0, max=120))}),
+                           vol.Optional("minutes", default=30): vol.All(vol.Coerce(int), vol.Range(min=0, max=120)),
+                           # окно рекламы на время теста, мс (0 = как в прошивке) — замер окна для прокси
+                           vol.Optional("tx_window_ms", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=10000))}),
         supports_response=SupportsResponse.OPTIONAL,
     )
 

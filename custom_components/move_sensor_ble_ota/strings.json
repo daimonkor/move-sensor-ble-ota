@@ -133,6 +133,10 @@
         "minutes": {
           "name": "Minutes",
           "description": "0 = turn off."
+        },
+        "tx_window_ms": {
+          "name": "Advertising window",
+          "description": "Test only: how long the sensor advertises after a packet, ms (0 = firmware value)."
         }
       }
     }
