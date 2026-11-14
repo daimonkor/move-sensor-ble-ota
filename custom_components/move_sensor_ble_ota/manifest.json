@@ -1,7 +1,9 @@
 {
   "domain": "move_sensor_ble_ota",
   "name": "Move Sensor BLE OTA",
-  "codeowners": [],
+  "codeowners": [
+    "@daimonkor"
+  ],
   "config_flow": true,
   "dependencies": [
     "bluetooth",

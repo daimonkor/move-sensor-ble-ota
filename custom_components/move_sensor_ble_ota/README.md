@@ -1,9 +1,9 @@
 # Move Sensor BLE OTA — интеграция Home Assistant
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-[![Release](https://img.shields.io/github/v/release/OWNER/move-sensor-ble-ota)](https://github.com/OWNER/move-sensor-ble-ota/releases)
+[![Release](https://img.shields.io/github/v/release/daimonkor/move-sensor-ble-ota)](https://github.com/daimonkor/move-sensor-ble-ota/releases)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=daimonkor&repository=move-sensor-ble-ota&category=integration)
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota)
 
 Прошивка по воздуху (OTA) и удалённые настройки для батарейного датчика движения
@@ -149,12 +149,12 @@ The detailed documentation below is in Russian.
    возьмётся из `esphome/secrets.yaml`.
 
 Без кнопок: Настройки → **Marketplace** → **Добавить по ссылке** (в HACS: ⋮ → *Custom repositories*) →
-`https://github.com/OWNER/move-sensor-ble-ota`, тип *Integration*.
+`https://github.com/daimonkor/move-sensor-ble-ota`, тип *Integration*.
 
 Ссылки устроены так (их же можно вставлять в форум/Discord):
 
 ```
-https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration
+https://my.home-assistant.io/redirect/hacs_repository/?owner=daimonkor&repository=move-sensor-ble-ota&category=integration
 https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota
 ```
 

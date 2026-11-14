@@ -1,9 +1,9 @@
 # Move Sensor BLE
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-[![Release](https://img.shields.io/github/v/release/OWNER/move-sensor-ble-ota)](https://github.com/OWNER/move-sensor-ble-ota/releases)
+[![Release](https://img.shields.io/github/v/release/daimonkor/move-sensor-ble-ota)](https://github.com/daimonkor/move-sensor-ble-ota/releases)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=daimonkor&repository=move-sensor-ble-ota&category=integration)
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota)
 
 **English** · [Русский](#русский)
@@ -33,7 +33,7 @@ Bluetooth proxies**. The sensor never needs Wi-Fi in normal operation.
 2. Click **Add integration** → the *Move Sensor BLE OTA* setup flow opens → pick the BTHome sensor.
 
 Manually: Settings → **Marketplace** → **Add from link** (HACS: ⋮ → *Custom repositories*) →
-`https://github.com/OWNER/move-sensor-ble-ota`, type *Integration*.
+`https://github.com/daimonkor/move-sensor-ble-ota`, type *Integration*.
 
 Requirements: the **Bluetooth** integration and at least one **ESPHome Bluetooth proxy** near the sensor
 (active connections are on by default). The sensor firmware must include `ble_ota:` in the `bthome:` block.
@@ -80,11 +80,11 @@ git add -A && git commit -m "..."
 2. Кнопка **Add integration** → мастер *Move Sensor BLE OTA* → выбрать датчик.
 
 Вручную: Настройки → **Marketplace** → **Добавить по ссылке** (в HACS: ⋮ → *Custom repositories*) →
-`https://github.com/OWNER/move-sensor-ble-ota`, тип *Integration*.
+`https://github.com/daimonkor/move-sensor-ble-ota`, тип *Integration*.
 
 Прошивку датчика собрать из `esphome/` (скопировать в `/config/esphome/`, секреты по `secrets.example.yaml`).
 
 ## Публикация
 
 `./tools/set_github.sh <github-логин>` — подставит логин вместо `OWNER` в README, доки и `manifest.json`
-(`codeowners`, `issue_tracker`). Для обновлений в Marketplace — GitHub-релиз с тегом = `version` из `manifest.json`.
+(`codeowners`). Для обновлений в Marketplace — GitHub-релиз с тегом = `version` из `manifest.json`.

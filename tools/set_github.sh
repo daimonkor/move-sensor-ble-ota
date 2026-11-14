@@ -15,7 +15,6 @@ import json,sys
 o,r,p=sys.argv[1:]
 m=json.load(open(p))
 m["codeowners"]=["@"+o]
-m["issue_tracker"]=f"https://github.com/{o}/{r}/issues"
 json.dump(m,open(p,"w"),indent=2,ensure_ascii=False); open(p,"a").write("\n")
 PY
 grep -rn "OWNER" README.md $INT/README.md $INT/docs/index.html || echo "OK: OWNER заменён на $OWNER"
