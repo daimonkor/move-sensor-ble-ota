@@ -26,7 +26,7 @@ class SettingNumber(OtaEntity, NumberEntity):
 
     def __init__(self, mgr, key: str) -> None:
         name, vmin, vmax, step, unit, icon = SETTINGS[key]
-        super().__init__(mgr, f"setting_{key}", f"{name} (BLE)", radio=key in WINDOW_KEYS)
+        super().__init__(mgr, f"setting_{key}", f"{name} (BLE)")
         self.key = key
         self._attr_native_min_value = vmin
         self._attr_native_max_value = vmax

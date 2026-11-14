@@ -122,6 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await mgr.async_load()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _setup_bthome_names(hass, entry, mgr.address)
+    _remove_radio_device(hass, mgr.address)
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True
 
@@ -133,6 +134,21 @@ BTHOME_NAMES = {
     ("sensor", "count"): "Wake count",
     ("binary_sensor", "battery"): "Battery low",
 }
+
+
+def _remove_radio_device(hass: HomeAssistant, address: str) -> None:
+    """v1.10.1 выносила радио-настройки в под-устройство «… Radio» — убрано (v1.10.2):
+    группа «Радио (BLE)» живёт на дашборде. Сущности уже вернулись на основное устройство —
+    удаляем опустевшее под-устройство."""
+    from homeassistant.helpers import device_registry as dr, entity_registry as er  # noqa: PLC0415
+
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"{address}_radio")})
+    if dev is None:
+        return
+    if er.async_entries_for_device(er.async_get(hass), dev.id, include_disabled_entities=True):
+        return
+    dev_reg.async_remove_device(dev.id)
 
 
 def _setup_bthome_names(hass: HomeAssistant, entry: ConfigEntry, address: str) -> None:

@@ -51,7 +51,7 @@ class AutoWindowSwitch(OtaEntity, SwitchEntity):
     _attr_icon = "mdi:signal-variant"
 
     def __init__(self, mgr) -> None:
-        super().__init__(mgr, "auto_window", "Auto advertising window", radio=True)
+        super().__init__(mgr, "auto_window", "Auto advertising window")
 
     @property
     def is_on(self) -> bool:
