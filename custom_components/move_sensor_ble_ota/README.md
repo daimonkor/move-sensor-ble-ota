@@ -3,8 +3,8 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Release](https://img.shields.io/github/v/release/OWNER/move-sensor-ble-ota)](https://github.com/OWNER/move-sensor-ble-ota/releases)
 
-[![Открыть репозиторий в Marketplace/HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration)
-[![Добавить интеграцию Move Sensor BLE OTA](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=OWNER&repository=move-sensor-ble-ota&category=integration)
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota)
 
 Прошивка по воздуху (OTA) и удалённые настройки для батарейного датчика движения
 **Move Sensor BLE** (Seeed XIAO ESP32-C3, ESPHome, BTHome, deep sleep) — **по Bluetooth,
@@ -13,6 +13,48 @@
 Датчик почти всё время спит. Просыпается от PIR или по таймеру телеметрии (температура/
 влажность), ~4.5 с шлёт BTHome-рекламу и засыпает снова. Интеграция ловит это окно,
 подключается и успевает за одно подключение передать настройки и/или прошивку.
+
+---
+
+**English** · [Русский](#что-умеет)
+
+## English
+
+Over-the-air firmware updates and remote settings for the battery motion sensor **Move Sensor BLE**
+(Seeed XIAO ESP32-C3, ESPHome, BTHome, deep sleep) — **over Bluetooth, through ESPHome Bluetooth proxies**,
+with no Wi-Fi on the sensor.
+
+The sensor sleeps almost all the time. It wakes on motion (PIR) or on the climate timer, advertises BTHome
+for ~4.5 s and goes back to sleep. The integration catches that window, connects through a proxy and sends
+pending settings and/or firmware in a single connection. If there is nothing to do, it does not touch the
+proxy or the sensor. Wave a hand in front of the sensor to get a window sooner.
+
+| Entity | Purpose |
+|---|---|
+| **Detect delay / Keep time / Climate report interval / Voltage factor (BLE)**, **Motion tracking LED (BLE)** | Sensor settings, applied at the next wake-up |
+| **Settings status** / **Read settings (BLE)** | `applied` / `pending` / `unknown` / `error`; read the actual settings from the sensor |
+| **Build & flash firmware (BLE)** | Compile `move-sensor-ble.yaml` in the ESPHome Builder add-on and flash it over BLE |
+| **Flash firmware (BLE)** / **Cancel OTA** | Flash the newest `.bin` from the firmware folder / cancel |
+| **OTA status / OTA progress** | `idle → building → waiting → connecting → flashing → success / error / cancelled` |
+| **Firmware version (BLE)** | `vYYYY.MM.DD.HHMMSS-xxxxxxxx` (build time + 8 hex of the image SHA-256) |
+| **Last seen**, **Battery days left**, **Motion events today / Wakes today** | Health and daily statistics from BTHome packets |
+| **PIR stuck** (+ **PIR stuck after**, min) | Problem sensor: "occupied" held longer than the threshold |
+| **Brownout count / Crash count / Last reset reason** | Reboot diagnostics stored in the sensor's NVS |
+| **Reset Wi-Fi to default (BLE)** | The sensor forgets the saved Wi-Fi network and returns to the firmware one |
+
+Services: `move_sensor_ble_ota.flash`, `build_and_flash`, `cancel`, `read_settings`, `reset_wifi`.
+REST: `POST /api/move_sensor_ble_ota/upload`, `GET /api/move_sensor_ble_ota/status`,
+`POST /api/move_sensor_ble_ota/build`.
+
+**Install:** use the buttons above (Marketplace/HACS → Download → restart HA → Add integration), or copy
+`move_sensor_ble_ota` to `/config/custom_components/` and restart. Then Settings → Devices & services →
+**Add integration** → *Move Sensor BLE OTA* → pick the BTHome sensor; leave the key empty to read it from
+`esphome/secrets.yaml`.
+
+**Requirements:** the Bluetooth integration, at least one ESPHome Bluetooth proxy near the sensor,
+and sensor firmware with `ble_ota:` in the `bthome:` block.
+
+The detailed documentation below is in Russian.
 
 ---
 
