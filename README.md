@@ -45,7 +45,7 @@ Requirements: the **Bluetooth** integration and at least one **ESPHome Bluetooth
 | `custom_components/move_sensor_ble_ota/` | Home Assistant integration ([detailed docs, Russian](custom_components/move_sensor_ble_ota/README.md)) |
 | `esphome/` | Sensor firmware: `move-sensor-ble.yaml`, `move_sensor_rtc.h`, service-mode web/AP `move_sensor_ble/`, external component `components/bthome` (BTHome + BLE OTA, DIAG, settings, Wi-Fi reset). Secrets template — `secrets.example.yaml` |
 | `tools/ble_ota_flash.py` | Build + BLE flash from a terminal (stdlib Python only) |
-| `sync_from_ha.sh` | Copy the working files from Home Assistant `/config` into this repo before a commit |
+| `sync_from_ha.sh` | Copy the firmware files (`esphome/`, `tools/`) from Home Assistant `/config` into this repo |
 
 Issues and pull requests are disabled — this is a personal project published as-is.
 
@@ -62,16 +62,14 @@ Issues and pull requests are disabled — this is a personal project published a
 | `custom_components/move_sensor_ble_ota/` | Интеграция HA (ставится через HACS как custom repository). Подробно — [её README](custom_components/move_sensor_ble_ota/README.md) |
 | `esphome/` | Прошивка датчика: `move-sensor-ble.yaml`, `move_sensor_rtc.h`, сайт/точка доступа `move_sensor_ble/`, компонент `components/bthome` (BTHome + BLE OTA, DIAG, настройки, сброс Wi-Fi, быстрый тест). Секреты — `secrets.example.yaml` |
 | `tools/ble_ota_flash.py` | Сборка + прошивка по BLE из терминала, без браузера (только stdlib Python) |
-| `sync_from_ha.sh` | Скопировать рабочие файлы из `/Volumes/config` в репозиторий перед коммитом |
+| `sync_from_ha.sh` | Скопировать файлы прошивки (`esphome/`, `tools/`) из `/Volumes/config` в репозиторий |
 
 ## Работа с репозиторием
 
-Рабочая копия живёт в Home Assistant (`/config/esphome`, `/config/custom_components`). Репозиторий — её снимок:
-
-```sh
-./sync_from_ha.sh          # забрать изменения из HA
-git add -A && git commit -m "..."
-```
+- **Интеграция** (`custom_components/`) — источник здесь. Правка → коммит → поднять `version` в `manifest.json` и
+  значок версии в `docs/index*.html` → push → GitHub-релиз с тегом `vX.Y.Z`. В HA обновление приходит через
+  **Marketplace** (Настройки → Marketplace → Move Sensor BLE OTA → Обновить), без ручного копирования в `/config`.
+- **Прошивка** (`esphome/`) — рабочая копия в `/config/esphome`. Перед коммитом: `./sync_from_ha.sh`.
 
 ## Установка интеграции
 

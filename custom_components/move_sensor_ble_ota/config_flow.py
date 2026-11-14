@@ -18,6 +18,7 @@ from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
     BooleanSelector,
     FileSelector,
@@ -68,9 +69,15 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
 
         # подсказки: BTHome-устройства, которые сейчас слышит HA (наш датчик — move-sensor-ble)
         options: list[SelectOptionDict] = []
+        dev_reg = dr.async_get(self.hass)
         for info in bluetooth.async_discovered_service_info(self.hass, connectable=False):
             if BTHOME_UUID in info.service_data or BTHOME_UUID in info.service_uuids:
-                label = f"{info.name or '?'} ({info.address})"
+                # имя из реестра устройств (BTHome-устройство в HA), а не BLE-имя: датчик его не рекламирует
+                dev = dev_reg.async_get_device(connections={(dr.CONNECTION_BLUETOOTH, info.address)})
+                name = (dev and (dev.name_by_user or dev.name)) or (
+                    info.name if info.name and info.name.replace("-", ":").upper() != info.address else None
+                )
+                label = f"{name} ({info.address})" if name else info.address
                 if not any(o["value"] == info.address for o in options):
                     options.append(SelectOptionDict(value=info.address, label=label))
         options.sort(key=lambda o: (0 if "move" in o["label"].lower() else 1, o["label"]))
