@@ -181,7 +181,7 @@
         "name": "Motion events today"
       },
       "wakes_today": {
-        "name": "Wakes today"
+        "name": "Wakes since midnight"
       }
     },
     "binary_sensor": {
