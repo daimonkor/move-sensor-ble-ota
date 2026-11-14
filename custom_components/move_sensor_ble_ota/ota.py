@@ -834,8 +834,11 @@ class OtaManager:
         self._roll_day()
         # пробуждения: Wake count растёт на каждое (и тихое тоже); новое значение = пробуждение с отправкой
         wake = parsed.get("wake")
+        rebooted = False
         if wake is not None:
             prev = self._stats_wake if self._stats_wake is not None else self.stats.get("last_wake")
+            # счётчик пробуждений сбросился — датчик перезагрузился (питание, OTA, сбой)
+            rebooted = prev is not None and wake < prev
             if prev is None or wake != prev:
                 if prev is not None:
                     delta = wake - prev if wake > prev else wake  # после перезагрузки счёт с 1
@@ -846,7 +849,13 @@ class OtaManager:
                 self.stats["last_wake"] = wake
         # ON-события и время начала «занято»
         occ = parsed.get("occupancy")
-        if occ is not None and occ != self.occupied:
+        if occ is not None and rebooted and occ and self.occupied:
+            # «занято» до перезагрузки и «занято» после — это новое событие: отсчёт PIR stuck
+            # заново с этого пакета, а не с момента до выключения (2026-11-15)
+            self.stats["motion_events"] += 1
+            self.occupied_since = now
+            _LOGGER.info("%s: reboot while occupied — occupied timer restarted", self.name)
+        elif occ is not None and occ != self.occupied:
             if occ:
                 self.stats["motion_events"] += 1
                 self.occupied_since = now
