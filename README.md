@@ -38,6 +38,22 @@ Manually: Settings → **Marketplace** → **Add from link** (HACS: ⋮ → *Cus
 Requirements: the **Bluetooth** integration and at least one **ESPHome Bluetooth proxy** near the sensor
 (active connections are on by default). The sensor firmware must include `ble_ota:` in the `bthome:` block.
 
+### Update
+
+New versions are published as GitHub releases. Home Assistant shows them under **Settings → Updates**
+(or Marketplace → *Move Sensor BLE OTA* → ⋮ → **Update information** to check right away) →
+**Update** → restart Home Assistant. Entities, settings and statistics are kept.
+
+### Video
+
+Clean install — README button → Marketplace → Download → setup → the sensor answers at its first wake-up:
+
+![Clean install](media/install.gif)
+
+Update to a new release through Marketplace:
+
+![Update](media/update.gif)
+
 ### Repository layout
 
 | Path | What |
@@ -81,6 +97,17 @@ Issues and pull requests are disabled — this is a personal project published a
 `https://github.com/daimonkor/move-sensor-ble-ota`, тип *Integration*.
 
 Прошивку датчика собрать из `esphome/` (скопировать в `/config/esphome/`, секреты по `secrets.example.yaml`).
+
+## Обновление
+
+Новая версия — это GitHub-релиз. HA покажет её в **Настройки → Обновления** (проверить сразу:
+Marketplace → *Move Sensor BLE OTA* → ⋮ → **Обновить информацию**) → **Обновить** → перезапустить HA.
+Сущности, настройки и статистика сохраняются.
+
+## Видео
+
+Установка с нуля (кнопка в README → Marketplace → установка → мастер → датчик ответил в первое окно) и
+обновление до нового релиза — выше, в английском разделе: [установка](media/install.gif), [обновление](media/update.gif).
 
 ## Публикация
 

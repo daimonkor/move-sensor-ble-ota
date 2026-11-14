@@ -257,6 +257,17 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
     <div>In HA 2026.11 HACS is built in as <b>Marketplace</b>. The repository format is the same as for HACS:
     public GitHub, <code>hacs.json</code> in the root, the integration in <code>custom_components/move_sensor_ble_ota/</code>, the icon in
     <code>brand/</code>, a GitHub release with the version number.</div></div>
+  <div class="note"><svg class="i"><use href="#i-refresh"/></svg>
+    <div><b>Updating.</b> A new version is a GitHub release. HA shows it under <b>Settings → Updates</b>
+    (to check right away: Marketplace → Move Sensor BLE OTA → ⋮ → <b>Update information</b>) → <b>Update</b> → restart HA.
+    Entities, settings and statistics are kept.</div></div>
+  <h3 style="margin-top:22px">Video</h3>
+  <div class="grid g2">
+    <div class="card"><b>Clean install</b><small style="color:var(--muted);display:block;margin:4px 0 10px">README button → Marketplace → Download → setup → the sensor answers at its first wake-up (≈30 s)</small>
+      <video src="media/install.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
+    <div class="card"><b>Update</b><small style="color:var(--muted);display:block;margin:4px 0 10px">New GitHub release → Settings → Updates → Update → restart HA</small>
+      <video src="media/update.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
+  </div>
 </section>
 
 <!-- SETUP -->
