@@ -36,6 +36,8 @@
 //                                                -> 0x91 st (фактические значения после применения, как 0x90)
 //       mask: bit0 detect delay, bit1 keep time, bit2 climate interval, bit3 LED, bit4 voltage factor,
 //             bit5 motion window, bit6 climate window (окна — только если пришли все 13 байт; 2026-11-14)
+//             bit7 поправки SHT41: + temp_offset*100:i16 hum_offset*10:i16 (17 байт; 0x7FFF = не менять)
+//       ответ 0x90/0x91 — 17 байт: ... motion_win_ms climate_win_ms temp_off*100 hum_off*10
 //       применяются через number/switch из YAML — сохраняются во флеш (restore_value) как из сервисного режима
 //   st: 0 ok, 1 нет авторизации, 2 батарея ниже порога, 3 неверный размер,
 //       4 ошибка esp_ota_begin, 5 ошибка записи, 6 чужой/битый образ,
@@ -93,6 +95,8 @@ class BleOta : public Component {
   void set_led(switch_::Switch *s) { this->led_ = s; }
   void set_motion_window(number::Number *n) { this->motion_window_ = n; }
   void set_climate_window(number::Number *n) { this->climate_window_ = n; }
+  void set_temp_offset(number::Number *n) { this->temp_offset_ = n; }
+  void set_hum_offset(number::Number *n) { this->hum_offset_ = n; }
 #endif
 
   // занят: есть подключение, идёт приём или ждём перезагрузку — спать нельзя
@@ -139,6 +143,8 @@ class BleOta : public Component {
   switch_::Switch *led_{nullptr};
   number::Number *motion_window_{nullptr};
   number::Number *climate_window_{nullptr};
+  number::Number *temp_offset_{nullptr};
+  number::Number *hum_offset_{nullptr};
 #endif
 
   BTHome *parent_{nullptr};

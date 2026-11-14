@@ -54,6 +54,9 @@ OTA_SETTINGS = {
     # окна рекламы после пакета (2026-11-14), мс — авто-подбор в интеграции по RSSI
     "motion_window": ("number", "set_motion_window"),
     "climate_window": ("number", "set_climate_window"),
+    # поправки SHT41 (2026-11-14): °C и %, со знаком
+    "temp_offset": ("number", "set_temp_offset"),
+    "hum_offset": ("number", "set_hum_offset"),
 }
 
 # Configuration constants

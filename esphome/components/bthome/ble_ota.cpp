@@ -666,6 +666,28 @@ static uint16_t num_u16(number::Number *n, float scale) {
   return (uint16_t) v;
 }
 
+// поправки со знаком: int16, 0x7FFF = нет значения
+static int16_t num_i16(number::Number *n, float scale) {
+  if (n == nullptr || !n->has_state() || std::isnan(n->state))
+    return 0x7FFF;
+  long v = lroundf(n->state * scale);
+  if (v < -32767)
+    v = -32767;
+  if (v > 32766)
+    v = 32766;
+  return (int16_t) v;
+}
+
+static void num_set_i16(number::Number *n, int16_t raw, float scale, const char *what) {
+  if (n == nullptr || raw == 0x7FFF)
+    return;
+  const float v = raw / scale;
+  ESP_LOGI(TAG, "setting %s = %.2f (was %.2f)", what, v, n->state);
+  auto call = n->make_call();
+  call.set_value(v);
+  call.perform();
+}
+
 static void num_set(number::Number *n, uint16_t raw, float scale, const char *what) {
   if (n == nullptr || raw == 0xFFFF)
     return;
@@ -677,7 +699,7 @@ static void num_set(number::Number *n, uint16_t raw, float scale, const char *wh
 }
 #endif
 
-// detect_ms keep_s climate_min led vfactor*1000 motion_win_ms climate_win_ms — 13 байт (старые — 9)
+// detect_ms keep_s climate_min led vfactor*1000 motion_win_ms climate_win_ms temp_off*100 hum_off*10 — 17 байт
 size_t BleOta::settings_pack_(uint8_t *out) {
 #ifdef BLE_OTA_SETTINGS
   uint16_t d = num_u16(this->detect_delay_, 1.0f);
@@ -687,8 +709,11 @@ size_t BleOta::settings_pack_(uint8_t *out) {
   uint8_t led = this->led_ == nullptr ? 255 : (this->led_->state ? 1 : 0);
   uint16_t mw = num_u16(this->motion_window_, 1.0f);
   uint16_t cw = num_u16(this->climate_window_, 1.0f);
+  int16_t to = num_i16(this->temp_offset_, 100.0f);
+  int16_t ho = num_i16(this->hum_offset_, 10.0f);
 #else
   uint16_t d = 0xFFFF, k = 0xFFFF, ci = 0xFFFF, vf = 0xFFFF, mw = 0xFFFF, cw = 0xFFFF;
+  int16_t to = 0x7FFF, ho = 0x7FFF;
   uint8_t led = 255;
 #endif
   out[0] = d & 0xFF;
@@ -704,7 +729,11 @@ size_t BleOta::settings_pack_(uint8_t *out) {
   out[10] = mw >> 8;
   out[11] = cw & 0xFF;
   out[12] = cw >> 8;
-  return 13;
+  out[13] = (uint16_t) to & 0xFF;
+  out[14] = (uint16_t) to >> 8;
+  out[15] = (uint16_t) ho & 0xFF;
+  out[16] = (uint16_t) ho >> 8;
+  return 17;
 }
 
 void BleOta::settings_apply_(const uint8_t *p, uint8_t mask, size_t len) {
@@ -736,6 +765,12 @@ void BleOta::settings_apply_(const uint8_t *p, uint8_t mask, size_t len) {
       num_set(this->motion_window_, mw, 1.0f, "motion window, ms");
     if (mask & 0x40)
       num_set(this->climate_window_, cw, 1.0f, "climate window, ms");
+  }
+  if (len >= 17 && (mask & 0x80)) {  // поправки SHT41 (со знаком)
+    const int16_t to = (int16_t) (p[13] | (p[14] << 8));
+    const int16_t ho = (int16_t) (p[15] | (p[16] << 8));
+    num_set_i16(this->temp_offset_, to, 100.0f, "temperature offset, C");
+    num_set_i16(this->hum_offset_, ho, 10.0f, "humidity offset, %");
   }
 #else
   ESP_LOGW(TAG, "settings not compiled in (no number/switch)");

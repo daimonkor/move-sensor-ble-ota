@@ -208,6 +208,12 @@
       "setting_climate_window": {
         "name": "Окно рекламы: климат"
       },
+      "setting_temp_offset": {
+        "name": "Поправка температуры"
+      },
+      "setting_hum_offset": {
+        "name": "Поправка влажности"
+      },
       "pir_stuck_threshold": {
         "name": "PIR залип через"
       }

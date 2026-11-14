@@ -178,7 +178,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.11.2</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.12.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -345,6 +345,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
     <tr><td><div class="cell"><svg class="i" style="color:var(--teal)"><use href="#i-thermo"/></svg>Climate report interval</div></td><td>0–240 min</td><td>at the next sleep</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-bulb"/></svg>Motion tracking LED</div></td><td>on / off</td><td>immediately</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:#64748b"><use href="#i-divide"/></svg>Voltage factor</div></td><td>1.5–2.5</td><td>immediately (voltage recalculated)</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-thermo"/></svg>Temperature / Humidity offset</div></td><td>−10…+10 °C / −20…+20 %, step 0.1</td><td>from the next reading; the temperature offset also recalculates humidity via the dew point</td></tr>
   </table>
   <div class="chips" style="margin-top:14px">
     <b style="margin-right:4px">Settings status:</b>
@@ -451,6 +452,8 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <div><b>Auto advertising window<span class="kind t-green">switch</span></b><small>Windows by signal: ≥ −75 dBm 800/1500 ms, ≥ −85 1500/2500, weaker 3000/4500; a missed climate packet makes it longer for 24 h. A manual window turns Auto off</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
       <div><b>Voltage factor (BLE)<span class="kind t-slate">number</span></b><small>Battery divider multiplier (calibrate with a multimeter)</small></div></div>
+    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-thermo"/></svg></span>
+      <div><b>Temperature / Humidity offset (BLE)<span class="kind t-teal">number</span></b><small>Plus or minus to the SHT41: −10…+10 °C, −20…+20 %. The temperature offset recalculates humidity via the dew point, then the humidity offset is added. Needs firmware with offsets</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-cog"/></svg></span>
       <div><b>Settings status<span class="kind t-green">sensor</span></b><small>Whether the settings were applied on the sensor</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-refresh"/></svg></span>

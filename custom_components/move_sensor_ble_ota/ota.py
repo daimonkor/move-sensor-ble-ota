@@ -97,8 +97,11 @@ RESULT_HOLD_S = 120  # сколько показывать success/error/cancell
 # порядок полей настроек в протоколе: detect_ms, keep_s, climate_min (u16), led (u8), vfactor*1000 (u16)
 SETTINGS_FMT = "<HHHBH"
 SETTINGS_FMT2 = "<HHHBHHH"   # + motion_window_ms, climate_window_ms (прошивка с 2026-11-14)
+SETTINGS_FMT3 = "<HHHBHHHhh"  # + temp_offset*100, hum_offset*10 (int16, 0x7FFF = нет; прошивка с 2026-11-14 23:xx)
+OFFSET_NONE = 0x7FFF
 SETTINGS_MASK = {"detect_delay": 0x01, "keep_time": 0x02, "climate_interval": 0x04, "led": 0x08, "voltage_factor": 0x10,
-                 "motion_window": 0x20, "climate_window": 0x40}
+                 "motion_window": 0x20, "climate_window": 0x40,
+                 "temp_offset": 0x80, "hum_offset": 0x80}  # поправки — общий бит, отсутствующая = 0x7FFF
 
 
 # длины объектов BTHome v2 (байт данных) — только то, что шлёт датчик и соседние типы;
@@ -239,6 +242,12 @@ def unpack_settings(payload: bytes) -> dict:
             out["motion_window"] = mw
         if cw != 0xFFFF:
             out["climate_window"] = cw
+    if len(payload) >= struct.calcsize(SETTINGS_FMT3):  # прошивка с поправками SHT41
+        to, ho = struct.unpack_from("<hh", payload, struct.calcsize(SETTINGS_FMT2))
+        if to != OFFSET_NONE:
+            out["temp_offset"] = round(to / 100.0, 2)
+        if ho != OFFSET_NONE:
+            out["hum_offset"] = round(ho / 10.0, 1)
     return out
 
 
@@ -247,10 +256,14 @@ def pack_settings(values: dict) -> bytes:
         v = values.get(key)
         return 0xFFFF if v is None else max(0, min(0xFFFE, int(round(float(v) * scale))))
 
+    def i16(key: str, scale: float) -> int:
+        v = values.get(key)
+        return OFFSET_NONE if v is None else max(-32767, min(32766, int(round(float(v) * scale))))
+
     led = values.get("led")
-    # старая прошивка читает первые 9 байт и не знает битов 0x20/0x40 — хвост ей не мешает
+    # старая прошивка читает первые 9/13 байт и не знает старших битов маски — хвост ей не мешает
     return struct.pack(
-        SETTINGS_FMT2,
+        SETTINGS_FMT3,
         u16("detect_delay"),
         u16("keep_time"),
         u16("climate_interval"),
@@ -258,6 +271,8 @@ def pack_settings(values: dict) -> bytes:
         u16("voltage_factor", 1000.0),
         u16("motion_window"),
         u16("climate_window"),
+        i16("temp_offset", 100.0),
+        i16("hum_offset", 10.0),
     )
 
 
@@ -268,6 +283,8 @@ def same_value(key: str, a, b) -> bool:
         return bool(a) == bool(b)
     if key == "voltage_factor":
         return abs(float(a) - float(b)) < 0.0005
+    if key in ("temp_offset", "hum_offset"):
+        return abs(float(a) - float(b)) < 0.05
     return int(round(float(a))) == int(round(float(b)))
 
 
@@ -485,6 +502,11 @@ class OtaManager:
     def window_supported(self) -> bool:
         """Прошивка умеет окна (прочитаны с датчика)."""
         return "motion_window" in self.applied
+
+    @property
+    def offsets_supported(self) -> bool:
+        """Прошивка умеет поправки SHT41 (прочитаны с датчика)."""
+        return "temp_offset" in self.applied
 
     def rssi_median(self) -> float | None:
         h = self.rssi_hist[-AUTO_WINDOW_SAMPLES:]

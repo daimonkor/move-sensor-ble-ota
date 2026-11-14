@@ -208,6 +208,12 @@
       "setting_climate_window": {
         "name": "Advertising window: climate"
       },
+      "setting_temp_offset": {
+        "name": "Temperature offset"
+      },
+      "setting_hum_offset": {
+        "name": "Humidity offset"
+      },
       "pir_stuck_threshold": {
         "name": "PIR stuck after"
       }

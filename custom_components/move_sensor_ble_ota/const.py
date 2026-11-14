@@ -82,8 +82,14 @@ SETTINGS = {
     # и интеграция успела подключиться. Авто — интеграция подбирает по RSSI и пропускам (AUTO_WINDOW_LEVELS)
     "motion_window": ("Motion window", 300, 5000, 100, "ms", "mdi:broadcast"),
     "climate_window": ("Climate window", 300, 5000, 100, "ms", "mdi:access-point"),
+    # поправки SHT41 (2026-11-14): прибавляются на датчике к измерению, бывают и плюс, и минус.
+    # Поправка температуры пересчитывает и влажность по точке росы (абсолютная влажность та же).
+    "temp_offset": ("Temperature offset", -10, 10, 0.1, "°C", "mdi:thermometer-plus"),
+    "hum_offset": ("Humidity offset", -20, 20, 0.1, "%", "mdi:water-plus"),
 }
 WINDOW_KEYS = ("motion_window", "climate_window")
+OFFSET_KEYS = ("temp_offset", "hum_offset")
+FLOAT_KEYS = ("voltage_factor", "temp_offset", "hum_offset")
 # Авто-окно: уровень по медиане RSSI последних пакетов -> (motion_ms, climate_ms).
 # Замер 2026-11-14 (RSSI −56, прокси на настройках ESPHome по умолчанию): 0 потерь даже при 300 мс,
 # подключение успевало при 600 мс; запас на слабый сигнал — уровни ниже.

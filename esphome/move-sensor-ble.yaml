@@ -265,6 +265,8 @@ bthome:
       led: debug_led_enable
       motion_window: motion_window
       climate_window: climate_window
+      temp_offset: temp_offset
+      hum_offset: hum_offset
   trigger_based: true        # HA не помечает спящее устройство как unavailable
   # Быстрая реклама: пакет каждые 20-30 мс, пока плата не спит. Приёмник слушает
   # эфир короткими окнами, редкие пакеты (раз в 1 с) в окно почти не попадают.
@@ -392,14 +394,31 @@ sensor:
     precision: High
     heater_max_duty: 0.0     # встроенный нагреватель выключен
     update_interval: never
+    # Поправки (2026-11-14): Temperature offset / Humidity offset (со знаком, меняются из HA по BLE).
+    # Поправка температуры пересчитывает и влажность по точке росы (Магнус): водяного пара в воздухе
+    # столько же, а при другой температуре относительная влажность другая. Потом + Humidity offset.
     temperature:
       id: sht_temp
       on_value:
-        - lambda: "id(env_temp).publish_state(x);"
+        - lambda: |-
+            float off = std::isnan(id(temp_offset).state) ? 0.0f : id(temp_offset).state;
+            id(env_temp).publish_state(x + off);
     humidity:
       id: sht_hum
       on_value:
-        - lambda: "id(env_hum).publish_state(x);"
+        - lambda: |-
+            float t = id(sht_temp).state;
+            float toff = std::isnan(id(temp_offset).state) ? 0.0f : id(temp_offset).state;
+            float hoff = std::isnan(id(hum_offset).state) ? 0.0f : id(hum_offset).state;
+            float rh = x;
+            if (!std::isnan(t) && toff != 0.0f) {
+              auto es = [](float c) { return 6.112f * expf(17.62f * c / (243.12f + c)); };
+              rh = x * es(t) / es(t + toff);
+            }
+            rh += hoff;
+            if (rh < 0.0f) rh = 0.0f;
+            if (rh > 100.0f) rh = 100.0f;
+            id(env_hum).publish_state(rh);
 
   # то, что уходит в BTHome и в API (значения SHT41)
   - platform: template
@@ -610,6 +629,34 @@ number:
     max_value: 5000
     step: 100
     initial_value: 1000
+    optimistic: true
+    restore_value: true
+    mode: box
+  # Поправки SHT41 (2026-11-14): прибавляются к измерению, бывают и плюс, и минус. Меняются из HA
+  # (move_sensor_ble_ota) по BLE или здесь в сервисном режиме; сохраняются во флеш.
+  - platform: template
+    id: temp_offset
+    name: "Temperature offset"
+    icon: mdi:thermometer-plus
+    entity_category: config
+    unit_of_measurement: "°C"
+    min_value: -10
+    max_value: 10
+    step: 0.1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+    mode: box
+  - platform: template
+    id: hum_offset
+    name: "Humidity offset"
+    icon: mdi:water-plus
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: -20
+    max_value: 20
+    step: 0.1
+    initial_value: 0
     optimistic: true
     restore_value: true
     mode: box
