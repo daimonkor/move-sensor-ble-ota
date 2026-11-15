@@ -319,6 +319,11 @@ class OtaManager:
         # --- настройки
         self.desired: dict = {}   # что задано в HA и ещё не подтверждено датчиком
         self.applied: dict = {}   # что датчик подтвердил последним
+        # v1.14.0: что должно стоять на датчике (последнее подтверждённое заданное из HA).
+        # После перезагрузки датчика (прошивка по USB, стёртый флеш, смена прошивки) его
+        # настройки могут вернуться к значениям из YAML — тогда HA отправит их заново.
+        self.target: dict = {}
+        self._resync = False      # перечитать и вернуть target после перезагрузки датчика
         self.settings_synced: datetime | None = None
         self.settings_applied_at: datetime | None = None  # когда датчик подтвердил последние изменения
         self._last_sst: str | None = None
@@ -378,6 +383,7 @@ class OtaManager:
         ts_fw = data.get("firmware_seen")
         self.firmware_seen = dt_util.parse_datetime(ts_fw) if ts_fw else None
         self.applied = data.get("applied", {})
+        self.target = data.get("target") or dict(self.applied)   # миграция со старых версий
         ts = data.get("synced")
         self.settings_synced = dt_util.parse_datetime(ts) if ts else None
         # первый запуск — прочитать настройки с датчика при ближайшем пробуждении
@@ -423,6 +429,7 @@ class OtaManager:
             lambda: {
                 "desired": self.desired,
                 "applied": self.applied,
+                "target": self.target,
                 "synced": self.settings_synced.isoformat() if self.settings_synced else None,
                 "firmware_version": self.firmware_version,
                 "firmware_seen": self.firmware_seen.isoformat() if self.firmware_seen else None,
@@ -797,6 +804,9 @@ class OtaManager:
             if batt is None or batt > 10:
                 self._diag_deferred = False
                 self._need_diag = True
+                # v1.14.0: настройки могли вернуться к значениям прошивки — перечитать и вернуть свои
+                self._need_read = True
+                self._resync = True
                 self._ensure_worker()
 
     def _mark_seen(self, service_info: bluetooth.BluetoothServiceInfoBleak, parsed: dict) -> None:
@@ -1135,6 +1145,7 @@ class OtaManager:
                 self._ota = None
                 # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
                 self._need_read = True
+                self._resync = True   # v1.14.0: новая прошивка могла сбросить настройки
                 self._rebooted_after_flash = False
                 self._set(ST_SUCCESS, progress=100, finished=dt_util.now())
                 _LOGGER.info("%s: OTA done, device reboots", self.name)
@@ -1293,6 +1304,28 @@ class OtaManager:
         actual = unpack_settings(rsp[2:])
         self.applied = actual
         self._need_read = False
+        if not pend:
+            if self._resync and self.target:
+                # v1.14.0: после перезагрузки датчика вернуть заданные из HA значения
+                drift = {k: v for k, v in self.target.items()
+                         if k in SETTINGS_MASK and v is not None and not same_value(k, v, actual.get(k))}
+                self._resync = False
+                if drift:
+                    _LOGGER.warning("%s: settings reset on the sensor after reboot, restoring: %s",
+                                    self.name, {k: (actual.get(k), v) for k, v in drift.items()})
+                    for k, v in drift.items():
+                        self.desired[k] = v
+                    await self._sync_settings(command)   # тот же сеанс: SET
+                    return
+            else:
+                # прочитано по запросу (Read settings / первый запуск): датчик — источник правды
+                # (например, настройку поменяли на сайте датчика по Wi-Fi)
+                self._resync = False
+                self.target.update({k: v for k, v in actual.items() if k in SETTINGS_MASK and v is not None})
+        else:
+            for k in pend:
+                if actual.get(k) is not None:
+                    self.target[k] = actual.get(k)   # что датчик реально принял
         notes = []
         for k, want in list(pend.items()):
             got = actual.get(k)

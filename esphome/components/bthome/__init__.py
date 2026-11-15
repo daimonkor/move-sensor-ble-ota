@@ -203,7 +203,10 @@ def validate_tx_power(value):
     value = int(value)
     if value not in levels:
         raise cv.Invalid(f"TX power {value} dBm not supported. Valid: {list(levels.keys())}")
-    return levels[value]
+    # local patch (2026-11-15): в C++ передаём dBm, а не номер из enum. Номера esp_power_level_t
+    # у ESP32 и ESP32-C3 разные (у C3 «4» = -12 dBm, 0 dBm = 8) — уровень выбирает bthome.cpp
+    # по именам ESP_PWR_LVL_*.
+    return value
 
 
 def validate_config(config):

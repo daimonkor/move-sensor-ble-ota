@@ -96,6 +96,7 @@ static inline uint32_t cap_sleep_ms(int64_t want_ms, uint32_t ci) {
 static RTC_DATA_ATTR float bat_vf = 0;      // сглаженное напряжение покоя, 0 = нет истории
 static RTC_DATA_ATTR int8_t bat_pct = -1;   // последний отправленный %, -1 = нет истории
 static RTC_DATA_ATTR bool bat_low = false;  // флаг "батарея разряжена" (с гистерезисом)
+static RTC_DATA_ATTR float bat_factor_used = 0;  // Voltage factor, с которым посчитан bat_vf (2026-11-15)
 static uint8_t bat_phase = 0;   // 0 — до замера на старте, 1 — замер без радио, 2 — радио работает
 static float bat_v_boot = 0;    // замер без радио в этом пробуждении
 static float bat_sag = -1;      // просадка под Wi-Fi, В; -1 = ещё не измерена

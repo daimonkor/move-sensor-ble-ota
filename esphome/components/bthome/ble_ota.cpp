@@ -25,7 +25,9 @@ namespace bthome {
 static const char *const TAG = "ble_ota";
 
 static const uint32_t OTA_BLOCK = 4096;
-static const uint32_t AUTH_TIMEOUT_MS = 20000;   // подключился, но не авторизовался
+// 2026-11-15: было 20 с — чужой телефон, подключившийся без авторизации, держал датчик без сна.
+// 10 с: HA успевает обнаружение сервисов через прокси, подписку и HELLO+AUTH с запасом.
+static const uint32_t AUTH_TIMEOUT_MS = 10000;   // подключился, но не авторизовался
 static const uint32_t IDLE_TIMEOUT_MS = 60000;   // авторизован, но ничего не делает
 static const uint32_t DATA_TIMEOUT_MS = 30000;   // идёт приём, данных нет
 

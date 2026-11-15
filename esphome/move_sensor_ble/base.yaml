@@ -326,6 +326,10 @@ bthome:
   min_interval: 20ms
   max_interval: 30ms
   retransmit_count: 0        # при такой частоте повторы не нужны
+  # Мощность рекламы BTHome, dBm: -12 -9 -6 -3 0 3 6 9 (2026-11-15). До этого в NimBLE не
+  # применялась вовсе. Датчик будет стоять за стеной — +9 (надёжность важнее). A/B у прокси
+  # в коридоре: +9 -> медиана -59 dBm, 0 -> -73 dBm; экономия от 0 dBm ~1-2 % батареи.
+  tx_power: 9
   sensors:
     - type: battery
       id: battery_pct
@@ -354,7 +358,7 @@ sensor:
     icon: mdi:flash-triangle-outline
     pin: GPIO${vbat_gpio}
     attenuation: 12db
-    samples: 16
+    samples: 64              # 2026-11-15: было 16 — делитель 2×1 МОм шумит, больше усреднения
     update_interval: never
     unit_of_measurement: "V"
     device_class: voltage
@@ -369,7 +373,17 @@ sensor:
             float v = x;
             if (ms::bat_phase == 1) {
               ms::bat_v_boot = v;             // без радио: это и есть покой
-            } else if (id(service_mode)) {
+              // 2026-11-15: Voltage factor поменяли — историю пересчитать под новый коэффициент
+              const float f = id(vbat_factor).state;
+              if (ms::bat_factor_used > 0 && ms::bat_vf > 0 && fabsf(f - ms::bat_factor_used) > 0.0005f)
+                ms::bat_vf *= f / ms::bat_factor_used;
+              ms::bat_factor_used = f;
+            } else if (!id(service_mode)) {
+              // 2026-11-15: замер вне сервисного режима (смена Voltage factor по BLE) идёт под нагрузкой
+              // BLE — в процент его не берём, новый коэффициент применится в следующем пробуждении
+              ESP_LOGI("bat", "measured %.3f V under BLE load - not used for %%", x);
+              return;
+            } else {
               // под Wi-Fi: один раз меряем просадку относительно замера без радио
               if (ms::bat_sag < 0 && ms::bat_v_boot > 0) {
                 float s = ms::bat_v_boot - v;
@@ -378,12 +392,15 @@ sensor:
               }
               if (ms::bat_sag > 0) v += ms::bat_sag;
             }
-            // сглаживание; скачок > 0.1 В (зарядка, другой аккумулятор) — принимаем сразу
-            if (ms::bat_vf <= 0 || fabsf(v - ms::bat_vf) > 0.10f) ms::bat_vf = v;
-            else ms::bat_vf += 0.3f * (v - ms::bat_vf);
+            // 2026-11-15: шум делителя/АЦП ±45 мВ давал ±10-15 % на плоском участке LiPo.
+            // Сглаживание медленнее (0.15 вместо 0.3); сразу принимаем только скачок ВВЕРХ > 0.1 В
+            // (зарядка, другой аккумулятор) — вниз напряжение так резко не падает, это шум.
+            const bool charge_jump = ms::bat_vf > 0 && v - ms::bat_vf > 0.10f;
+            if (ms::bat_vf <= 0 || charge_jump) ms::bat_vf = v;
+            else ms::bat_vf += 0.15f * (v - ms::bat_vf);
             int p = (int) roundf(ms::lipo_pct(ms::bat_vf));
-            // без зарядки процент только падает: рост меньше 5 % — шум/отдых батареи, игнор
-            if (ms::bat_pct >= 0 && p > ms::bat_pct && p < ms::bat_pct + 5) p = ms::bat_pct;
+            // без зарядки процент только падает: рост — только при скачке напряжения или сразу на 10 %+
+            if (ms::bat_pct >= 0 && p > ms::bat_pct && !charge_jump && p < ms::bat_pct + 10) p = ms::bat_pct;
             ms::bat_pct = p;
             // разряжена: <= 10 % (~3.69 В покоя), снимаем флаг только от 15 %
             if (p <= 10) ms::bat_low = true;
@@ -685,7 +702,7 @@ number:
     min_value: 0
     max_value: 240
     step: 1
-    initial_value: 30
+    initial_value: 5     # 2026-11-15: по умолчанию 5 мин (было 30)
     optimistic: true
     restore_value: true
     mode: box
@@ -843,6 +860,11 @@ interval:
   - interval: 200ms
     then:
       - lambda: |-
+          // 2026-11-15 (ревью): пока фильтр delayed_on_off (30 мс) не выдал первое состояние,
+          // state = false -> интервал «выходил» из сервисного режима, в который boot_dispatch
+          // только что вошёл по уровню пина, и тут же входил снова: одно включение считалось
+          // дважды в счётчике заводского сброса. Ждём первого состояния.
+          if (!id(service_btn).has_state()) return;
           const bool sw = id(service_btn).state;
           if (sw && !id(service_by_switch)) {
             id(service_by_switch) = true;
@@ -942,12 +964,21 @@ script:
             lambda: "return id(woke_by_pir) || id(pir_raw).state;"
           then:
             # задержка на детект: сигнал должен продержаться detect_delay.
-            # После пробуждения от PIR не ждём - движение уже было.
+            # 2026-11-15 (ревью): и после пробуждения от PIR тоже (раньше пропускалась, и настройка
+            # во сне не работала). Время загрузки засчитывается: ждём только остаток detect_delay.
+            # Если остаток есть — движение засчитаем, только если PIR к его концу ещё держит HIGH.
             - if:
                 condition:
                   lambda: "return !id(woke_by_pir);"
                 then:
                   - delay: !lambda "return (uint32_t) id(detect_delay).state;"
+                else:
+                  - delay: !lambda |-
+                      const uint32_t d = (uint32_t) id(detect_delay).state, up = millis();
+                      if (d <= up) return 0;   // задержка прошла, пока грузились — движение засчитано
+                      id(woke_by_pir) = false; // дальше решает уровень PIR (pir_raw)
+                      ESP_LOGD("ms", "woke by PIR: detect delay, waiting %u ms more", (unsigned) (d - up));
+                      return d - up;
             - if:
                 condition:
                   lambda: "return id(woke_by_pir) || id(pir_raw).state;"

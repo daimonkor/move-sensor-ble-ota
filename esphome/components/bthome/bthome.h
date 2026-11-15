@@ -90,7 +90,8 @@ class BTHome : public Component {
   void set_retransmit_interval(uint16_t interval_ms) { this->retransmit_interval_ = interval_ms; }
 
 #ifdef USE_ESP32
-  void set_tx_power(int val) { this->tx_power_esp32_ = static_cast<esp_power_level_t>(val); }
+  // local patch (2026-11-15): значение в dBm (-12..9), уровень enum — tx_power_level_()
+  void set_tx_power(int val) { this->tx_power_dbm_ = static_cast<int8_t>(val); }
 #endif
 #ifdef USE_NRF52
   void set_tx_power(int8_t val) { this->tx_power_nrf52_ = val; }
@@ -128,6 +129,9 @@ class BTHome : public Component {
 #endif
   bool encrypt_payload_(const uint8_t *plaintext, size_t plaintext_len, uint8_t *ciphertext, size_t *ciphertext_len);
   void trigger_immediate_advertising_(uint8_t measurement_index, bool is_binary);
+#ifdef USE_ESP32
+  esp_power_level_t tx_power_level_() const;
+#endif
 
   // Measurements storage
 #ifdef USE_SENSOR
@@ -182,7 +186,8 @@ class BTHome : public Component {
 
   // Platform-specific members
 #ifdef USE_ESP32
-  esp_power_level_t tx_power_esp32_{};
+  int8_t tx_power_dbm_{0};
+  bool tx_power_applied_{false};  // local patch: NimBLE — мощность рекламы выставлена в контроллере
 
   #ifdef USE_BTHOME_NIMBLE
     // NimBLE-specific members

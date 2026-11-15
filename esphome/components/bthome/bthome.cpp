@@ -81,7 +81,7 @@ void BTHome::dump_config() {
 #endif
                 this->min_interval_, this->max_interval_,
 #ifdef USE_ESP32
-                (this->tx_power_esp32_ * 3) - 12,
+                (int) this->tx_power_dbm_,
 #else
                 this->tx_power_nrf52_,
 #endif
@@ -371,6 +371,10 @@ void BTHome::restart_advertising() {
   ble_gap_adv_stop();
   this->advertising_ = false;
   this->start_advertising_();
+  // local patch (2026-11-15): если старт не удался, повторяет loop() (раз в 500 мс), но к этому
+  // моменту он обычно уже выключен (disable_loop) — без этого реклама пропадала до сна
+  if (!this->advertising_)
+    this->enable_loop();
 #endif
 }
 
@@ -577,8 +581,7 @@ void BTHome::build_scan_response_data_() {
   this->scan_rsp_data_[pos++] = 2;     // Length
   this->scan_rsp_data_[pos++] = 0x0A;  // Type: TX Power Level
 #ifdef USE_ESP32
-  // Convert ESP32 power level enum to dBm: level * 3 - 12
-  int8_t tx_power_dbm = static_cast<int8_t>(this->tx_power_esp32_) * 3 - 12;
+  int8_t tx_power_dbm = this->tx_power_dbm_;  // local patch: хранится в dBm
 #elif defined(USE_NRF52)
   int8_t tx_power_dbm = this->tx_power_nrf52_;
 #else
@@ -641,6 +644,18 @@ void BTHome::start_advertising_() {
     }
   }
 
+  // local patch (2026-11-15): мощность рекламы. Раньше в ветке NimBLE не задавалась вовсе —
+  // работал уровень контроллера по умолчанию (+9 dBm), а в scan response писалось другое.
+  if (!this->tx_power_applied_) {
+    esp_err_t perr = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, this->tx_power_level_());
+    if (perr == ESP_OK) {
+      this->tx_power_applied_ = true;
+      ESP_LOGI(TAG, "BLE advertising TX power %d dBm", (int) this->tx_power_dbm_);
+    } else {
+      ESP_LOGW(TAG, "esp_ble_tx_power_set failed: %s", esp_err_to_name(perr));
+    }
+  }
+
   // Configure non-connectable advertising
   struct ble_gap_adv_params adv_params;
   memset(&adv_params, 0, sizeof(adv_params));
@@ -678,7 +693,7 @@ void BTHome::start_advertising_() {
   this->scan_rsp_data_set_ = false;
 
   ESP_LOGD(TAG, "Setting BLE TX power");
-  esp_err_t err = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, this->tx_power_esp32_);
+  esp_err_t err = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, this->tx_power_level_());
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "esp_ble_tx_power_set failed: %s", esp_err_to_name(err));
   }
@@ -837,6 +852,22 @@ void BTHome::nimble_on_reset_(int reason) {
 void BTHome::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
   // GAP events are handled by ESPHome's BLE component
   // We start advertising directly in start_advertising_()
+}
+#endif
+
+#ifdef USE_ESP32
+// local patch (2026-11-15): dBm -> esp_power_level_t по именам (номера у ESP32 и C3 разные)
+esp_power_level_t BTHome::tx_power_level_() const {
+  switch (this->tx_power_dbm_) {
+    case -12: return ESP_PWR_LVL_N12;
+    case -9:  return ESP_PWR_LVL_N9;
+    case -6:  return ESP_PWR_LVL_N6;
+    case -3:  return ESP_PWR_LVL_N3;
+    case 0:   return ESP_PWR_LVL_N0;
+    case 3:   return ESP_PWR_LVL_P3;
+    case 6:   return ESP_PWR_LVL_P6;
+    default:  return ESP_PWR_LVL_P9;
+  }
 }
 #endif
 
