@@ -302,6 +302,12 @@ bool BleOta::sleep_ready() {
   return now - this->sleep_lock_ms_ >= 300;
 }
 
+uint32_t BleOta::activity_idle_ms() const {
+  if (!this->is_busy() || this->reboot_at_ != 0 || this->ev_connected_.load())
+    return 0;
+  return millis() - this->last_activity_ms_;
+}
+
 void BleOta::sleep_unlock() {
   if (!this->sleep_locked_)
     return;
