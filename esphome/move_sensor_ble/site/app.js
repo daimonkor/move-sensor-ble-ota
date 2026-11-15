@@ -427,7 +427,7 @@
       .then(function () { return press("Save AP password"); })
       .then(function () {
         $("ms-appass").value = ""; setWBusy(false);
-        wstat("Сохранено. Точка перезапустится с новым паролем — подключитесь заново");
+        wstat("Сохранено. Датчик перезагрузится (~5 с) — подключитесь к точке заново с новым паролем");
       }, function () { setWBusy(false); wstat("Не удалось отправить"); });
   });
   window.addEventListener("hashchange", function () { if (location.hash === "#wifi") openWifi(); });

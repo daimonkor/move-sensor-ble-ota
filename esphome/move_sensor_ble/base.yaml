@@ -1218,6 +1218,11 @@ script:
       - script.execute: wifi_reset_blink
       - delay: 200ms        # globals успевают записать новое значение в NVS-очередь
       - lambda: "global_preferences->sync();"
+      # 2026-11-15: пароль точки на лету не применялся — перезагрузка (WiFi включён -> снова сервисный режим)
+      - delay: 1500ms       # дать досветить 6 вспышек
+      - lambda: |-
+          ESP_LOGW("ms", "FACTORY RESET: rebooting to apply AP password");
+          App.safe_reboot();
 
   - id: service_exit
     then:

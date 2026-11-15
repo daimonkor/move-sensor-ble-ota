@@ -13,7 +13,7 @@
 # (move_sensor_ble/base.yaml, service_enter -> factory_reset_net): сеть из прошивки + заводской пароль точки.
 #
 # Пароль своей точки доступа (2026-11-15): «New AP Password» -> «Save AP password» (8–63 символа ASCII).
-# Хранится во флеше (globals ap_password_custom), точка сразу перезапускается с новым паролем.
+# Хранится во флеше (globals ap_password_custom); датчик перезагружается (~5 с) и поднимает точку с новым паролем.
 
 # Для окна «Wi-Fi роутера»: текущая сеть (пусто — нет связи) и список найденных сетей
 # "SSID: -63dB" по строке (обновляется на сканах самого wifi и по кнопке).
@@ -171,10 +171,15 @@ button:
                 ESP_LOGW("ms", "AP password: custom saved (%u chars)", (unsigned) id(ap_password_custom).size());
             - text.set: {id: new_ap_password, value: ""}
             - component.update: ap_password_mode
+            # 2026-11-15: смена пароля на лету (esp_wifi_set_config, ESP_OK) на практике не действовала —
+            # телефон заходил со старым паролем. Надёжно: записать во флеш и перезагрузиться; WiFi включён,
+            # поэтому датчик сразу вернётся в сервисный режим, а on_boot поднимет точку с новым паролем.
             - delay: 1500ms
             - lambda: |-
                 global_preferences->sync();
-                ms_ap::set_password(id(ap_password_custom));
+                ESP_LOGW("ms", "AP password: rebooting to apply");
+            - delay: 300ms
+            - lambda: "App.safe_reboot();"
           else:
             - logger.log:
                 format: "AP password rejected: need 8-63 printable ASCII characters"
