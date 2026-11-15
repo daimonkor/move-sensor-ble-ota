@@ -10,26 +10,28 @@
       </div>
     </div>
     <div class="prefs">
-      <button class="ib" id="ms-snd" type="button" aria-label="Звук при движении" title="Звук при движении"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/><path class="x" d="M22 9l-6 6M16 9l6 6"/></svg></button>
-      <button class="ib" id="ms-wopen" type="button" aria-label="Wi-Fi роутера" title="Wi-Fi роутера"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></button>
-      <button class="ib" id="ms-theme" type="button" aria-label="Тема"></button>
+      <button class="ib" id="ms-snd" type="button" aria-label="Sound"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/><path class="x" d="M22 9l-6 6M16 9l6 6"/></svg></button>
+      <button class="ib lang" id="ms-lang" type="button">EN</button>
+      <button class="ib" id="ms-help" type="button" data-it="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 0 1 4.9.8c0 1.7-2.5 2.2-2.5 3.8M12 17h.01"/></svg></button>
+      <button class="ib" id="ms-wopen" type="button" data-it="wifiTitle"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></button>
+      <button class="ib" id="ms-theme" type="button" aria-label="Theme"></button>
     </div>
   </header>
 
   <nav class="bar2">
-    <span class="onl" id="ms-onl"><i class="dot"></i><span id="ms-onl-t">Подключение…</span></span>
-    <div class="seg tabs" role="tablist" aria-label="Вкладки">
-      <button role="tab" aria-selected="true" data-t="main" class="on">Датчик</button>
-      <button role="tab" aria-selected="false" data-t="dev">Устройство</button>
+    <span class="onl" id="ms-onl"><i class="dot"></i><span id="ms-onl-t">…</span></span>
+    <div class="seg tabs" role="tablist" data-it="tabs">
+      <button role="tab" aria-selected="true" data-t="main" class="on" data-i="tabMain">Sensor</button>
+      <button role="tab" aria-selected="false" data-t="dev" data-i="tabDev">Device</button>
     </div>
   </nav>
-  <p class="devnote">Если датчик работает по BLE (на батарее), его настройки (Keep time, Detect delay, поправки, окна, LED) задаёт интеграция Move Sensor BLE в HA — она может вернуть своё значение при следующем пробуждении. По Wi-Fi (WiFi включён, питание от USB) меняйте здесь или в HA на устройстве ESPHome.</p>
+  <p class="devnote" data-i="devnote"></p>
 
   <main>
     <!-- сервисный режим: Wi-Fi держит батарею (2026-11-15) -->
     <div class="warnbar hide" id="ms-svcbar" role="status">
       <svg viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2M7 10v4"/></svg>
-      <span>Включён переключатель WiFi — датчик не спит. От батареи она садится быстрее: после настройки выключите WiFi. От USB можно оставить — тогда датчик работает по Wi-Fi.</span>
+      <span data-i="svcbar"></span>
     </div>
     <!-- движение -->
     <section class="card hero" id="ms-hero" aria-live="polite">
@@ -38,7 +40,7 @@
         <span class="core"><svg viewBox="0 0 24 24"><circle cx="13.5" cy="3.6" r="2"/><path d="M9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3A7.3 7.3 0 0 0 19 13v-2a5 5 0 0 1-4.3-2.4l-1-1.6a2 2 0 0 0-2.5-.8L6 8.3V13h2V9.6z"/></svg></span>
       </div>
       <div class="htxt">
-        <p class="eyebrow">Движение</p>
+        <p class="eyebrow" data-i="motion">Motion</p>
         <div class="state" id="ms-occ">—</div>
         <p class="hsub" id="ms-occsub">&nbsp;</p>
         <div class="chips">
@@ -51,7 +53,7 @@
     <div class="grid">
       <!-- температура -->
       <section class="card tile t-temp">
-        <h2><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>Температура</h2>
+        <h2><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span data-i="temp">Temperature</span></h2>
         <div class="val"><span id="ms-temp">—</span><small>°C</small></div>
         <p class="note" id="ms-temp-n">&nbsp;</p>
         <div class="gauge" id="ms-temp-g">
@@ -63,7 +65,7 @@
 
       <!-- влажность -->
       <section class="card tile t-hum">
-        <h2><svg viewBox="0 0 24 24"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.32 0z"/></svg>Влажность</h2>
+        <h2><svg viewBox="0 0 24 24"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.32 0z"/></svg><span data-i="hum">Humidity</span></h2>
         <div class="val"><span id="ms-hum">—</span><small>%</small></div>
         <p class="note" id="ms-hum-n">&nbsp;</p>
         <div class="gauge" id="ms-hum-g">
@@ -75,17 +77,17 @@
 
       <!-- батарея -->
       <section class="card tile t-bat" id="ms-batcard">
-        <h2><svg viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/></svg>Батарея<span class="badge bad hide" id="ms-batlow">низкий заряд</span></h2>
+        <h2><svg viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/></svg><span data-i="bat">Battery</span><span class="badge bad hide" id="ms-batlow" data-i="batLow">low battery</span></h2>
         <div class="batrow">
           <div class="batt" aria-hidden="true"><i id="ms-batfill"></i></div>
           <div class="val"><span id="ms-bat">—</span><small>%</small></div>
         </div>
-        <p class="note"><span id="ms-volt">—</span> В · LiPo 920 мА·ч</p>
+        <p class="note"><span id="ms-volt">—</span><span data-i="batNote"> V · LiPo 920 mAh</span></p>
       </section>
 
       <!-- сигнал -->
       <section class="card tile t-sig">
-        <h2><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>Сигнал</h2>
+        <h2><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg><span data-i="sig">Signal</span></h2>
         <div class="sig">
           <div class="srow">
             <span class="sname"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>Wi-Fi</span>
@@ -103,45 +105,45 @@
 
     <!-- диагностика -->
     <section class="card diag">
-      <h2><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Устройство</h2>
+      <h2><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span data-i="dev">Device</span></h2>
       <dl>
-        <div><dt>Сервисный режим</dt><dd id="ms-svc">—</dd></div>
-        <div><dt>Отчёт климата</dt><dd id="ms-clim">—</dd></div>
-        <div><dt>Поправка температуры</dt><dd id="ms-toff">—</dd></div>
-        <div><dt>Поправка влажности</dt><dd id="ms-hoff">—</dd></div>
-        <div><dt>LED срабатываний</dt><dd id="ms-led">—</dd></div>
+        <div><dt data-i="dSvc"></dt><dd id="ms-svc">—</dd></div>
+        <div><dt data-i="dClim"></dt><dd id="ms-clim">—</dd></div>
+        <div><dt data-i="dToff"></dt><dd id="ms-toff">—</dd></div>
+        <div><dt data-i="dHoff"></dt><dd id="ms-hoff">—</dd></div>
+        <div><dt data-i="dLed"></dt><dd id="ms-led">—</dd></div>
         <div><dt>Device ID</dt><dd id="ms-devid">—</dd></div>
-        <div><dt>IP в сети</dt><dd id="ms-ip">—</dd></div>
+        <div><dt data-i="dIp"></dt><dd id="ms-ip">—</dd></div>
         <div><dt>ESPHome</dt><dd id="ms-esv">—</dd></div>
-        <div><dt>Сборка</dt><dd id="ms-build">—</dd></div>
-        <div><dt>Обновлено</dt><dd id="ms-upd">—</dd></div>
+        <div><dt data-i="dBuild"></dt><dd id="ms-build">—</dd></div>
+        <div><dt data-i="dUpd"></dt><dd id="ms-upd">—</dd></div>
       </dl>
-      <p class="dnote">На батарее данные и настройки идут по BLE (интеграция в HA), с включённым WiFi — ещё и по Wi-Fi (устройство ESPHome в HA).</p>
+      <p class="dnote" data-i="dnote"></p>
     </section>
 
     <!-- отладка (2026-11-15): скрыта от обычного пользователя — 5 нажатий на подпись внизу
          страницы или адрес /#debug; выключается так же. Только сервисная диагностика. -->
     <section class="card diag dbg hide" id="ms-dbg">
-      <h2><svg viewBox="0 0 24 24"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6 13H2M22 13h-4M6.5 8.5 3 7M17.5 8.5 21 7M6 17l-3 2M18 17l3 2"/></svg>Отладка<span class="badge">сервис</span></h2>
+      <h2><svg viewBox="0 0 24 24"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6 13H2M22 13h-4M6.5 8.5 3 7M17.5 8.5 21 7M6 17l-3 2M18 17l3 2"/></svg><span data-i="dbg">Debug</span><span class="badge" data-i="dbgBadge">service</span></h2>
       <div class="pirrow">
         <span class="lamp" id="ms-pirlamp" aria-hidden="true"></span>
         <div>
-          <b>PIR сырой: <span id="ms-pir">—</span></b>
-          <span class="sub" id="ms-pirsub">выход SR602 до Detect delay и Keep time</span>
+          <b><span data-i="pirRaw">Raw PIR</span>: <span id="ms-pir">—</span></b>
+          <span class="sub" id="ms-pirsub" data-i="pirSub"></span>
         </div>
       </div>
       <dl>
-        <div><dt>Последний импульс PIR</dt><dd id="ms-pirlast">—</dd></div>
-        <div><dt>Импульсов с открытия</dt><dd id="ms-pircnt">—</dd></div>
-        <div><dt>Самый короткий / длинный</dt><dd id="ms-pirmm">—</dd></div>
-        <div><dt>Причина пробуждения</dt><dd id="ms-why">—</dd></div>
-        <div><dt>Пробуждений</dt><dd id="ms-wakes">—</dd></div>
-        <div><dt>Сбросы: brownout / падения</dt><dd id="ms-rst">—</dd></div>
-        <div><dt>Последний сброс</dt><dd id="ms-rstlast">—</dd></div>
-        <div><dt>Окно движения (BLE)</dt><dd id="ms-mwin">—</dd></div>
-        <div><dt>Окно климата (BLE)</dt><dd id="ms-cwin">—</dd></div>
-        <div><dt>Батарея в покое</dt><dd id="ms-rest">—</dd></div>
-        <div><dt>Напряжение на D0</dt><dd id="ms-d0">—</dd></div>
+        <div><dt data-i="pLast"></dt><dd id="ms-pirlast">—</dd></div>
+        <div><dt data-i="pCnt"></dt><dd id="ms-pircnt">—</dd></div>
+        <div><dt data-i="pMm"></dt><dd id="ms-pirmm">—</dd></div>
+        <div><dt data-i="pWhy"></dt><dd id="ms-why">—</dd></div>
+        <div><dt data-i="pWakes"></dt><dd id="ms-wakes">—</dd></div>
+        <div><dt data-i="pRst"></dt><dd id="ms-rst">—</dd></div>
+        <div><dt data-i="pRstLast"></dt><dd id="ms-rstlast">—</dd></div>
+        <div><dt data-i="pMwin"></dt><dd id="ms-mwin">—</dd></div>
+        <div><dt data-i="pCwin"></dt><dd id="ms-cwin">—</dd></div>
+        <div><dt data-i="pRest"></dt><dd id="ms-rest">—</dd></div>
+        <div><dt data-i="pD0"></dt><dd id="ms-d0">—</dd></div>
         <div><dt>Voltage factor</dt><dd id="ms-vf">—</dd></div>
       </dl>
     </section>
@@ -155,24 +157,36 @@
   <div class="sheet hide" id="ms-wsheet" role="dialog" aria-modal="true" aria-labelledby="ms-wt">
     <div class="sbox">
       <div class="shead">
-        <h2 id="ms-wt"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>Wi-Fi роутера</h2>
-        <button class="ib" id="ms-wclose" type="button" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <h2 id="ms-wt"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg><span data-i="wifiTitle">Router Wi-Fi</span></h2>
+        <button class="ib" id="ms-wclose" type="button" data-it="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <p class="sdesc" id="ms-wnow">—</p>
       <div class="nets" id="ms-nets"></div>
-      <button class="wbtn ghost" id="ms-wscan" type="button">Найти сети</button>
-      <label class="fld"><span>Сеть</span><input id="ms-wssid" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32"></label>
-      <label class="fld"><span>Пароль</span><input id="ms-wpass" type="password" autocomplete="off" maxlength="64"></label>
-      <p class="sdesc">Пустое поле «Сеть» — переподключиться к текущей. Не подключилось за 20 с — датчик сам вернётся к прежней сети.</p>
-      <button class="wbtn primary" id="ms-wgo" type="button">Переподключиться</button>
-      <button class="wbtn ghost" id="ms-wreset" type="button">Сеть из прошивки</button>
-      <h3 class="ssub">Пароль точки доступа датчика</h3>
+      <button class="wbtn ghost" id="ms-wscan" type="button" data-i="wScan"></button>
+      <label class="fld"><span data-i="wNet"></span><input id="ms-wssid" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32"></label>
+      <label class="fld"><span data-i="wPass"></span><input id="ms-wpass" type="password" autocomplete="off" maxlength="64"></label>
+      <p class="sdesc" data-i="wHint"></p>
+      <button class="wbtn primary" id="ms-wgo" type="button"></button>
+      <button class="wbtn ghost" id="ms-wreset" type="button" data-i="wReset"></button>
+      <h3 class="ssub" data-i="apHead"></h3>
       <p class="sdesc" id="ms-apnow">—</p>
-      <label class="fld"><span>Новый пароль</span><input id="ms-appass" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" maxlength="63"></label>
-      <button class="wbtn primary" id="ms-apgo" type="button">Сменить пароль точки</button>
-      <p class="sdesc small">8–63 латинских символа. После смены датчик перезагрузится (~5 с), телефон отключится от точки — подключитесь заново с новым паролем.</p>
-      <p class="sdesc small">Заводской сброс без сайта: 5 раз включить сервисный переключатель за 20 с — сеть из прошивки и заводской пароль точки (с наклейки), LED мигнёт 6 раз.</p>
+      <label class="fld"><span data-i="apNew"></span><input id="ms-appass" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" maxlength="63"></label>
+      <button class="wbtn primary" id="ms-apgo" type="button" data-i="apGo"></button>
+      <p class="sdesc small" data-i="apHint"></p>
+      <p class="sdesc small" data-i="apReset"></p>
       <p class="sstat" id="ms-wstat" role="status"></p>
+    </div>
+  </div>
+
+  <!-- инструкция пользователя (2026-11-15): текст на трёх языках — manual.html, build.js кладёт его
+       в window.MS_MANUAL; вставляется при первом открытии, показывается статья текущего языка -->
+  <div class="sheet hide" id="ms-hsheet" role="dialog" aria-modal="true" aria-labelledby="ms-ht">
+    <div class="sbox man">
+      <div class="shead">
+        <h2 id="ms-ht"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 0 1 4.9.8c0 1.7-2.5 2.2-2.5 3.8M12 17h.01"/></svg><span data-i="help">User manual</span></h2>
+        <button class="ib" id="ms-hclose" type="button" data-it="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div id="ms-hbody"></div>
     </div>
   </div>
 </div>

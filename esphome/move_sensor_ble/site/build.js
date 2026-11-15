@@ -3,7 +3,7 @@
 // esp32_c3_plus_honey_weight/site/build.js):
 //   node move_sensor_ble/site/build.js [выход]   (по умолчанию ../site_bundle.js)
 // site_bundle.js берёт YAML: web_server: js_include → отдаётся как /0.js (ESPHome сам жмёт gzip).
-// Руками site_bundle.js не править — править panel.html / app.css / app.js и пересобирать.
+// Руками site_bundle.js не править — править panel.html / app.css / app.js / manual.html и пересобирать.
 //
 // Состав: стили + разметка панели (вставляются перед <esp-app>), app.js и штатный интерфейс
 // ESPHome v3 (vendor/esphome_www_v3.js — копия из сайта весов, без интернета CDN не нужен),
@@ -16,6 +16,7 @@ const rd = f => fs.readFileSync(path.join(dir, f), 'utf8');
 // На SMB-шаре файл сразу после записи может прочитаться обрезанным.
 const tail = (f, re) => { if (!re.test(rd(f).trimEnd())) throw new Error(f + ': обрезан — пересоберите через пару секунд'); };
 tail('app.css', /\}$/); tail('panel.html', />$/); tail('app.js', /\}\)\(\);$/);
+tail('manual.html', /<\/article>$/);
 // www.js в firstUpdated подменяет favicon на свой «домик» — гасим, остаётся наша иконка.
 const WWW_ICON = "n&&(n.href=`data:image/svg+xml,";
 const wwwRaw = rd('vendor/esphome_www_v3.js');
@@ -54,6 +55,7 @@ const parts = [
   ' // ── vendor/esphome_www_v3.js (esphome-webserver v3, oi.esphome.io/v3/www.js) ──\n' +
   ' (function () {\n' + www + '\n })();\n' +
   '};\n',
+  '// ── manual.html: инструкция пользователя EN/UA/RU (кнопка «?») ──\nwindow.MS_MANUAL = ' + JSON.stringify(rd('manual.html')) + ';\n',
   '// ── app.js ──\n' + rd('app.js')
 ];
 fs.writeFileSync(out, parts.join('\n'));
