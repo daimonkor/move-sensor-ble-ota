@@ -209,7 +209,14 @@
     lastMsg = lastUpd = Date.now();
     render();
   }
-  function onPing() { lastMsg = Date.now(); }
+  // имя из прошивки: «Move Sensor BLE 148f98» — хвост MAC (Device ID) показываем заглавными (2026-11-15)
+  function onPing(e) {
+    lastMsg = Date.now();
+    try {
+      var t = JSON.parse(e.data).title;
+      if (t) txt("ms-name", t.replace(/([0-9a-f]{6})$/i, function (m) { return m.toUpperCase(); }));
+    } catch (_) {}
+  }
 
   function attach(src) {
     src.addEventListener("state", onState);

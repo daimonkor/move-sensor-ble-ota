@@ -32,7 +32,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .const import CONF_ADDRESS, CONF_FIRMWARE_DIR, CONF_KEY, DEFAULT_FIRMWARE_DIR, DEFAULT_NAME, DOMAIN
+from .const import CONF_ADDRESS, CONF_FIRMWARE_DIR, CONF_KEY, DEFAULT_FIRMWARE_DIR, DEFAULT_NAME, DOMAIN, device_id
 
 BTHOME_UUID = "0000fcd2-0000-1000-8000-00805f9b34fb"
 CONF_FIRMWARE = "firmware"
@@ -58,8 +58,12 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
             else:
                 await self.async_set_unique_id(address)
                 self._abort_if_unique_id_configured()
+                # имя по умолчанию — с Device ID (хвост MAC), чтобы различать несколько датчиков
+                title = (user_input.get(CONF_NAME) or "").strip()
+                if not title or title == DEFAULT_NAME:
+                    title = f"{DEFAULT_NAME} {device_id(address)}"
                 return self.async_create_entry(
-                    title=user_input.get(CONF_NAME) or DEFAULT_NAME,
+                    title=title,
                     data={
                         CONF_ADDRESS: address,
                         CONF_KEY: (user_input.get(CONF_KEY) or "").strip(),
@@ -77,7 +81,8 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
                 name = (dev and (dev.name_by_user or dev.name)) or (
                     info.name if info.name and info.name.replace("-", ":").upper() != info.address else None
                 )
-                label = f"{name} ({info.address})" if name else info.address
+                did = device_id(info.address)
+                label = f"{name} · ID {did} ({info.address})" if name else f"ID {did} ({info.address})"
                 if not any(o["value"] == info.address for o in options):
                     options.append(SelectOptionDict(value=info.address, label=label))
         options.sort(key=lambda o: (0 if "move" in o["label"].lower() else 1, o["label"]))

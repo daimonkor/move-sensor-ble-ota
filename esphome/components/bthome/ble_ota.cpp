@@ -40,6 +40,7 @@ enum : uint8_t {
   CMD_DIAG = 0x09,
   CMD_WIFI_RESET = 0x12,
   CMD_TEST_MODE = 0x13,
+  CMD_IDENTIFY = 0x14,
   CMD_GET_SETTINGS = 0x10,
   CMD_SET_SETTINGS = 0x11,
   RSP_ACK = 0x84,
@@ -483,6 +484,21 @@ void BleOta::handle_command_() {
         r[1] = ST_OK;
       }
       this->reply_(r, 3);
+      break;
+    }
+    case CMD_IDENTIFY: {
+      r[0] = 0x94;
+      if (this->state_ == ST_IDLE) {
+        r[1] = ST_NOT_AUTH;
+      } else if (!this->identify_cb_) {
+        r[1] = ST_STATE;
+      } else {
+        const uint8_t sec = len >= 2 && c[1] ? c[1] : 5;
+        ESP_LOGW(TAG, "IDENTIFY %u s over BLE", (unsigned) sec);
+        this->identify_cb_(sec);
+        r[1] = ST_OK;
+      }
+      this->reply_(r, 2);
       break;
     }
     case CMD_WIFI_RESET: {

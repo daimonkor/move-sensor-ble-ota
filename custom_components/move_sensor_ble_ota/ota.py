@@ -40,6 +40,9 @@ from .const import (
     CMD_DIAG,
     CMD_WIFI_RESET,
     CMD_TEST_MODE,
+    CMD_IDENTIFY,
+    IDENTIFY_SECONDS,
+    device_id,
     TEST_MODE_MIN,
     DIAG_FIELDS,
     RESET_REASONS,
@@ -332,6 +335,7 @@ class OtaManager:
         self._rebooted_after_flash = False  # после success видели сброс Wake count
         # --- сброс Wi-Fi на сеть из прошивки (команда 0x12), ждёт окна как настройки
         self.wifi_reset: dict = {}          # {"state": pending|sent|error, "requested", "done", "error"}
+        self.identify: dict = {}            # {"state": pending|sent|error, ...} — не сохраняется
         # --- быстрый тест (0x13): {"want": bool, "state": pending|active|off|error, "until", "error"}
         self.test_mode: dict = {}
         # --- Last seen (2026-11-14): последний пакет BTHome от датчика
@@ -609,6 +613,7 @@ class OtaManager:
             "firmware_dir": self.firmware_dir,
             "last_build": self.last_build,
             "wifi_reset": self.wifi_reset or None,
+            "device_id": self.device_id,
         }
 
     async def _key(self) -> str:
@@ -753,6 +758,7 @@ class OtaManager:
         return (self._ota is not None or self._settings_work()
                 or (self._need_diag and not self.diag_unsupported)
                 or self.wifi_reset.get("state") == "pending"
+                or self.identify.get("state") == "pending"
                 or self.test_mode.get("state") == "pending")
 
     # ================= диагностика сбросов =================
@@ -1101,6 +1107,10 @@ class OtaManager:
             if self.wifi_reset.get("state") == "pending":
                 await self._send_wifi_reset(command)
 
+            # ---- Identify: помигать светодиодом (найти датчик)
+            if self.identify.get("state") == "pending":
+                await self._send_identify(command)
+
             # ---- быстрый тест (вкл/выкл)
             if self.test_mode.get("state") == "pending":
                 await self._send_test_mode(command)
@@ -1181,6 +1191,28 @@ class OtaManager:
             msg = "прошивка без быстрого теста" if rsp[1] == 10 else DEVICE_STATUS.get(rsp[1], f"status {rsp[1]}")
             self.test_mode.update(state="error", error=msg, want=False)
         self._save()
+        self._notify()
+
+    @property
+    def device_id(self) -> str:
+        return device_id(self.address)
+
+    async def async_request_identify(self) -> None:
+        self.identify = {"state": "pending", "requested": dt_util.now().isoformat()}
+        self._notify()
+        self._ensure_worker()
+
+    async def _send_identify(self, command) -> None:
+        try:
+            rsp = await command(bytes([CMD_IDENTIFY, IDENTIFY_SECONDS]), timeout=3.0)
+        except asyncio.TimeoutError:
+            return  # повтор в следующее окно
+        if rsp[1] == 0:
+            self.identify.update(state="sent", done=dt_util.now().isoformat(), error=None)
+            _LOGGER.info("%s: identify — LED blinks %d s", self.name, IDENTIFY_SECONDS)
+        else:
+            msg = "прошивка без Identify" if rsp[1] == 10 else DEVICE_STATUS.get(rsp[1], f"status {rsp[1]}")
+            self.identify.update(state="error", error=msg)
         self._notify()
 
     async def async_request_wifi_reset(self) -> None:

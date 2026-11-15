@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.button import ButtonEntity
+from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -17,7 +17,7 @@ from .ota import OtaError
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     mgr = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([FlashButton(mgr), BuildFlashButton(mgr), CancelButton(mgr), ReadSettingsButton(mgr),
-                        ResetWifiButton(mgr)])
+                        ResetWifiButton(mgr), IdentifyButton(mgr)])
 
 
 class FlashButton(OtaEntity, ButtonEntity):
@@ -68,6 +68,24 @@ class ReadSettingsButton(OtaEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.mgr.async_request_read()
+
+
+class IdentifyButton(OtaEntity, ButtonEntity):
+    """Помигать светодиодом датчика 10 с — найти нужный из нескольких (2026-11-15).
+    Уходит по BLE в ближайшее пробуждение (движение перед датчиком будит его сразу)."""
+
+    _attr_device_class = ButtonDeviceClass.IDENTIFY
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "identify", "Identify (BLE)")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"device_id": self.mgr.device_id} | (self.mgr.identify or {})
+
+    async def async_press(self) -> None:
+        await self.mgr.async_request_identify()
 
 
 class ResetWifiButton(OtaEntity, ButtonEntity):

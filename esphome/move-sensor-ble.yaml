@@ -58,6 +58,10 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  # 2026-11-15: одна прошивка на несколько датчиков — к имени добавляется хвост MAC Wi-Fi
+  # (Device ID, напр. 148f98): move-sensor-ble-148f98.local, «Move Sensor BLE 148f98».
+  # Точка доступа — MoveSensorBLE-148F98 (ставится в on_boot ниже).
+  name_add_mac_suffix: true
   includes:
     - move_sensor_rtc.h
     - move_sensor_ble/ms_ap.h     # своя точка доступа + DNS + лендинг (как у весов и батареи)
@@ -76,6 +80,16 @@ esphome:
     - priority: 550
       then:
         - lambda: |-
+            // 2026-11-15: SSID точки доступа = MoveSensorBLE-<хвост MAC Wi-Fi> (Device ID), до старта Wi-Fi
+            {
+              uint8_t mac[6];
+              esp_read_mac(mac, ESP_MAC_WIFI_STA);
+              char ssid[24];
+              snprintf(ssid, sizeof(ssid), "MoveSensorBLE-%02X%02X%02X", mac[3], mac[4], mac[5]);
+              wifi::WiFiAP ap = wifi::global_wifi_component->get_ap();
+              ap.set_ssid(ssid);
+              wifi::global_wifi_component->set_ap(ap);
+            }
             ms::bat_phase = 1;
             id(vbat).update();
             ms::bat_phase = 2;
@@ -95,6 +109,11 @@ esphome:
                 ESP_LOGW("ms", "Wi-Fi RESET over BLE: will apply on next service mode");
               }
               id(wifi_reset_blink).execute();
+            });
+            // найти датчик (команда 0x14 IDENTIFY из HA): мигать светодиодом N с, не засыпая
+            id(bth_ota).set_identify_callback([](uint8_t sec) {
+              id(identify_left) = sec * 2;   // полсекунды на вспышку
+              id(identify_blink).execute();
             });
             // быстрый тест по BLE (команда 0x13): просыпаться раз в 30 с, выключится сам через N мин
             id(bth_ota).set_test_mode_callback([](uint8_t minutes, uint16_t tx_ms) {
@@ -149,7 +168,8 @@ wifi:
   # «Войти в сеть» -> сайт датчика / «Wi-Fi роутера». В рабочем режиме Wi-Fi выключен целиком.
   # captive_portal не ставим: он показывал бы свою страницу вместо сайта датчика.
   ap:
-    ssid: "Move-Sensor-BLE"
+    # SSID ставится в on_boot: MoveSensorBLE-<Device ID> (хвост MAC Wi-Fi) — у каждого датчика свой
+    ssid: "MoveSensorBLE"
     password: !secret move_sensor_ap_password
     # адрес вне частных диапазонов (ms_ap.h, AP_IP_B): иначе Android не показывает окно входа
     manual_ip:
@@ -181,7 +201,7 @@ safe_mode:
 
 # Веб-интерфейс для отладки: состояния, настройки и лог в браузере.
 # Доступен только когда поднят Wi-Fi, то есть в сервисном режиме (переключатель на D2):
-# через свою точку «Move-Sensor-BLE» — http://100.64.4.1/ (доменное имя на лендинге не работает),
+# через свою точку «MoveSensorBLE-148F98» — http://100.64.4.1/ (доменное имя на лендинге не работает),
 # из домашней сети — по IP датчика или http://move-sensor-ble.local. В рабочем режиме и во сне Wi-Fi выключен,
 # поэтому страница недоступна и радио на неё не тратится.
 web_server:
@@ -232,6 +252,11 @@ globals:
     type: bool
     restore_value: false
     initial_value: "false"
+  # Identify: сколько полусекундных вспышек осталось (0 = не мигаем)
+  - id: identify_left
+    type: int
+    restore_value: false
+    initial_value: "0"
   # сервисный режим включён переключателем на D2 (а не холодным стартом / из HA)
   - id: service_by_switch
     type: bool
@@ -983,6 +1008,11 @@ script:
                 condition:
                   lambda: "return id(bth_ota).sleep_ready();"
                 timeout: 15min
+            # Identify (2026-11-15): пока мигаем — не спим; после защёлки: команда приходит во время подключения (иначе LED замрёт посреди серии)
+            - wait_until:
+                condition:
+                  lambda: "return id(identify_left) <= 0;"
+                timeout: 65s
             - lambda: |-
                 // сервисный переключатель (D2) будит по HIGH
                 esp_deep_sleep_enable_gpio_wakeup(1ULL << ${service_gpio}, ESP_GPIO_WAKEUP_GPIO_HIGH);
@@ -1099,6 +1129,20 @@ script:
 
   # индикатор срабатываний: count коротких вспышек (только если включён Motion tracking LED)
   # подтверждение сброса Wi-Fi: 6 быстрых вспышек, даже если Motion tracking LED выключен
+  # Identify (2026-11-15): быстрые вспышки, чтобы найти нужный датчик из нескольких.
+  # Не зависит от «Motion tracking LED».
+  - id: identify_blink
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: "return id(identify_left) > 0;"
+          then:
+            - output.turn_on: dbg_led
+            - delay: 150ms
+            - output.turn_off: dbg_led
+            - delay: 350ms
+            - lambda: "id(identify_left)--;"
   - id: wifi_reset_blink
     then:
       - repeat:

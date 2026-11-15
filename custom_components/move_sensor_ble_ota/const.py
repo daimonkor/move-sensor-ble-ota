@@ -27,6 +27,18 @@ CMD_INFO = 0x08
 CMD_DIAG = 0x09   # счётчики сбросов (2026-11-14), см. ble_ota.h
 CMD_WIFI_RESET = 0x12  # сброс Wi-Fi на сеть из прошивки (2026-11-14)
 CMD_TEST_MODE = 0x13   # быстрый тест: просыпаться раз в 30 с, выключится сам (2026-11-14)
+CMD_IDENTIFY = 0x14    # мигать светодиодом N с — найти датчик физически (2026-11-15)
+IDENTIFY_SECONDS = 10
+
+
+def device_id(ble_address: str) -> str:
+    """Device ID = хвост MAC Wi-Fi (как суффикс имени прошивки, SSID точки доступа): у ESP32-C3
+    BT MAC = Wi-Fi MAC + 2, поэтому из BLE-адреса вычитаем 2. Пример: E8:F6:0A:14:8F:9A -> 148F98."""
+    try:
+        v = (int(ble_address.replace(":", "").replace("-", ""), 16) - 2) & 0xFFFFFFFFFFFF
+    except ValueError:
+        return ""
+    return f"{v & 0xFFFFFF:06X}"
 TEST_MODE_MIN = 30     # на сколько минут включать быстрый тест
 CMD_GET_SETTINGS = 0x10
 CMD_SET_SETTINGS = 0x11

@@ -32,8 +32,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_add_entities([
         OtaStatusSensor(mgr), OtaProgressSensor(mgr), SettingsStatusSensor(mgr), FirmwareVersionSensor(mgr),
         BrownoutCountSensor(mgr), CrashCountSensor(mgr), LastResetReasonSensor(mgr), LastSeenSensor(mgr),
-        BatteryDaysLeftSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr),
+        BatteryDaysLeftSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
     ])
+
+
+class DeviceIdSensor(OtaEntity, SensorEntity):
+    """Device ID — хвост MAC Wi-Fi (148F98): тот же, что в имени прошивки (move-sensor-ble-148f98),
+    SSID точки доступа (MoveSensorBLE-148F98) и на сайте датчика. Различать несколько датчиков (2026-11-15)."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:identifier"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "device_id", "Device ID")
+
+    @property
+    def native_value(self) -> str:
+        return self.mgr.device_id
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"ble_address": self.mgr.address, "hostname": f"move-sensor-ble-{self.mgr.device_id.lower()}",
+                "ap_ssid": f"MoveSensorBLE-{self.mgr.device_id}"}
 
 
 class OtaStatusSensor(OtaEntity, SensorEntity):

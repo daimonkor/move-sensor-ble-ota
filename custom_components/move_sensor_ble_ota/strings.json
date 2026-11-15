@@ -182,6 +182,9 @@
       },
       "wakes_today": {
         "name": "Wakes since midnight"
+      },
+      "device_id": {
+        "name": "Device ID"
       }
     },
     "binary_sensor": {
@@ -241,6 +244,9 @@
       },
       "wifi_reset": {
         "name": "Reset Wi-Fi to default"
+      },
+      "identify": {
+        "name": "Identify"
       }
     }
   }

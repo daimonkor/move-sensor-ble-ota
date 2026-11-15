@@ -23,6 +23,8 @@
 //     0x12 WIFI_RESET (после авторизации) -> 0x92 st                                 (2026-11-14)
 //       Сбросить сохранённую сеть Wi-Fi на сеть из прошивки. Выполняет колбэк из YAML
 //       (set_wifi_reset_callback); нет колбэка -> st 10.
+//     0x14 IDENTIFY seconds:u8 (после авторизации) -> 0x94 st                       (2026-11-15)
+//       Мигать светодиодом seconds с (0 = 5 с), чтобы найти датчик физически. Колбэк из YAML.
 //     0x13 TEST_MODE minutes:u8 [tx_window_ms:u16] (после авторизации) -> 0x93 st minutes  (2026-11-14)
 //       tx_window_ms (необязательно, 0 = как в прошивке): окно рекламы после пакета на время теста
 //       Быстрый тест: без движения просыпаться раз в 30 с, а не по Climate interval; само
@@ -85,6 +87,7 @@ class BleOta : public Component {
   // сброс Wi-Fi на сеть из прошивки по команде 0x12 — логика в YAML (флаг + save_wifi_sta)
   void set_wifi_reset_callback(std::function<void()> cb) { this->wifi_reset_cb_ = std::move(cb); }
   void set_test_mode_callback(std::function<void(uint8_t, uint16_t)> cb) { this->test_mode_cb_ = std::move(cb); }
+  void set_identify_callback(std::function<void(uint8_t)> cb) { this->identify_cb_ = std::move(cb); }
 
 #ifdef BLE_OTA_SETTINGS
   // настройки, которые HA может менять через окно BLE
@@ -152,6 +155,7 @@ class BleOta : public Component {
   std::string build_version_;
   std::function<void()> wifi_reset_cb_;
   std::function<void(uint8_t, uint16_t)> test_mode_cb_;
+  std::function<void(uint8_t)> identify_cb_;
   int min_battery_{30};
   int battery_pct_{-1};
 

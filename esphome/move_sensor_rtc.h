@@ -3,6 +3,7 @@
 // Обнуляется только при холодном старте (подача питания / reset / прошивка).
 #include <esp_attr.h>
 #include <esp_sleep.h>
+#include <esp_mac.h>      // esp_read_mac() — Device ID / SSID точки доступа
 #include <esp_system.h>   // esp_reset_reason() — причина сброса (brownout и т.п.)
 #include <esp_app_desc.h> // esp_app_get_description() — SHA образа в Build Version
 #include <driver/gpio.h>
