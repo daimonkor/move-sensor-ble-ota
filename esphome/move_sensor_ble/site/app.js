@@ -265,6 +265,7 @@
     if (id.indexOf("/") < 0 && j.name) id = id.split("-")[0] + "/" + j.name;
     S[id] = j;
     lastMsg = lastUpd = Date.now();
+    if (id === "text_sensor/AP password status") apStatus(j.state);
     render();
   }
   // имя из прошивки: «Move Sensor BLE 148f98» — хвост MAC (Device ID) показываем заглавными (2026-11-15)
@@ -419,6 +420,20 @@
   }
   $("ms-toast").addEventListener("click", function () { this.classList.add("hide"); });
 
+  // Результат «Save AP password» от датчика — тостом, в том числе когда сохраняли на штатной
+  // вкладке «Устройство» или из HA. Значения первых секунд после загрузки не показываем; своё нажатие
+  // на панели уже показало тост — его не дублируем.
+  var apStReady = Date.now() + 4000, apSelfT = 0;   // первые 4 с — начальные состояния SSE
+  function apStatus(v) {
+    if (Date.now() < apStReady) return;
+    if (!v || Date.now() - apSelfT < 5000) return;
+    var m = /^rejected: (\d+) characters/.exec(v);
+    if (v.indexOf("saved") === 0) toast("Пароль точки сохранён. Датчик перезагрузится (~5 с) — подключитесь заново с новым паролем", false);
+    else if (v === "rejected: field is empty") toast("Пароль точки НЕ изменён: поле «New AP Password» пустое — введите пароль и нажмите Enter, потом «Save AP password»", true);
+    else if (m) toast("Пароль точки НЕ изменён: " + m[1] + " символов, нужно 8–63", true);
+    else if (v.indexOf("rejected") === 0) toast("Пароль точки НЕ изменён: только латинские буквы, цифры и знаки", true);
+  }
+
   // ── пароль своей точки доступа: «New AP Password» → «Save AP password», два нажатия ──
   var apArmed = 0;
   $("ms-apgo").addEventListener("click", function () {
@@ -436,7 +451,7 @@
       return;
     }
     apArmed = 0; b.classList.remove("warn"); b.textContent = "Сменить пароль точки";
-    wstat("Сохраняю…"); setWBusy(true);
+    wstat("Сохраняю…"); setWBusy(true); apSelfT = Date.now();
     postText("New AP Password", p)
       .then(function () { return press("Save AP password"); })
       .then(function () {

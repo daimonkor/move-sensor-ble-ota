@@ -42,6 +42,14 @@ text_sensor:
     entity_category: diagnostic
     update_interval: never
     lambda: 'return {id(ap_password_custom).size() >= 8 ? "custom" : "default"};'
+  # Результат последнего «Save AP password» (2026-11-15) — видно и на штатной вкладке «Устройство»,
+  # и в HA; сайт показывает его тостом. Пусто до первого нажатия.
+  - platform: template
+    id: ap_password_status
+    name: "AP password status"
+    icon: "mdi:message-alert-outline"
+    entity_category: diagnostic
+    update_interval: never
 
 text:
   - platform: template
@@ -168,6 +176,9 @@ button:
               for (char ch : p) if (ch < 0x20 || ch > 0x7e) return false;
               return true;
           then:
+            - text_sensor.template.publish:
+                id: ap_password_status
+                state: "saved, rebooting"
             - lambda: |-
                 id(ap_password_custom) = id(new_ap_password).state;
                 ESP_LOGW("ms", "AP password: custom saved (%u chars)", (unsigned) id(ap_password_custom).size());
@@ -193,9 +204,15 @@ button:
             - delay: 300ms
             - lambda: "App.safe_reboot();"
           else:
-            - logger.log:
-                format: "AP password rejected: need 8-63 printable ASCII characters"
-                level: WARN
+            # причина отказа — в лог, в «AP password status» (штатная вкладка, HA, тост сайта)
+            - lambda: |-
+                const std::string &p = id(new_ap_password).state;
+                std::string why;
+                if (p.empty()) why = "rejected: field is empty";
+                else if (p.size() < 8 || p.size() > 63) why = "rejected: " + std::to_string(p.size()) + " characters, need 8-63";
+                else why = "rejected: only Latin letters, digits and symbols";
+                ESP_LOGW("ms", "AP password %s", why.c_str());
+                id(ap_password_status).publish_state(why);
             - homeassistant.action:
                 action: persistent_notification.create
                 data:
