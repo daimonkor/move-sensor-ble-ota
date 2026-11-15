@@ -76,6 +76,16 @@ BUILD_SCHEMA = vol.Schema(
 )
 
 
+async def async_flash_gate(mgr: OtaManager, start: bool) -> None:
+    """До фоновой сборки: датчик уже отклонил этот ключ -> ошибка сразу (всплывает в UI)."""
+    if not start:
+        return
+    try:
+        await mgr.async_auth_gate("build and flash")
+    except OtaError as err:
+        raise HomeAssistantError(str(err)) from err
+
+
 def start_build(hass: HomeAssistant, mgr: OtaManager, configuration: str, start: bool, timeout: int) -> None:
     """Сборка + прошивка в фоне (сборка 0.5-5 мин, ожидание окна — до timeout).
     Ход — в «OTA status» (building -> waiting -> flashing -> success) и /status."""
@@ -242,6 +252,7 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def build_and_flash(call: ServiceCall) -> ServiceResponse:
         mgr = _pick(hass, call.data.get(ATTR_ENTRY_ID))
+        await async_flash_gate(mgr, call.data[ATTR_START])
         start_build(hass, mgr, call.data[ATTR_CONFIGURATION], call.data[ATTR_START], call.data[ATTR_TIMEOUT])
         return {"status": "building", "configuration": call.data[ATTR_CONFIGURATION]}
 
@@ -369,6 +380,7 @@ class BuildView(HomeAssistantView):
             cfg = os.path.basename(q.get("configuration") or "")   # пусто = YAML датчика по Device ID
             start = q.get("start", "1") not in ("0", "false", "no")
             timeout = int(q.get("timeout", DEFAULT_TIMEOUT_MIN))
+            await async_flash_gate(mgr, start)
             start_build(self.hass, mgr, cfg, start, timeout)
         except (HomeAssistantError, ValueError) as err:
             return self.json_message(str(err), status_code=409)

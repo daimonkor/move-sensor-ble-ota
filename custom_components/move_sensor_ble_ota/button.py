@@ -42,8 +42,9 @@ class BuildFlashButton(OtaEntity, ButtonEntity):
         super().__init__(mgr, "ota_build_flash", "Build & flash firmware (BLE)")
 
     async def async_press(self) -> None:
-        from . import start_build  # noqa: PLC0415
+        from . import async_flash_gate, start_build  # noqa: PLC0415
 
+        await async_flash_gate(self.mgr, True)
         start_build(self.hass, self.mgr, DEFAULT_ESPHOME_CONFIG, True, DEFAULT_TIMEOUT_MIN)
 
 

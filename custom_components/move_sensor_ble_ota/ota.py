@@ -21,9 +21,10 @@ from datetime import datetime
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 
-from homeassistant.components import bluetooth
+from homeassistant.components import bluetooth, persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
@@ -147,6 +148,13 @@ class OtaError(Exception):
 
 class RetryLater(Exception):
     """Окно закрылось/связь оборвалась — ждём следующее пробуждение."""
+
+
+# v1.14.1: ключ не подошёл (или ключа нет) — подключения к датчику на паузе, пока ключ тот же.
+# Ключ проверяем заново раз в AUTH_KEY_CHECK_S (поле «Ключ OTA» может быть пустым — тогда
+# действующий ключ из secrets.yaml), а раз в AUTH_RETRY_H часов пробуем ещё раз и с тем же.
+AUTH_KEY_CHECK_S = 600
+AUTH_RETRY_H = 6
 
 
 @dataclass
@@ -324,6 +332,9 @@ class OtaManager:
         # настройки могут вернуться к значениям из YAML — тогда HA отправит их заново.
         self.target: dict = {}
         self._resync = False      # перечитать и вернуть target после перезагрузки датчика
+        # v1.14.1: {"reason": "auth"|"no_key", "key_fp": ..., "since": iso} — подключения на паузе
+        self.auth_block: dict | None = None
+        self._auth_check_at = 0.0
         self.settings_synced: datetime | None = None
         self.settings_applied_at: datetime | None = None  # когда датчик подтвердил последние изменения
         self._last_sst: str | None = None
@@ -384,6 +395,9 @@ class OtaManager:
         self.firmware_seen = dt_util.parse_datetime(ts_fw) if ts_fw else None
         self.applied = data.get("applied", {})
         self.target = data.get("target") or dict(self.applied)   # миграция со старых версий
+        self.auth_block = data.get("auth_block")
+        if self.auth_block is not None:   # сообщение в «Ремонте» не переживает перезапуск HA
+            self._raise_auth_issue(self.auth_block.get("reason", "auth"))
         ts = data.get("synced")
         self.settings_synced = dt_util.parse_datetime(ts) if ts else None
         # первый запуск — прочитать настройки с датчика при ближайшем пробуждении
@@ -430,6 +444,7 @@ class OtaManager:
                 "desired": self.desired,
                 "applied": self.applied,
                 "target": self.target,
+                "auth_block": self.auth_block,
                 "synced": self.settings_synced.isoformat() if self.settings_synced else None,
                 "firmware_version": self.firmware_version,
                 "firmware_seen": self.firmware_seen.isoformat() if self.firmware_seen else None,
@@ -491,6 +506,7 @@ class OtaManager:
         }
 
     async def async_set_setting(self, key: str, value) -> None:
+        self._auth_unblock("setting changed")
         if key not in SETTINGS:
             raise OtaError(f"неизвестная настройка {key}")
         if key in WINDOW_KEYS and self.auto_window:
@@ -589,6 +605,7 @@ class OtaManager:
         self._notify()
 
     async def async_request_read(self) -> None:
+        self._auth_unblock("Read settings")
         self._need_read = True
         self.settings_error = None
         self._notify()
@@ -623,6 +640,7 @@ class OtaManager:
             "last_build": self.last_build,
             "wifi_reset": self.wifi_reset or None,
             "device_id": self.device_id,
+            "auth_error": self.auth_block,
         }
 
     async def _key(self) -> str:
@@ -642,6 +660,7 @@ class OtaManager:
 
         if self._ota is not None or self.status == ST_BUILDING:
             raise OtaError("сборка или прошивка уже идёт")
+        await self.async_auth_gate("build and flash")
         cfg = await self.hass.async_add_executor_job(self.resolve_config, configuration)
         self.last_build = {"configuration": cfg, "started": dt_util.now().isoformat()}
         self._set(ST_BUILDING, progress=0, error=None, finished=None, file=None, new_version=None)
@@ -677,6 +696,7 @@ class OtaManager:
         return path
 
     async def async_start(self, file: str | None = None, timeout_min: int = 180) -> None:
+        await self.async_auth_gate("firmware flash")
         if self._ota is not None:
             raise OtaError("прошивка уже идёт или ждёт окно")
         path = file
@@ -764,6 +784,8 @@ class OtaManager:
         return (bool(self.pending()) or self._need_read) and self.settings_error is None
 
     def _has_work(self) -> bool:
+        if self.auth_block is not None:
+            return False   # v1.14.1: ключ не подошёл — не подключаемся, пока он не изменится
         return (self._ota is not None or self._settings_work()
                 or (self._need_diag and not self.diag_unsupported)
                 or self.wifi_reset.get("state") == "pending"
@@ -796,6 +818,7 @@ class OtaManager:
             if prev is not None and wake < prev and not (prev > 65000 and wake < 1000):
                 _LOGGER.info("%s: wake count %d -> %d, device rebooted", self.name, prev, wake)
                 self._diag_deferred = True
+                self._auth_unblock("device rebooted")
                 if self.status == ST_SUCCESS:
                     self._rebooted_after_flash = True
         if self._diag_deferred:
@@ -935,6 +958,9 @@ class OtaManager:
             self._save()
             self._notify()
         self._check_missed_climate()
+        if self.auth_block is not None and time.monotonic() >= self._auth_check_at:
+            self._auth_check_at = time.monotonic() + AUTH_KEY_CHECK_S
+            self.hass.async_create_task(self._auth_recheck())
         sst = self.settings_status
         if sst != self._last_sst:
             # applied -> idle через SETTINGS_APPLIED_SHOW_MIN: обновить сенсор
@@ -968,6 +994,108 @@ class OtaManager:
             self._save()
             self._notify()
             self._auto_window()
+
+    # ================= авторизация (v1.14.1) =================
+    @staticmethod
+    def _key_fp(key: str | None) -> str:
+        return hashlib.sha256(key.encode()).hexdigest()[:12] if key else "none"
+
+    def _issue_id(self) -> str:
+        return f"auth_{self.entry.entry_id}"
+
+    def _auth_fail(self, reason: str, key: str | None) -> None:
+        """Ключ не подошёл / ключа нет: больше не подключаемся, пока действующий ключ тот же."""
+        self.auth_block = {"reason": reason, "key_fp": self._key_fp(key), "since": dt_util.now().isoformat()}
+        self._auth_check_at = time.monotonic() + AUTH_KEY_CHECK_S
+        _LOGGER.error(
+            "%s: %s - BLE connections paused until the key changes (options or %s in %s), "
+            "Read settings / flash, or %d h",
+            self.name, "OTA key rejected by the sensor" if reason == "auth" else "no OTA key",
+            SECRET_NAME, SECRETS_PATH, AUTH_RETRY_H,
+        )
+        self._raise_auth_issue(reason)
+        self._save()
+        self._notify()
+
+    def _raise_auth_issue(self, reason: str) -> None:
+        ir.async_create_issue(
+            self.hass, DOMAIN, self._issue_id(), is_fixable=False, severity=ir.IssueSeverity.ERROR,
+            translation_key="auth_failed" if reason == "auth" else "no_key",
+            translation_placeholders={"name": self.name, "secret": SECRET_NAME, "path": SECRETS_PATH,
+                                      "hours": str(AUTH_RETRY_H)},
+        )
+
+    def _auth_ok(self) -> None:
+        if self.auth_block is not None:
+            _LOGGER.info("%s: OTA key accepted - BLE connections resumed", self.name)
+            self.auth_block = None
+            self._save()
+        ir.async_delete_issue(self.hass, DOMAIN, self._issue_id())
+        persistent_notification.async_dismiss(self.hass, self._notice_id())
+
+    def _notice_id(self) -> str:
+        return f"{DOMAIN}_auth_{self.entry.entry_id}"
+
+    def _auth_text(self) -> str:
+        return (
+            f"Датчик «{self.name}» не принял ключ OTA — прошивка не запущена.\n\n"
+            "Ключ в Home Assistant: поле «Ключ OTA» в параметрах интеграции, "
+            f"а если оно пустое — `{SECRET_NAME}` в `{SECRETS_PATH}`. "
+            "В датчике — ключ из secrets.yaml на момент сборки его прошивки.\n\n"
+            "Исправить: сделать ключи одинаковыми (вписать верный ключ в параметры) "
+            "или прошить датчик по USB с текущим secrets.yaml, затем нажать прошивку ещё раз."
+        )
+
+    def _flash_auth_notice(self) -> None:
+        """Прошивка ждала окно, а датчик отклонил ключ — показать уведомление (кнопку уже не вернуть)."""
+        persistent_notification.async_create(
+            self.hass, self._auth_text(), title=f"{self.name}: прошивка не началась",
+            notification_id=self._notice_id(),
+        )
+
+    async def async_auth_gate(self, why: str) -> None:
+        """Перед прошивкой: если датчик уже отклонил этот же ключ — сразу ошибка (всплывёт в UI),
+        не ставим прошивку в очередь. Ключ сменился — пробуем заново."""
+        blk = self.auth_block
+        if blk is None:
+            return
+        try:
+            key = await self._key()
+        except OtaError:
+            key = None
+        if key is not None and self._key_fp(key) == blk.get("key_fp") and blk.get("reason") == "auth":
+            raise OtaError(
+                f"Датчик не принял ключ OTA — прошивка не запущена. Проверь «Ключ OTA» "
+                f"в параметрах или {SECRET_NAME} в secrets.yaml (подробно — в «Ремонт»)"
+            )
+        self._auth_unblock(why)
+
+    def _auth_unblock(self, why: str) -> None:
+        if self.auth_block is None:
+            return
+        _LOGGER.info("%s: retrying BLE auth (%s)", self.name, why)
+        self.auth_block = None
+        self.settings_error = None
+        self._save()
+        self._notify()
+        self._ensure_worker()
+
+    async def _auth_recheck(self) -> None:
+        """Действующий ключ сменился (поле может быть пустым — тогда secrets.yaml) или прошло
+        AUTH_RETRY_H часов — снять паузу и попробовать ещё раз."""
+        from datetime import timedelta  # noqa: PLC0415
+        blk = self.auth_block
+        if blk is None:
+            return
+        try:
+            key = await self._key()
+        except OtaError:
+            key = None
+        since = dt_util.parse_datetime(blk.get("since") or "")
+        if self._key_fp(key) != blk.get("key_fp"):
+            self._auth_unblock("key changed")
+        elif since is None or dt_util.now() - since >= timedelta(hours=AUTH_RETRY_H):
+            self._auth_unblock(f"{AUTH_RETRY_H} h passed")
 
     def _ensure_worker(self) -> None:
         if not self._has_work():
@@ -1047,7 +1175,7 @@ class OtaManager:
                 key = await self._key()
             except OtaError as err:
                 self.settings_error = str(err)
-                self._notify()
+                self._auth_fail("no_key", None)
                 return
         if self._ota is not None:
             self._set(ST_CONNECTING)
@@ -1091,7 +1219,10 @@ class OtaManager:
                 if self._ota is not None:
                     self._ota = None
                     self._set(ST_ERROR, error=msg, finished=dt_util.now())
+                    self._flash_auth_notice()
+                self._auth_fail("auth", key)
                 return
+            self._auth_ok()
             info = await command(bytes([CMD_INFO]))
             ver = info[2:].decode(errors="replace")
             if self._ota is not None and self.status != ST_FLASHING:
@@ -1178,6 +1309,7 @@ class OtaManager:
 
         tx_window_ms — окно рекламы после пакета на время теста (0 = как в прошивке); старая
         прошивка лишние байты команды игнорирует."""
+        self._auth_unblock("fast test")
         self.test_mode = {"want": on, "minutes": minutes if on else 0, "state": "pending",
                           "tx_window_ms": tx_window_ms if on else 0,
                           "requested": dt_util.now().isoformat()}
@@ -1223,6 +1355,7 @@ class OtaManager:
         raise OtaError(f"нет YAML датчика: {own} (или {DEFAULT_ESPHOME_CONFIG}) в {ESPHOME_DIR}")
 
     async def async_request_identify(self) -> None:
+        self._auth_unblock("Identify")
         self.identify = {"state": "pending", "requested": dt_util.now().isoformat()}
         self._notify()
         self._ensure_worker()
@@ -1241,6 +1374,7 @@ class OtaManager:
         self._notify()
 
     async def async_request_wifi_reset(self) -> None:
+        self._auth_unblock("Wi-Fi reset")
         self.wifi_reset = {"state": "pending", "requested": dt_util.now().isoformat()}
         self._save()
         self._notify()

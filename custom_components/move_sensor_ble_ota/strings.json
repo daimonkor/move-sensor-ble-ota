@@ -249,5 +249,15 @@
         "name": "Identify"
       }
     }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "{name}: OTA key rejected by the sensor",
+      "description": "The sensor rejected the BLE OTA key, so firmware updates, settings and diagnostics are paused for it (BLE connections stopped to save its battery). Sensor data via BTHome still works.\n\nThe key in Home Assistant comes from the integration options («OTA key»); if that field is empty, from `{secret}` in `{path}`. The sensor has the key that was in secrets.yaml when its firmware was built.\n\nFix: make the keys match — set the right key in the options (or `{secret}`), or rebuild and flash the sensor over USB with the current secrets.yaml. Connections resume by themselves when the key changes, after Read settings / a flash, or every {hours} h."
+    },
+    "no_key": {
+      "title": "{name}: no OTA key",
+      "description": "There is no BLE OTA key: the «OTA key» field in the integration options is empty and `{secret}` was not found in `{path}`. Firmware updates, settings and diagnostics over BLE are paused. Sensor data via BTHome still works.\n\nFix: add `{secret}` to `{path}` (the same value the firmware was built with) or enter the key in the options."
+    }
   }
 }
