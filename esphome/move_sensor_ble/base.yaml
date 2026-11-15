@@ -985,6 +985,7 @@ script:
                 then:
                   - lambda: |-
                       id(woke_by_pir) = false;
+                      ms::off_repeat_ms = 0;   // новое движение — повтор OFF не нужен
                       if (!ms::occupied) {
                         ms::occupied = true;
                         ESP_LOGI("ms", "motion confirmed -> ON");
@@ -1033,6 +1034,7 @@ script:
                       ms::occupied = false;
                       ESP_LOGI("ms", "keep time elapsed -> OFF");
                       id(send_state).execute(false, true);
+                      ms::off_repeat_ms = ms::now_ms() + ms::OFF_REPEAT_MS;   // повтор OFF через 60 с
           else:
             # после холодного старта / пробуждения по таймеру климата сообщаем "чисто",
             # но БЕЗ мигания: это не событие движения
@@ -1044,8 +1046,16 @@ script:
       # пакета в этом пробуждении нет (например «motion again» при занято), а срок отчёта
       # о климате прошёл — шлём текущее состояние + климат, без мигания (2026-11-14)
       - lambda: |-
+          // повтор «свободно» (2026-11-15): срок пришёл — шлём состояние ещё раз, без мигания
+          if (!id(tx_pending) && !ms::occupied && ms::off_repeat_ms != 0 &&
+              ms::now_ms() >= ms::off_repeat_ms - 2000) {
+            ms::off_repeat_ms = 0;
+            ESP_LOGI("ms", "OFF repeat -> send");
+            id(send_state).execute(false, false);
+          }
           if (!id(tx_pending) && ms::climate_due(ms::climate_interval_ms(id(climate_interval).state))) {
             ESP_LOGI("ms", "climate report due -> send (occupied=%d)", ms::occupied);
+            if (!ms::occupied) ms::off_repeat_ms = 0;   // «свободно» уходит и в климат-пакете
             id(send_state).execute(ms::occupied, false);
           }
       - script.execute: go_sleep
@@ -1070,6 +1080,9 @@ script:
           id(climate_read).execute();
           ms::climate_last_ms = ms::now_ms();   // климат уходит в этом пакете
           id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+          // повтор «свободно» (2026-11-15): любой пакет со «свободно» его выполняет. Флаг ставит
+          // ветка keep time ПОСЛЕ этого вызова — сама её отправка его не сбрасывает.
+          if (!state) ms::off_repeat_ms = 0;
           id(occupancy).publish_state(state);
           id(tx_pending) = true;
           if (led) id(tx_motion) = true;   // led = реальное событие (занято / освободилось)
@@ -1183,16 +1196,24 @@ script:
                         # по таймеру проснёмся и отправим температуру/влажность
                         - if:
                             condition:
-                              lambda: "return id(climate_interval).state >= 1.0f || ms::test_mode();"
+                              lambda: "return id(climate_interval).state >= 1.0f || ms::test_mode() || ms::off_repeat_ms != 0;"
                             then:
                               - logger.log:
-                                  format: "sleep until motion, climate report in %.0f min%s"
-                                  args: ["id(climate_interval).state", "ms::test_mode() ? \" (FAST TEST: 30 s)\" : \"\""]
+                                  format: "sleep until motion, climate report in %.0f min%s%s"
+                                  args: ["id(climate_interval).state", "ms::test_mode() ? \" (FAST TEST: 30 s)\" : \"\"", "ms::off_repeat_ms ? \", OFF repeat pending\" : \"\""]
                               - deep_sleep.enter:
                                   id: ds
                                   sleep_duration: !lambda |-
-                                    if (ms::test_mode()) return ms::TEST_WAKE_MS;
-                                    return (uint32_t) (id(climate_interval).state * 60000.0f);
+                                    uint32_t d = ms::test_mode() ? ms::TEST_WAKE_MS
+                                               : (id(climate_interval).state >= 1.0f ? (uint32_t) (id(climate_interval).state * 60000.0f)
+                                                                                    : UINT32_MAX);
+                                    // повтор «свободно» (2026-11-15): проснуться не позже его срока
+                                    if (ms::off_repeat_ms != 0) {
+                                      int64_t r = ms::off_repeat_ms - ms::now_ms();
+                                      if (r < 1000) r = 1000;
+                                      if (r < (int64_t) d) d = (uint32_t) r;
+                                    }
+                                    return d;
                             else:
                               - logger.log: "sleep until motion"
                               - deep_sleep.enter:

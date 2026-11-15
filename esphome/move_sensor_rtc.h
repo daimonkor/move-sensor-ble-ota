@@ -43,6 +43,13 @@ static RTC_DATA_ATTR bool pir_held = false;            // уснули, ожид
 static constexpr int64_t KEEP_PENDING = INT64_MAX;      // Keep time ещё не идёт: PIR держит HIGH
 static constexpr uint32_t HELD_SAFETY_MS = 10UL * 60 * 1000;  // страховочный таймер, если PIR залип в HIGH
 static inline bool keep_pending() { return off_deadline_ms == KEEP_PENDING; }
+
+// ---- Повтор «свободно» (2026-11-15). BLE-реклама без подтверждения: если прокси пропустил
+// короткое окно с OFF, HA держал «занято» до следующего климат-пакета (до Climate interval).
+// Теперь через OFF_REPEAT_MS после OFF датчик просыпается ещё раз и шлёт состояние повторно.
+// Новое движение или климат-пакет со «свободно» повтор отменяют. 0 = повтор не нужен.
+static RTC_DATA_ATTR int64_t off_repeat_ms = 0;
+static constexpr int64_t OFF_REPEAT_MS = 60000;
 static inline void keep_start(int keep_s) { off_deadline_ms = now_ms() + (int64_t) keep_s * 1000; }
 
 // ---- Быстрый тест (2026-11-14, BLE-команда 0x13): без движения просыпаться раз в 30 с.
