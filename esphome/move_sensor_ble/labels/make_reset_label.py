@@ -15,8 +15,8 @@ THRESH = 150   # серый -> 1 бит: меньше = тоньше буквы
 
 ROWS = [  # текст, размер, отступ после; первая строка — заголовок по центру, дальше список слева
     ("ЗАВОДСКОЙ СБРОС", 18, 6),
-    ("1. WiFi включить 5 раз", 16, 4),
-    ("2. уложиться в 20 с", 16, 4),
+    ("1. начать с WiFi выкл", 16, 4),
+    ("2. 5 раз вкл за 20 с", 16, 4),
     ("3. 5-й раз не выключать", 16, 4),
     ("4. LED мигнёт 6 раз", 16, 0),
 ]
@@ -32,11 +32,14 @@ for t, size, _ in ROWS:
         size -= 1
         f = ImageFont.truetype(FONT, size)
     fonts.append(f)
-heights = [d.textbbox((0, 0), t, font=f)[3] - d.textbbox((0, 0), t, font=f)[1] for (t, _, _), f in zip(ROWS, fonts)]
+# ровный шаг строк: высота по метрикам шрифта (от верха заглавных до низа «р/у»), а не по рамке
+# конкретного текста — иначе строки без выносных букв «прилипали» к следующей
+def cap_top(f): return d.textbbox((0, 0), "Н", font=f)[1]
+heights = [f.getmetrics()[0] + f.getmetrics()[1] - cap_top(f) for f in fonts]
 total = sum(heights) + sum(g for _, _, g in ROWS[:-1])
 y = (H - total) // 2
 for i, ((t, _, g), f, h) in enumerate(zip(ROWS, fonts, heights)):
-    top = d.textbbox((0, 0), t, font=f)[1]
+    top = cap_top(f)
     x = (W - d.textlength(t, font=f)) / 2 if i == 0 else LIST_X
     d.text((x, y - top), t, font=f, fill=0)
     y += h + g
