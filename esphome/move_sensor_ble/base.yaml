@@ -9,8 +9,9 @@
 #                середина на A0/GPIO2, 100 нФ с A0 на GND ОБЯЗАТЕЛЬНО (делитель высокоомный, ~2 мкА).
 #                BAT+ — площадка снизу платы (BAT- не используется, «-» АКБ в B1 -> GND).
 #   D10 / GPIO10 — индикатор срабатываний: D10 -> R4 100 Ом -> синий LED -> GND.
-#                1 вспышка = отправлено "занято", 2 = "свободно". Только отслеживание срабатываний,
-#                режимы (сервис/сон) светодиодом не показываются.
+#                1 вспышка = отправлено "занято", 2 = "свободно". Постоянно не горит.
+#                Включили WiFi (сервисный режим): 3 медленные вспышки; 2-е включение за 10 с —
+#                2 коротких (счёт к заводскому сбросу), 3-е — 6 быстрых (сброс). Identify — частое 10 с.
 #                Отключается выключателем "Motion tracking LED" в HA (по умолчанию включён, выбор хранится во флеше).
 #   D4 / GPIO6  — I2C SDA  \ датчик температуры/влажности SHT41 (модуль 10x13 на крышке, адрес 0x44):
 #   D5 / GPIO7  — I2C SCL  /  VIN -> 3V3, GND -> GND. Подтяжки I2C — на модуле (проверь у своего).
@@ -53,8 +54,9 @@ substitutions:
   # первое и последнее включения не дальше wifi_reset_window_ms -> сеть роутера сбрасывается на сеть
   # из прошивки (secrets.yaml) БЕЗ отката И пароль своей точки доступа — на заводской, LED мигает 6 раз.
   # Считается и через сон (RTC). То же делает команда сброса по BLE из HA (script factory_reset_net).
-  wifi_reset_toggles: "5"
-  wifi_reset_window_ms: "20000"
+  # 2026-11-15: было 5 включений за 20 с — по просьбе Димы 3 за 10 с
+  wifi_reset_toggles: "3"
+  wifi_reset_window_ms: "10000"
   # сеть из прошивки — для сброса (лямбда не умеет !secret напрямую)
   fw_wifi_ssid: !secret wifi_ssid
   fw_wifi_password: !secret wifi_password
@@ -261,7 +263,7 @@ globals:
     restore_value: true
     initial_value: "false"
   # 2026-11-15: свой пароль точки доступа (с сайта датчика, во флеше). Пусто = заводской
-  # (fw_ap_password). Сбрасывается заводским сбросом (5 включений SW2 / BLE).
+  # (fw_ap_password). Сбрасывается заводским сбросом (3 включения SW2 за 10 с / BLE).
   - id: ap_password_custom
     type: std::string
     restore_value: true
@@ -1246,7 +1248,12 @@ script:
                    (unsigned) ms::svc_on_count);
           if (ms::svc_on_count >= ${wifi_reset_toggles}) {
             ms::svc_on_count = 0;
-            id(wifi_reset_pending) = true;
+            id(wifi_reset_pending) = true;   // LED: 6 быстрых (factory_reset_net)
+          } else if (!id(wifi_reset_pending)) {
+            // LED (2026-11-15): 1-е включение — 3 медленные вспышки «сервисный режим»;
+            // 2-е (до wifi_reset_toggles-1) за 10 с — столько же коротких вспышек, сколько включений засчитано.
+            // Ждёт сброс из HA (BLE) — не мигаем: сейчас будут 6 быстрых, без каши из серий.
+            id(service_blink).execute((int) ms::svc_on_count);
           }
       - component.update: build_version_text
       - component.update: device_id_text
@@ -1266,7 +1273,7 @@ script:
 
   # Заводской сброс сети (2026-11-15): сеть роутера -> из прошивки (без отката), пароль своей
   # точки доступа -> заводской (fw_ap_password, он же на наклейке). Остальные настройки
-  # (Keep time и т.д.) не трогает — их присылает HA. Запуск: 5 включений SW2 за 20 с
+  # (Keep time и т.д.) не трогает — их присылает HA. Запуск: 3 включения SW2 за 10 с
   # (service_enter) или команда сброса по BLE из HA. LED: 6 быстрых вспышек.
   - id: factory_reset_net
     then:
@@ -1313,6 +1320,25 @@ script:
             - output.turn_off: dbg_led
             - delay: 350ms
             - lambda: "id(identify_left)--;"
+  # Сервисный режим (2026-11-15), всегда, как подтверждения сброса и Identify:
+  # n = 1 — 3 медленные вспышки (WiFi включён); n >= 2 — n коротких (счёт к заводскому сбросу; при 3 из 3 — сброс).
+  # Дальше LED снова только для срабатываний (постоянно не горит).
+  - id: service_blink
+    mode: restart
+    parameters:
+      n: int
+    then:
+      - lambda: 'ESP_LOGI("led", "service blink: %s", n <= 1 ? "3 slow (service mode)" : "count to factory reset");'
+      - output.turn_off: dbg_led
+      - delay: 300ms
+      - repeat:
+          count: !lambda "return n <= 1 ? 3 : n;"
+          then:
+            - output.turn_on: dbg_led
+            - delay: !lambda "return n <= 1 ? 500 : 120;"
+            - output.turn_off: dbg_led
+            - delay: !lambda "return n <= 1 ? 500 : 250;"
+
   - id: wifi_reset_blink
     then:
       - repeat:

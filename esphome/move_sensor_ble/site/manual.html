@@ -46,10 +46,12 @@
 <tr><th>LED</th><th>Meaning</th></tr>
 <tr><td><span class="led"><i></i></span>1 flash</td><td>Motion detected — "occupied" sent.</td></tr>
 <tr><td><span class="led"><i></i><i></i></span>2 flashes</td><td>Area clear — "clear" sent (after Keep time).</td></tr>
+<tr><td><span class="led"><i></i><i></i><i></i></span>3 slow flashes</td><td>WiFi switch turned on — service mode.</td></tr>
+<tr><td><span class="led"><i></i><i></i></span>2 short flashes</td><td>Switch turned on again within 10 s — 2nd turn counted toward the factory reset (the 3rd resets).</td></tr>
 <tr><td><span class="led"><i></i><i></i><i></i><i></i><i></i><i></i></span>6 fast flashes</td><td>Reset command accepted (switch sequence or command from Home Assistant).</td></tr>
 <tr><td>Fast blinking for 10 s</td><td><b>Identify</b> — pressed in Home Assistant to find this particular sensor.</td></tr>
 </table>
-<p>Motion flashes can be turned off with the <b>Motion tracking LED</b> setting; confirmations and Identify always blink.</p>
+<p>Motion flashes can be turned off with the <b>Motion tracking LED</b> setting; service mode, confirmations and Identify always blink.</p>
 </section>
 
 <section id="en-5"><h2><span class="n">5</span>Settings</h2>
@@ -103,11 +105,19 @@
 <p>Restores the <b>router network from the firmware</b> and the <b>default access point password</b>. Other settings (Keep time etc.) are kept.</p>
 <ol class="steps">
 <li>Start with the WiFi switch <b>off</b> (if it is on — switch it off).</li>
-<li>Switch WiFi <b>on 5 times</b> (off in between); the first and fifth "on" within <b>20 seconds</b>.</li>
-<li>After the fifth time <b>leave it on</b>.</li>
-<li>The LED flashes <b>6 times</b>, the sensor reboots (~5 s) and brings up its access point with the default password.</li>
+<li>Switch WiFi <b>on</b> — the LED flashes <b>3 times slowly</b>: service mode, counting starts.</li>
+<li>Off and on again — <b>2 short</b> flashes: the 2nd turn is counted.</li>
+<li>Off and on the <b>3rd</b> time — <b>6 fast</b> flashes: reset done. <b>Leave it on.</b></li>
+<li>The sensor reboots (~2 s) — <b>3 slow</b> flashes again — and brings up its access point with the default password (on the sticker).</li>
 </ol>
-<p>The same reset can be sent from Home Assistant: <b>Reset Wi-Fi to default (BLE)</b> button — it is applied at the next service mode.</p>
+<table>
+<tr><th>You see</th><th>Means</th></tr>
+<tr><td><span class="led"><i></i><i></i><i></i></span>3 slow</td><td>Service mode on; count = 1. On the 2nd or 3rd turn this means the 10 s ran out and counting started over — switch off and continue from step 3.</td></tr>
+<tr><td><span class="led"><i></i><i></i></span>2 short</td><td>2nd turn counted.</td></tr>
+<tr><td><span class="led"><i></i><i></i><i></i><i></i><i></i><i></i></span>6 fast</td><td>Reset done, reboot follows.</td></tr>
+</table>
+<p>All three turns within <b>10 seconds</b> from the first "on" to the third. The off position between them can be short (about a second is enough).</p>
+<p>From Home Assistant: the <b>Reset Wi-Fi to default (BLE)</b> button. The sensor confirms with <b>6 fast</b> flashes when it receives the command; the reset itself is applied the next time WiFi is switched on — <b>6 fast</b>, reboot, <b>3 slow</b>.</p>
 </section>
 
 <section id="en-10"><h2><span class="n">10</span>Battery and charging</h2>
@@ -186,10 +196,12 @@
 <tr><th>Світлодіод</th><th>Значення</th></tr>
 <tr><td><span class="led"><i></i></span>1 спалах</td><td>Є рух — надіслано «зайнято».</td></tr>
 <tr><td><span class="led"><i></i><i></i></span>2 спалахи</td><td>Вільно — надіслано «вільно» (після Keep time).</td></tr>
+<tr><td><span class="led"><i></i><i></i><i></i></span>3 повільні спалахи</td><td>Увімкнули перемикач WiFi — сервісний режим.</td></tr>
+<tr><td><span class="led"><i></i><i></i></span>2 короткі спалахи</td><td>Перемикач увімкнули знову протягом 10 с — 2-ге ввімкнення зараховано до заводського скидання (3-тє скидає).</td></tr>
 <tr><td><span class="led"><i></i><i></i><i></i><i></i><i></i><i></i></span>6 швидких спалахів</td><td>Команду скидання прийнято (перемикачем або з Home Assistant).</td></tr>
 <tr><td>Часте блимання 10 с</td><td><b>Identify</b> — натиснули в Home Assistant, щоб знайти саме цей датчик.</td></tr>
 </table>
-<p>Спалахи на рух вимикаються налаштуванням <b>Motion tracking LED</b>; підтвердження та Identify блимають завжди.</p>
+<p>Спалахи на рух вимикаються налаштуванням <b>Motion tracking LED</b>; сервісний режим, підтвердження та Identify блимають завжди.</p>
 </section>
 
 <section id="uk-5"><h2><span class="n">5</span>Налаштування</h2>
@@ -243,11 +255,19 @@
 <p>Повертає <b>мережу роутера з прошивки</b> та <b>заводський пароль точки доступу</b>. Інші налаштування (Keep time тощо) зберігаються.</p>
 <ol class="steps">
 <li>Почніть з <b>вимкненого</b> WiFi (якщо увімкнено — вимкніть).</li>
-<li>Увімкніть WiFi <b>5 разів</b> (між ними вимикаючи); перше й п'яте увімкнення — протягом <b>20 секунд</b>.</li>
-<li>Після п'ятого разу <b>не вимикайте</b>.</li>
-<li>Світлодіод блимне <b>6 разів</b>, датчик перезавантажиться (~5 с) і підніме точку доступу із заводським паролем.</li>
+<li>Увімкніть WiFi — світлодіод блимне <b>3 рази повільно</b>: сервісний режим, рахунок почався.</li>
+<li>Вимкніть і знову увімкніть — <b>2 короткі</b> спалахи: 2-ге ввімкнення зараховано.</li>
+<li>Вимкніть і увімкніть <b>втретє</b> — <b>6 швидких</b> спалахів: скидання виконано. <b>Не вимикайте.</b></li>
+<li>Датчик перезавантажиться (~2 с) — знову <b>3 повільні</b> — і підніме точку доступу із заводським паролем (на наліпці).</li>
 </ol>
-<p>Те саме скидання можна надіслати з Home Assistant кнопкою <b>Reset Wi-Fi to default (BLE)</b> — воно застосується при наступному сервісному режимі.</p>
+<table>
+<tr><th>Бачите</th><th>Значить</th></tr>
+<tr><td><span class="led"><i></i><i></i><i></i></span>3 повільні</td><td>Сервісний режим, рахунок = 1. Якщо це на 2-му чи 3-му ввімкненні — минули 10 с, рахунок почався спочатку: вимкніть і продовжуйте з кроку 3.</td></tr>
+<tr><td><span class="led"><i></i><i></i></span>2 короткі</td><td>Зараховано 2-ге ввімкнення.</td></tr>
+<tr><td><span class="led"><i></i><i></i><i></i><i></i><i></i><i></i></span>6 швидких</td><td>Скидання виконано, далі перезавантаження.</td></tr>
+</table>
+<p>Усі три ввімкнення — за <b>10 секунд</b> від першого до третього. Вимкнене положення між ними може бути коротким (досить секунди).</p>
+<p>З Home Assistant: кнопка <b>Reset Wi-Fi to default (BLE)</b>. Отримавши команду, датчик відповідає <b>6 швидкими</b> спалахами; саме скидання — при наступному ввімкненні WiFi: <b>6 швидких</b>, перезавантаження, <b>3 повільні</b>.</p>
 </section>
 
 <section id="uk-10"><h2><span class="n">10</span>Батарея та заряджання</h2>
@@ -326,10 +346,12 @@
 <tr><th>Светодиод</th><th>Значение</th></tr>
 <tr><td><span class="led"><i></i></span>1 вспышка</td><td>Есть движение — отправлено «занято».</td></tr>
 <tr><td><span class="led"><i></i><i></i></span>2 вспышки</td><td>Свободно — отправлено «свободно» (после Keep time).</td></tr>
+<tr><td><span class="led"><i></i><i></i><i></i></span>3 медленные вспышки</td><td>Включили переключатель WiFi — сервисный режим.</td></tr>
+<tr><td><span class="led"><i></i><i></i></span>2 короткие вспышки</td><td>Переключатель включили снова в течение 10 с — 2-е включение засчитано к заводскому сбросу (3-е сбрасывает).</td></tr>
 <tr><td><span class="led"><i></i><i></i><i></i><i></i><i></i><i></i></span>6 быстрых вспышек</td><td>Команда сброса принята (переключателем или из Home Assistant).</td></tr>
 <tr><td>Частое мигание 10 с</td><td><b>Identify</b> — нажали в Home Assistant, чтобы найти именно этот датчик.</td></tr>
 </table>
-<p>Вспышки на движение отключаются настройкой <b>Motion tracking LED</b>; подтверждения и Identify мигают всегда.</p>
+<p>Вспышки на движение отключаются настройкой <b>Motion tracking LED</b>; сервисный режим, подтверждения и Identify мигают всегда.</p>
 </section>
 
 <section id="ru-5"><h2><span class="n">5</span>Настройки</h2>
@@ -383,11 +405,19 @@
 <p>Возвращает <b>сеть роутера из прошивки</b> и <b>заводской пароль точки доступа</b>. Остальные настройки (Keep time и т. д.) сохраняются.</p>
 <ol class="steps">
 <li>Начните с <b>выключенного</b> WiFi (если включён — выключите).</li>
-<li>Включите WiFi <b>5 раз</b> (между ними выключая); первое и пятое включение — в пределах <b>20 секунд</b>.</li>
-<li>После пятого раза <b>не выключайте</b>.</li>
-<li>Светодиод мигнёт <b>6 раз</b>, датчик перезагрузится (~5 с) и поднимет точку доступа с заводским паролем.</li>
+<li>Включите WiFi — светодиод мигнёт <b>3 раза медленно</b>: сервисный режим, счёт начался.</li>
+<li>Выключите и снова включите — <b>2 короткие</b> вспышки: 2-е включение засчитано.</li>
+<li>Выключите и включите <b>в 3-й раз</b> — <b>6 быстрых</b> вспышек: сброс выполнен. <b>Не выключайте.</b></li>
+<li>Датчик перезагрузится (~2 с) — снова <b>3 медленные</b> — и поднимет точку доступа с заводским паролем (на наклейке).</li>
 </ol>
-<p>Тот же сброс можно отправить из Home Assistant кнопкой <b>Reset Wi-Fi to default (BLE)</b> — он применится при следующем сервисном режиме.</p>
+<table>
+<tr><th>Видите</th><th>Значит</th></tr>
+<tr><td><span class="led"><i></i><i></i><i></i></span>3 медленные</td><td>Сервисный режим, счёт = 1. Если это на 2-м или 3-м включении — прошло больше 10 с, счёт начался заново: выключите и продолжайте с шага 3.</td></tr>
+<tr><td><span class="led"><i></i><i></i></span>2 короткие</td><td>Засчитано 2-е включение.</td></tr>
+<tr><td><span class="led"><i></i><i></i><i></i><i></i><i></i><i></i></span>6 быстрых</td><td>Сброс выполнен, дальше перезагрузка.</td></tr>
+</table>
+<p>Все три включения — за <b>10 секунд</b> от первого до третьего. Выключенное положение между ними может быть коротким (хватит секунды).</p>
+<p>Из Home Assistant: кнопка <b>Reset Wi-Fi to default (BLE)</b>. Получив команду, датчик отвечает <b>6 быстрыми</b> вспышками; сам сброс — при следующем включении WiFi: <b>6 быстрых</b>, перезагрузка, <b>3 медленные</b>.</p>
 </section>
 
 <section id="ru-10"><h2><span class="n">10</span>Батарея и зарядка</h2>

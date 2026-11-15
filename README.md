@@ -13,6 +13,33 @@ with **BTHome v2** over BLE and deep sleep — plus a Home Assistant custom inte
 **Move Sensor BLE OTA**, that flashes firmware and changes settings **over Bluetooth through ESPHome
 Bluetooth proxies**. The sensor never needs Wi-Fi in normal operation.
 
+### Quick start
+
+From parts on the table to motion in Home Assistant. You need a Home Assistant with the **ESPHome Builder** add-on,
+the **Bluetooth** integration and an **ESPHome Bluetooth proxy** near the sensor.
+
+1. **Solder** the XIAO ESP32-C3, SR602 PIR, SHT41 and LiPo as in the header of
+   [`esphome/move_sensor_ble/base.yaml`](esphome/move_sensor_ble/base.yaml) (pins, divider, LED, service switch).
+2. **Copy the firmware** into Home Assistant: everything from `esphome/` → `/config/esphome/`.
+3. **Secrets**: copy `secrets.example.yaml` into `/config/esphome/secrets.yaml` (or add its lines to yours) and fill in
+   your router Wi-Fi, a password for the sensor's own access point and `move_sensor_ble_ota_key`
+   — any long random string, e.g. `openssl rand -hex 16`. The integration reads the same key from this file.
+4. **Your sensor's file**: copy `move-sensor-ble-148f98.yaml` → `move-sensor-ble-new.yaml`, set `name` /
+   `friendly_name`. In ESPHome Builder: **Install → Plug into this computer** (USB, first flash only).
+5. **Device ID**: the last 6 hex digits of the sensor's Wi-Fi MAC — they are in the ESPHome install log and in
+   the access point name `MoveSensorBLE-XXXXXX` (service mode). Rename the file to `move-sensor-ble-<id>.yaml` and put the id into
+   `name`; later builds over BLE look for exactly this file.
+6. **BTHome**: wave in front of the sensor — Home Assistant discovers a **BTHome** device; add it.
+   Set `ble_rssi_entity` in the sensor's file to its *Signal strength* entity.
+7. **Integration**: the two buttons at the top → Marketplace → **Download** → restart → **Add integration** → pick
+   the sensor. Leave **OTA key** empty — the key is taken from `secrets.yaml`.
+8. **Check**: wave — *Occupancy* turns on and the LED flashes once; after *Keep time* it clears with two flashes.
+   *Settings status* becomes *applied* after the first wake-up.
+
+From now on: firmware — **Build & flash firmware (BLE)** on the device page, no USB; settings — in Home Assistant.
+Wi-Fi is needed only in **service mode** (switch on D2, the LED flashes 3 times slowly): the sensor's site is at `http://100.64.4.1/` on its access
+point. If the sensor rejects the OTA key, Home Assistant shows it in **Settings → Repairs**.
+
 ### Features
 
 - **BLE OTA**: flash a new firmware over Bluetooth during the sensor's short wake window (button, service or REST).
@@ -72,6 +99,33 @@ Issues and pull requests are disabled — this is a personal project published a
 Батарейный датчик движения на **Seeed XIAO ESP32-C3** (PIR SR602, SHT41, LiPo) с **BTHome v2** по BLE
 и deep sleep — и интеграция Home Assistant **Move Sensor BLE OTA** к нему: прошивка и настройки по BLE
 через Bluetooth-прокси, диагностика, сборка прошивки одной кнопкой.
+
+## Быстрый старт
+
+От деталей на столе до движения в Home Assistant. Нужны Home Assistant с аддоном **ESPHome Builder**,
+интеграция **Bluetooth** и **Bluetooth-прокси ESPHome** рядом с датчиком.
+
+1. **Спаять** XIAO ESP32-C3, PIR SR602, SHT41 и LiPo по шапке
+   [`esphome/move_sensor_ble/base.yaml`](esphome/move_sensor_ble/base.yaml) (пины, делитель, LED, сервисный переключатель).
+2. **Скопировать прошивку** в Home Assistant: всё из `esphome/` → `/config/esphome/`.
+3. **Секреты**: `secrets.example.yaml` → `/config/esphome/secrets.yaml` (или дописать строки в свой) и заполнить:
+   Wi-Fi роутера, пароль своей точки доступа датчика и `move_sensor_ble_ota_key` — любая длинная случайная строка,
+   например `openssl rand -hex 16`. Интеграция берёт тот же ключ из этого файла.
+4. **Файл датчика**: скопировать `move-sensor-ble-148f98.yaml` → `move-sensor-ble-new.yaml`, поправить `name` /
+   `friendly_name`. В ESPHome Builder: **Install → Plug into this computer** (USB, только первый раз).
+5. **Device ID** — последние 6 hex-цифр MAC Wi-Fi датчика: они в логе установки ESPHome и в имени точки доступа
+   `MoveSensorBLE-XXXXXX` (сервисный режим). Переименовать файл в `move-sensor-ble-<id>.yaml` и вписать id в `name`: сборка по BLE
+   ищет именно этот файл.
+6. **BTHome**: помахать перед датчиком — Home Assistant найдёт устройство **BTHome**, добавить его.
+   В файле датчика указать `ble_rssi_entity` = его сущность *Signal strength*.
+7. **Интеграция**: две кнопки вверху README → Marketplace → **Скачать** → перезапуск → **Add integration** → выбрать
+   датчик. Поле **Ключ OTA** оставить пустым — ключ возьмётся из `secrets.yaml`.
+8. **Проверка**: помахать — *Occupancy* включается, LED мигает 1 раз; через *Keep time* — «свободно» и 2 вспышки.
+   *Settings status* после первого пробуждения — *applied*.
+
+Дальше: прошивка — кнопка **Build & flash firmware (BLE)** на странице устройства, без USB; настройки — в Home Assistant.
+Wi-Fi нужен только в **сервисном режиме** (переключатель на D2, LED — 3 медленные вспышки): сайт датчика — `http://100.64.4.1/` на его точке
+доступа. Если датчик не принял ключ OTA, Home Assistant покажет это в **Настройки → Ремонт**.
 
 | Папка | Что |
 |---|---|
