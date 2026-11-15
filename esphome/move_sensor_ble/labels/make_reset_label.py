@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Наклейка Move Sensor BLE (2026-11-15): заводской сброс — переключатель WiFi (SW2) ×5 за 20 с, LED ×6
 (одинаковая для всех датчиков). Наклейку с QR точки доступа Дима отменил.
-Niimbot D11, лента T15x30 (30x15 мм): 240x120 px @203 dpi, 1-бит, тонкая рамка под обрез.
+Niimbot D11, лента T15x30 (30x15 мм): 240x120 px @203 dpi, 1-бит, без рамки (2026-11-15: рамку убрали по просьбе Димы).
 Текст рисуется со сглаживанием в оттенках серого и потом порогом в 1 бит — так буквы ровнее,
 чем при рисовании сразу в 1 бит (там «ть», «SW» ломались).
   python3 make_reset_label.py      -> reset_label.png рядом. Нужен pip: pillow."""
@@ -43,7 +43,6 @@ for i, ((t, _, g), f, h) in enumerate(zip(ROWS, fonts, heights)):
 if y > H - 3:
     raise SystemExit(f"не влезает по высоте: {y}")
 img = img.point(lambda v: 255 if v > THRESH else 0).convert("1")
-ImageDraw.Draw(img).rectangle([0, 0, W - 1, H - 1], outline=0)   # линия обреза
 out = os.path.join(HERE, "reset_label.png")
 img.save(out, dpi=(203, 203))
 print(out, "text bottom", y)
