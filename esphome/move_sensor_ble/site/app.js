@@ -410,12 +410,26 @@
     press("Reset Wi-Fi to firmware defaults").then(function () { waitBack(Date.now(), ""); },
       function () { setWBusy(false); wstat("Не удалось отправить"); });
   });
+  // ── тост: заметное сообщение на 6 с (ошибка — красный) ──
+  var toastT = 0;
+  function toast(msg, bad) {
+    var t = $("ms-toast");
+    t.textContent = msg; t.classList.toggle("bad", !!bad); t.classList.remove("hide");
+    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.add("hide"); }, 6000);
+  }
+  $("ms-toast").addEventListener("click", function () { this.classList.add("hide"); });
+
   // ── пароль своей точки доступа: «New AP Password» → «Save AP password», два нажатия ──
   var apArmed = 0;
   $("ms-apgo").addEventListener("click", function () {
     if (wBusy) return;
     var b = $("ms-apgo"), p = $("ms-appass").value;
-    if (p.length < 8 || p.length > 63 || !/^[\x20-\x7e]+$/.test(p)) { wstat("Пароль: 8–63 латинских символа, цифры, знаки"); return; }
+    if (!p) { var m0 = "Введите новый пароль точки"; wstat(m0); toast(m0, true); return; }
+    if (p.length < 8 || p.length > 63 || !/^[\x20-\x7e]+$/.test(p)) {
+      var m1 = "Пароль не принят: нужно 8–63 латинских символа (буквы, цифры, знаки, без кириллицы)" +
+        (p.length < 8 ? " — сейчас " + p.length : "");
+      wstat(m1); toast(m1, true); return;
+    }
     if (Date.now() > apArmed) {
       apArmed = Date.now() + 4000; b.classList.add("warn"); b.textContent = "Точно сменить? Нажмите ещё раз";
       setTimeout(function () { if (Date.now() > apArmed) { b.classList.remove("warn"); b.textContent = "Сменить пароль точки"; } }, 4100);
@@ -427,8 +441,9 @@
       .then(function () { return press("Save AP password"); })
       .then(function () {
         $("ms-appass").value = ""; setWBusy(false);
-        wstat("Сохранено. Датчик перезагрузится (~5 с) — подключитесь к точке заново с новым паролем");
-      }, function () { setWBusy(false); wstat("Не удалось отправить"); });
+        var ok = "Пароль точки сохранён. Датчик перезагрузится (~5 с) — подключитесь к точке заново с новым паролем";
+        wstat(ok); toast(ok, false);
+      }, function () { setWBusy(false); wstat("Не удалось отправить"); toast("Не удалось отправить пароль на датчик", true); });
   });
   window.addEventListener("hashchange", function () { if (location.hash === "#wifi") openWifi(); });
 

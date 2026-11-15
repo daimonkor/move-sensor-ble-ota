@@ -209,3 +209,6 @@ body{background:#f4f5f8}
 #ms .lamp.on{background:var(--bad);box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 22%,transparent)}
 #ms .diag dd.bad{color:var(--bad)}
 #ms .foot{cursor:default;user-select:none;-webkit-user-select:none}
+#ms .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:80;max-width:min(92vw,460px);padding:12px 16px;border-radius:14px;font-size:14px;font-weight:650;line-height:1.35;color:#fff;background:var(--ok,#1f9d55);box-shadow:0 8px 28px rgba(0,0,0,.28);animation:mstoast .18s ease-out}
+#ms .toast.bad{background:var(--bad)}
+@keyframes mstoast{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}

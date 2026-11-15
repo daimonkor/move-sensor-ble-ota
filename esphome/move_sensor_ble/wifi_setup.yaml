@@ -75,6 +75,8 @@ text:
     mode: password
     optimistic: true
     max_length: 63
+    # 2026-11-15: HA проверяет ввод сам и показывает ошибку сразу (пусто — для очистки поля прошивкой)
+    pattern: "^$|^[ -~]{8,63}$"
     entity_category: config
     icon: "mdi:access-point-network"
     on_value:
@@ -171,6 +173,16 @@ button:
                 ESP_LOGW("ms", "AP password: custom saved (%u chars)", (unsigned) id(ap_password_custom).size());
             - text.set: {id: new_ap_password, value: ""}
             - component.update: ap_password_mode
+            # уведомление в HA (нужна опция интеграции ESPHome «Разрешить устройству выполнять действия HA»)
+            - homeassistant.action:
+                action: persistent_notification.create
+                data:
+                  notification_id: move_sensor_ble_ap_password
+                  title: "${friendly_name}: пароль точки изменён"
+                  message: !lambda |-
+                    return "Датчик перезагружается (~5 с). Подключайтесь к точке " +
+                           std::string(wifi::global_wifi_component->get_ap().get_ssid().c_str()) +
+                           " с новым паролем. Забыли — заводской сброс переключателем WiFi (наклейка).";
             # 2026-11-15: смена пароля на лету (esp_wifi_set_config, ESP_OK) на практике не действовала —
             # телефон заходил со старым паролем. Надёжно: записать во флеш и перезагрузиться; WiFi включён,
             # поэтому датчик сразу вернётся в сервисный режим, а on_boot поднимет точку с новым паролем.
@@ -184,6 +196,15 @@ button:
             - logger.log:
                 format: "AP password rejected: need 8-63 printable ASCII characters"
                 level: WARN
+            - homeassistant.action:
+                action: persistent_notification.create
+                data:
+                  notification_id: move_sensor_ble_ap_password
+                  title: "${friendly_name}: пароль точки НЕ изменён"
+                  message: !lambda |-
+                    if (id(new_ap_password).state.empty())
+                      return std::string("Поле «New AP Password» пустое — сначала введите новый пароль, потом нажмите «Save AP password».");
+                    return std::string("Пароль не принят: нужно 8–63 латинских символа (буквы, цифры, знаки, без кириллицы). Старый пароль остался.");
             - text.set: {id: new_ap_password, value: ""}
 
   # Жёсткий сброс: NVS снова на сеть из прошивки (secrets.yaml), и после перезагрузки тоже.
