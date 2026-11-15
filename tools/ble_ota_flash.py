@@ -2,7 +2,7 @@
 """
 Сборка и прошивка Move Sensor BLE по BLE OTA — одной командой, без браузера.
 
-    python3 ble_ota_flash.py                 # собрать move-sensor-ble.yaml и прошить по BLE
+    python3 ble_ota_flash.py                 # собрать move-sensor-ble-148f98.yaml и прошить по BLE
     python3 ble_ota_flash.py --compile-only  # только собрать и скачать .bin
     python3 ble_ota_flash.py --no-start      # собрать и загрузить в интеграцию, не прошивать
     python3 ble_ota_flash.py --file x.bin    # прошить готовый файл (без сборки)
@@ -37,7 +37,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SECRETS = os.path.normpath(os.path.join(HERE, "..", "secrets.yaml"))
 DEFAULT_URL = "http://homeassistant.local:8123"
-DEFAULT_CONFIG = "move-sensor-ble.yaml"
+DEFAULT_CONFIG = "move-sensor-ble-148f98.yaml"
 VERSION_ENTITY_SUFFIX = "_firmware_version_ble"
 
 
@@ -303,7 +303,7 @@ def flash(ha: HA, data: bytes, filename: str, start: bool, timeout_min: int) -> 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Сборка + BLE OTA для Move Sensor BLE через Home Assistant")
-    ap.add_argument("--config", default=DEFAULT_CONFIG, help="YAML в /config/esphome (по умолчанию move-sensor-ble.yaml)")
+    ap.add_argument("--config", default=DEFAULT_CONFIG, help="YAML в /config/esphome (по умолчанию move-sensor-ble-148f98.yaml)")
     ap.add_argument("--url", default=os.environ.get("HA_URL", DEFAULT_URL))
     ap.add_argument("--secrets", default=DEFAULT_SECRETS)
     ap.add_argument("--file", help="готовый .ota.bin — без сборки")

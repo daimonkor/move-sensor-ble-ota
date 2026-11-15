@@ -100,7 +100,7 @@
         },
         "configuration": {
           "name": "YAML ESPHome",
-          "description": "Файл в /config/esphome (по умолчанию move-sensor-ble.yaml)."
+          "description": "Файл в /config/esphome. Пусто — YAML этого датчика move-sensor-ble-<device id>.yaml."
         },
         "start": {
           "name": "Прошить после сборки",

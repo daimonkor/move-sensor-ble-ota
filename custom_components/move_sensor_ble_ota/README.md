@@ -33,7 +33,7 @@ proxy or the sensor. Wave a hand in front of the sensor to get a window sooner.
 |---|---|
 | **Detect delay / Keep time / Climate report interval / Voltage factor (BLE)**, **Motion tracking LED (BLE)** | Sensor settings, applied at the next wake-up |
 | **Settings status** / **Read settings (BLE)** | `idle` (nothing pending) / `pending` (waiting for wake-up) / `applied` (just applied, back to `idle` after 5 min) / `unknown` / `error`; read the actual settings from the sensor |
-| **Build & flash firmware (BLE)** | Compile `move-sensor-ble.yaml` in the ESPHome Builder add-on and flash it over BLE |
+| **Build & flash firmware (BLE)** | Compile this sensor's `move-sensor-ble-<device id>.yaml` (e.g. `move-sensor-ble-148f98.yaml`, v1.13.1) in the ESPHome Builder add-on and flash it over BLE |
 | **Flash firmware (BLE)** / **Cancel OTA** | Flash the newest `.bin` from the firmware folder / cancel |
 | **OTA status / OTA progress** | `idle → building → waiting → connecting → flashing → success / error / cancelled` |
 | **Firmware version (BLE)** | `vYYYY.MM.DD.HHMMSS-xxxxxxxx` (build time + 8 hex of the image SHA-256) |
@@ -71,7 +71,7 @@ The detailed documentation below is in Russian.
 | **Motion window / Climate window (BLE)** + **Auto advertising window** | Сколько датчик рекламирует после пакета: «движение/пусто» и климат. Короче окно — меньше бодрствует, дольше батарея. **Авто** (по умолчанию): по медиане RSSI последних 10 пакетов — ≥ −75 дБм → 800/1500 мс, ≥ −85 → 1500/2500, слабее → 3000/4500 (к лучшему уровню — с запасом 3 дБ); пропущен климат-пакет (нет пакетов дольше 1,8 × Climate interval) — на сутки уровень длиннее. Ручное значение выключает авто. Нужна прошивка с окнами (иначе сущности недоступны). На дашборде Move Sensor BLE — отдельная группа «Радио (BLE)». Замер 2026-11-14: RSSI −56, прокси на настройках ESPHome по умолчанию — 0 потерь даже при 300 мс, подключение успевало при 600 мс |
 | **Settings status** (v1.11.1) | «Nothing pending» (`idle`) — всё на датчике совпадает с HA; «Waiting for sensor wake-up» (`pending`, в атрибутах — что именно); «Just applied» (`applied`) — датчик только что подтвердил, через 5 мин сбрасывается в «Nothing pending»; «Not read yet» (`unknown`); «Error» (`error`) |
 | **Read settings (BLE)** | Прочитать фактические настройки с датчика в ближайшее окно |
-| **Build & flash firmware (BLE)** | Собрать `move-sensor-ble.yaml` в аддоне ESPHome Builder и сразу прошить по BLE — одна кнопка, без скачивания файлов |
+| **Build & flash firmware (BLE)** | Собрать YAML этого датчика `move-sensor-ble-<device id>.yaml` (напр. `move-sensor-ble-148f98.yaml`, v1.13.1) в аддоне ESPHome Builder и сразу прошить по BLE — одна кнопка, без скачивания файлов |
 | **Flash firmware (BLE)** | Прошить самым свежим `.bin` из папки прошивок |
 | **Cancel OTA** | Отменить ожидание / прошивку |
 | **OTA status / OTA progress** | `idle → (building %) → waiting → connecting → flashing (%) → success` / `error` / `cancelled`; после `success` статус сразу становится `idle` / 0 %, как только датчик после перезагрузки ответил новой версией (запасной таймер — 2 мин); в атрибутах — `last_result`, `last_build`, файл, версии до/после, скорость, ошибка, число попыток |
@@ -233,7 +233,7 @@ python3 /config/esphome/tools/ble_ota_flash.py --file x.bin    # прошить 
 
 | Что | Как |
 |---|---|
-| **Собрать и прошить** | `POST /api/move_sensor_ble_ota/build[?configuration=move-sensor-ble.yaml][&start=0][&timeout=180]` — отвечает сразу, сборка в фоне; или сервис `move_sensor_ble_ota.build_and_flash` (`configuration`, `start`, `timeout`) |
+| **Собрать и прошить** | `POST /api/move_sensor_ble_ota/build[?configuration=move-sensor-ble-148f98.yaml][&start=0][&timeout=180]` — отвечает сразу, сборка в фоне; или сервис `move_sensor_ble_ota.build_and_flash` (`configuration`, `start`, `timeout`) |
 | Загрузить `.bin` и сразу прошить | `POST /api/move_sensor_ble_ota/upload?filename=<имя>.bin&start=1` — тело: файл (raw или multipart), токен администратора |
 | Прошить | сервис `move_sensor_ble_ota.flash` (`file`, `timeout` мин, `config_entry_id`) |
 | Отменить | сервис `move_sensor_ble_ota.cancel` |
@@ -245,7 +245,7 @@ python3 /config/esphome/tools/ble_ota_flash.py --file x.bin    # прошить 
 Примеры:
 
 ```bash
-# собрать move-sensor-ble.yaml и прошить по BLE (ход — GET /status)
+# собрать YAML датчика (move-sensor-ble-<device id>.yaml) и прошить по BLE (ход — GET /status)
 curl -X POST -H "Authorization: Bearer $HA_TOKEN" \
   "http://homeassistant.local:8123/api/move_sensor_ble_ota/build"
 

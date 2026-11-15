@@ -84,6 +84,10 @@ class BleOta : public Component {
   void set_battery_percent(int pct) { this->battery_pct_ = pct; }
   // строка версии сборки (как «Build Version» в сервисном режиме) — отдаётся по INFO
   void set_build_version(const std::string &v) { this->build_version_ = v; }
+  // 2026-11-15: счётчики сбросов для Wi-Fi-канала (ESPHome API/сайт) — те же, что DIAG по BLE
+  uint16_t diag_brownout() const { return this->diag_[DIAG_BROWNOUT]; }
+  uint16_t diag_crash() const { return this->diag_[DIAG_PANIC] + this->diag_[DIAG_WDT]; }  // как Crash count в HA
+  uint8_t diag_last() const { return this->diag_last_; }
   // сброс Wi-Fi на сеть из прошивки по команде 0x12 — логика в YAML (флаг + save_wifi_sta)
   void set_wifi_reset_callback(std::function<void()> cb) { this->wifi_reset_cb_ = std::move(cb); }
   void set_test_mode_callback(std::function<void(uint8_t, uint16_t)> cb) { this->test_mode_cb_ = std::move(cb); }

@@ -309,6 +309,30 @@ inline void setup(std::function<void(std::string &, std::string &)> creds) {
   keeper.credentials = std::move(creds);
 }
 
+// Пароль своей точки на лету (2026-11-15): в wifi → ap (для следующего подъёма, Keeper берёт оттуда)
+// и в уже поднятую точку. Подключённые к точке клиенты отключаются — входить заново с новым паролем.
+// < 8 символов = открытая точка (так не вызываем: сайт и сброс дают 8–63).
+inline void set_password(const std::string &pass) {
+  auto *w = esphome::wifi::global_wifi_component;
+  if (w == nullptr) return;
+  auto ap = w->get_ap();
+  ap.set_password(pass);
+  w->set_ap(ap);
+  wifi_mode_t mode;
+  if (esp_wifi_get_mode(&mode) != ESP_OK || (mode != WIFI_MODE_APSTA && mode != WIFI_MODE_AP)) return;
+  wifi_config_t c;
+  if (esp_wifi_get_config(WIFI_IF_AP, &c) != ESP_OK) return;
+  memset(c.ap.password, 0, sizeof(c.ap.password));
+  if (pass.size() >= 8) {
+    c.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    memcpy(c.ap.password, pass.c_str(), pass.size() > 63 ? 63 : pass.size());
+  } else {
+    c.ap.authmode = WIFI_AUTH_OPEN;
+  }
+  esp_err_t e = esp_wifi_set_config(WIFI_IF_AP, &c);
+  ESP_LOGW(TAG, "AP password applied (%s): %s", pass.size() >= 8 ? "WPA2" : "open", esp_err_to_name(e));
+}
+
 // interval 250ms: держать AP, отвечать DNS, один раз зарегистрировать лендинг.
 inline void tick() {
   static uint32_t last_keep = 0;

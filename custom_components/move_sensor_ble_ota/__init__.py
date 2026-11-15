@@ -67,7 +67,7 @@ CANCEL_SCHEMA = vol.Schema({vol.Optional(ATTR_ENTRY_ID): cv.string})
 BUILD_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
-        vol.Optional(ATTR_CONFIGURATION, default=DEFAULT_ESPHOME_CONFIG): cv.string,
+        vol.Optional(ATTR_CONFIGURATION, default=""): cv.string,   # пусто = YAML датчика по Device ID
         vol.Optional(ATTR_START, default=True): cv.boolean,
         vol.Optional(ATTR_TIMEOUT, default=DEFAULT_TIMEOUT_MIN): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=24 * 60)
@@ -366,7 +366,7 @@ class BuildView(HomeAssistantView):
         q = request.query
         try:
             mgr = _pick(self.hass, q.get("entry_id"))
-            cfg = os.path.basename(q.get("configuration") or DEFAULT_ESPHOME_CONFIG)
+            cfg = os.path.basename(q.get("configuration") or "")   # пусто = YAML датчика по Device ID
             start = q.get("start", "1") not in ("0", "false", "no")
             timeout = int(q.get("timeout", DEFAULT_TIMEOUT_MIN))
             start_build(self.hass, mgr, cfg, start, timeout)

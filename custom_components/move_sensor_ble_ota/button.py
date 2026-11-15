@@ -34,7 +34,7 @@ class FlashButton(OtaEntity, ButtonEntity):
 
 
 class BuildFlashButton(OtaEntity, ButtonEntity):
-    """Собрать move-sensor-ble.yaml в аддоне ESPHome и сразу прошить по BLE."""
+    """Собрать YAML этого датчика (move-sensor-ble-<device id>.yaml) в аддоне ESPHome и сразу прошить по BLE."""
 
     _attr_icon = "mdi:hammer-wrench"
 

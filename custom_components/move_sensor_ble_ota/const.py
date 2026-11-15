@@ -75,7 +75,10 @@ SERVICE_FLASH = "flash"
 SERVICE_BUILD_FLASH = "build_and_flash"
 ATTR_CONFIGURATION = "configuration"
 ATTR_START = "start"
-DEFAULT_ESPHOME_CONFIG = "move-sensor-ble.yaml"   # YAML в /config/esphome
+DEFAULT_ESPHOME_CONFIG = "move-sensor-ble.yaml"   # YAML в /config/esphome (старое общее имя — запасной вариант)
+# 1.13.1: у каждого датчика свой YAML (общая прошивка в move_sensor_ble/base.yaml) — его имя по Device ID
+ESPHOME_DIR = "/config/esphome"
+DEVICE_ESPHOME_CONFIG = "move-sensor-ble-{device_id}.yaml"   # device_id строчными: 148f98
 SERVICE_CANCEL = "cancel"
 ATTR_FILE = "file"
 ATTR_TIMEOUT = "timeout"

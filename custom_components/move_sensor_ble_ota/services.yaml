@@ -41,8 +41,7 @@ build_and_flash:
           integration: move_sensor_ble_ota
     configuration:
       required: false
-      default: move-sensor-ble.yaml
-      example: move-sensor-ble.yaml
+      example: move-sensor-ble-148f98.yaml
       selector:
         text:
     start:

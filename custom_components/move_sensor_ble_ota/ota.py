@@ -73,6 +73,8 @@ from .const import (
     ST_BUILDING,
     ST_CONNECTING,
     DEFAULT_ESPHOME_CONFIG,
+    DEVICE_ESPHOME_CONFIG,
+    ESPHOME_DIR,
     ST_ERROR,
     ST_FLASHING,
     ST_IDLE,
@@ -633,7 +635,7 @@ class OtaManager:
 
         if self._ota is not None or self.status == ST_BUILDING:
             raise OtaError("сборка или прошивка уже идёт")
-        cfg = configuration or DEFAULT_ESPHOME_CONFIG
+        cfg = await self.hass.async_add_executor_job(self.resolve_config, configuration)
         self.last_build = {"configuration": cfg, "started": dt_util.now().isoformat()}
         self._set(ST_BUILDING, progress=0, error=None, finished=None, file=None, new_version=None)
 
@@ -1196,6 +1198,18 @@ class OtaManager:
     @property
     def device_id(self) -> str:
         return device_id(self.address)
+
+    def resolve_config(self, configuration: str | None = None) -> str:
+        """YAML для сборки (блокирующая). Явно указанный — как есть; пусто или старое общее имя
+        (move-sensor-ble.yaml) — файл этого датчика move-sensor-ble-<device id>.yaml, если он есть,
+        иначе старое общее имя (1.13.1)."""
+        if configuration and configuration != DEFAULT_ESPHOME_CONFIG:
+            return configuration
+        own = DEVICE_ESPHOME_CONFIG.format(device_id=self.device_id.lower())
+        for cfg in (own, DEFAULT_ESPHOME_CONFIG):
+            if os.path.isfile(os.path.join(ESPHOME_DIR, cfg)):
+                return cfg
+        raise OtaError(f"нет YAML датчика: {own} (или {DEFAULT_ESPHOME_CONFIG}) в {ESPHOME_DIR}")
 
     async def async_request_identify(self) -> None:
         self.identify = {"state": "pending", "requested": dt_util.now().isoformat()}

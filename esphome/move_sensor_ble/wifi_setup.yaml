@@ -9,7 +9,11 @@
 #   • на время попытки гасит радио целиком (STA и AP) — ms_ap.h поднимает AP за ~1 с.
 # Скан — фоновый (ms_ap::scan_networks), связь с роутером не рвёт; штатный start_scanning()
 # переподключал Wi-Fi и сайт отваливался (2026-11-11).
-# Жёсткий сброс без отката — 5 включений сервисного переключателя (move-sensor-ble.yaml, service_enter).
+# Жёсткий (заводской) сброс без отката — 5 включений сервисного переключателя за 20 с
+# (move_sensor_ble/base.yaml, service_enter -> factory_reset_net): сеть из прошивки + заводской пароль точки.
+#
+# Пароль своей точки доступа (2026-11-15): «New AP Password» -> «Save AP password» (8–63 символа ASCII).
+# Хранится во флеше (globals ap_password_custom), точка сразу перезапускается с новым паролем.
 
 # Для окна «Wi-Fi роутера»: текущая сеть (пусто — нет связи) и список найденных сетей
 # "SSID: -63dB" по строке (обновляется на сканах самого wifi и по кнопке).
@@ -30,6 +34,14 @@ text_sensor:
       name: "WiFi IP"
       icon: "mdi:ip-network"
       entity_category: diagnostic
+  # какой пароль у своей точки сейчас: default (заводской, на наклейке) / custom (задан с сайта)
+  - platform: template
+    id: ap_password_mode
+    name: "AP password"
+    icon: "mdi:access-point-network"
+    entity_category: diagnostic
+    update_interval: never
+    lambda: 'return {id(ap_password_custom).size() >= 8 ? "custom" : "default"};'
 
 text:
   - platform: template
@@ -57,7 +69,30 @@ text:
           then:
             - script.execute: wifi_password_autoclear
 
+  - platform: template
+    name: "New AP Password"
+    id: new_ap_password
+    mode: password
+    optimistic: true
+    max_length: 63
+    entity_category: config
+    icon: "mdi:access-point-network"
+    on_value:
+      - if:
+          condition:
+            lambda: 'return !x.empty();'
+          then:
+            - script.execute: ap_password_autoclear
+
 script:
+  - id: ap_password_autoclear
+    mode: restart
+    then:
+      - delay: 5min
+      - text.set:
+          id: new_ap_password
+          value: ""
+
   - id: wifi_password_autoclear
     mode: restart
     then:
@@ -114,6 +149,37 @@ button:
     entity_category: diagnostic
     on_press:
       - lambda: 'ms_ap::scan_networks();'
+
+  # Новый пароль своей точки: 8–63 печатных ASCII (требование WPA2). Ответ сайту уходит,
+  # через 1.5 с точка перезапускается с новым паролем (телефон отключится — войти заново).
+  - platform: template
+    name: "Save AP password"
+    id: save_ap_password
+    icon: "mdi:content-save-cog"
+    entity_category: diagnostic
+    on_press:
+      - if:
+          condition:
+            lambda: |-
+              const std::string &p = id(new_ap_password).state;
+              if (p.size() < 8 || p.size() > 63) return false;
+              for (char ch : p) if (ch < 0x20 || ch > 0x7e) return false;
+              return true;
+          then:
+            - lambda: |-
+                id(ap_password_custom) = id(new_ap_password).state;
+                ESP_LOGW("ms", "AP password: custom saved (%u chars)", (unsigned) id(ap_password_custom).size());
+            - text.set: {id: new_ap_password, value: ""}
+            - component.update: ap_password_mode
+            - delay: 1500ms
+            - lambda: |-
+                global_preferences->sync();
+                ms_ap::set_password(id(ap_password_custom));
+          else:
+            - logger.log:
+                format: "AP password rejected: need 8-63 printable ASCII characters"
+                level: WARN
+            - text.set: {id: new_ap_password, value: ""}
 
   # Жёсткий сброс: NVS снова на сеть из прошивки (secrets.yaml), и после перезагрузки тоже.
   - platform: template

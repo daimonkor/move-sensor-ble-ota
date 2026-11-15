@@ -18,7 +18,13 @@
     wPct: "sensor/WiFi Signal", wDbm: "sensor/WiFi RSSI", bPct: "sensor/BLE Signal", bDbm: "sensor/BLE RSSI",
     why: "text_sensor/Wake reason", esv: "text_sensor/ESPHome Version", build: "text_sensor/Build Version",
     keep: "number/Keep time", delay: "number/Detect delay", clim: "number/Climate report interval", vf: "number/Voltage factor",
-    led: "switch/Motion tracking LED", sim: "switch/Simulate climate"
+    led: "switch/Motion tracking LED",
+    // 2026-11-15: настройки, которые HA шлёт по BLE, + батарея в покое и IP (раньше на сайте не было)
+    mwin: "number/Motion window", cwin: "number/Climate window",
+    toff: "number/Temperature offset", hoff: "number/Humidity offset",
+    rest: "sensor/Battery rest voltage", ip: "text_sensor/WiFi IP", devid: "text_sensor/Device ID",
+    pir: "binary_sensor/PIR raw", bo: "sensor/Brownout count", crash: "sensor/Crash count",
+    rlast: "text_sensor/Last reset reason"
   };
 
   function num(k) {
@@ -129,14 +135,14 @@
     p.className = "pin " + zone;
   }
   function renderClimate() {
-    var t = num(K.temp), h = num(K.hum), sim = bool(K.sim) === true;
-    $("ms-sim1").classList.toggle("hide", !sim);
-    $("ms-sim2").classList.toggle("hide", !sim);
+    var t = num(K.temp), h = num(K.hum);
     txt("ms-temp", fmt(t, 1));
-    txt("ms-temp-n", t === null ? " " : t < 18 ? "Прохладно" : t <= 26 ? "Комфортно" : "Жарко");
+    var toff = num(K.toff), hoff = num(K.hoff);
+    var offTxt = function (v, u) { return v ? " · поправка " + (v > 0 ? "+" : "−") + Math.abs(v).toFixed(1) + " " + u : ""; };
+    txt("ms-temp-n", t === null ? " " : (t < 18 ? "Прохладно" : t <= 26 ? "Комфортно" : "Жарко") + offTxt(toff, "°C"));
     pin("ms-temp-pin", t === null ? null : (t - 10) / 25 * 100, t === null ? "" : t < 18 ? "cold" : t <= 26 ? "ok" : "hot");
     txt("ms-hum", fmt(h, 0));
-    txt("ms-hum-n", h === null ? " " : h < 30 ? "Сухо" : h <= 60 ? "Норма" : "Влажно");
+    txt("ms-hum-n", h === null ? " " : (h < 30 ? "Сухо" : h <= 60 ? "Норма" : "Влажно") + offTxt(hoff, "%"));
     pin("ms-hum-pin", h, h === null ? "" : h < 30 ? "dry" : h <= 60 ? "ok" : "wet");
   }
 
@@ -170,14 +176,66 @@
     txt("ms-why", why ? (WHY[why] || why) : "—");
     txt("ms-wakes", w === null ? "—" : String(Math.round(w)));
     txt("ms-svc", svc === null ? "—" : svc ? "включён" : "выключен");
+    $("ms-svcbar").classList.toggle("hide", svc !== true);
+    renderDbg();
     txt("ms-clim", clim === null ? "—" : clim < 1 ? "выключен" : "каждые " + clim + " мин");
     txt("ms-d0", d0 === null ? "—" : d0.toFixed(3) + " В");
     txt("ms-vf", vf === null ? "—" : vf.toFixed(3));
     txt("ms-led", led === null ? "—" : led ? "включён" : "выключен");
+    txt("ms-devid", str(K.devid) || "—");
+    var mwin = num(K.mwin), cwin = num(K.cwin), toff = num(K.toff), hoff = num(K.hoff), rest = num(K.rest);
+    var sgn = function (v, d) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d); };
+    txt("ms-toff", toff === null ? "—" : sgn(toff, 1) + " °C");
+    txt("ms-hoff", hoff === null ? "—" : sgn(hoff, 1) + " %");
+    txt("ms-mwin", mwin === null ? "—" : (mwin / 1000).toFixed(1) + " с");
+    txt("ms-cwin", cwin === null ? "—" : (cwin / 1000).toFixed(1) + " с");
+    txt("ms-rest", rest === null ? "—" : rest.toFixed(3) + " В");
+    txt("ms-ip", str(K.ip) || "—");
     txt("ms-esv", str(K.esv) || "—");
     txt("ms-build", str(K.build) || "—");
     txt("ms-upd", lastUpd ? hms(lastUpd) : "—");
   }
+
+  // ── отладка (скрыта: 5 нажатий на подпись внизу или /#debug) ──
+  var pirPrev = null, pirRise = 0, pirLast = null, pirCnt = 0, pirMin = null, pirMax = null;
+  var RR = { "power on": "включение питания", "reset pin": "кнопка RESET", "software": "программный (OTA/перезапуск)",
+    "panic": "panic (падение)", "watchdog (int)": "watchdog (прерывания)", "watchdog (task)": "watchdog (задача)",
+    "brownout": "brownout (просадка питания)" };
+  function sec(ms) { return ms < 1000 ? ms + " мс" : (ms / 1000).toFixed(1) + " с"; }
+  function renderDbg() {
+    var p = bool(K.pir), now = Date.now();
+    if (p === true && pirPrev !== true) pirRise = now;
+    if (p === false && pirPrev === true && pirRise) {
+      pirLast = now - pirRise; pirCnt++;
+      pirMin = pirMin === null ? pirLast : Math.min(pirMin, pirLast);
+      pirMax = pirMax === null ? pirLast : Math.max(pirMax, pirLast);
+    }
+    pirPrev = p;
+    if ($("ms-dbg").classList.contains("hide")) return;
+    $("ms-pirlamp").classList.toggle("on", p === true);
+    txt("ms-pir", p === null ? "—" : p ? "HIGH (есть сигнал)" : "LOW");
+    txt("ms-pirlast", p === true ? "идёт " + sec(now - pirRise) : pirLast === null ? "—" : sec(pirLast));
+    txt("ms-pircnt", String(pirCnt));
+    txt("ms-pirmm", pirMin === null ? "—" : sec(pirMin) + " / " + sec(pirMax));
+    var bo = num(K.bo), cr = num(K.crash);
+    txt("ms-rst", bo === null ? "—" : bo + " / " + cr);
+    $("ms-rst").classList.toggle("bad", (bo || 0) + (cr || 0) > 0);
+    var rl = str(K.rlast);
+    txt("ms-rstlast", rl ? (RR[rl] || rl) : "—");
+  }
+  var dbgTaps = [];
+  function setDbg(on) {
+    $("ms-dbg").classList.toggle("hide", !on);
+    try { localStorage.setItem("ms-debug", on ? "1" : ""); } catch (e) { /* без хранилища — до перезагрузки */ }
+    if (on) renderDbg();
+  }
+  $("ms-foot").addEventListener("click", function () {
+    var now = Date.now();
+    dbgTaps = dbgTaps.filter(function (t) { return now - t < 3000; }); dbgTaps.push(now);
+    if (dbgTaps.length >= 5) { dbgTaps = []; setDbg($("ms-dbg").classList.contains("hide")); }
+  });
+  window.addEventListener("hashchange", function () { if (location.hash === "#debug") setDbg(true); });
+  try { if (localStorage.getItem("ms-debug") === "1" || location.hash === "#debug") setDbg(true); } catch (e) { if (location.hash === "#debug") setDbg(true); }
 
   var rq = 0;
   function render() {
@@ -262,8 +320,13 @@
     return out.sort(function (a, b) { return b.rssi - a.rssi; });
   }
   var netsKey = null;
+  function renderAp() {  // «AP password»: default / custom (wifi_setup.yaml)
+    var m = str("text_sensor/AP password");
+    txt("ms-apnow", m === "custom" ? "Сейчас: свой пароль" : m === "default" ? "Сейчас: заводской пароль (с наклейки)" : "—");
+  }
   function renderWifi() {
     if ($("ms-wsheet").classList.contains("hide")) return;
+    renderAp();
     var now = str("text_sensor/Wi-Fi SSID");
     txt("ms-wnow", now ? "Сейчас: " + now : "К роутеру не подключён");
     var raw = str("text_sensor/Wi-Fi Scan Results") || "", cur = $("ms-wssid").value.trim();
@@ -346,6 +409,26 @@
     wstat("Отправлено, подключаюсь…"); setWBusy(true);
     press("Reset Wi-Fi to firmware defaults").then(function () { waitBack(Date.now(), ""); },
       function () { setWBusy(false); wstat("Не удалось отправить"); });
+  });
+  // ── пароль своей точки доступа: «New AP Password» → «Save AP password», два нажатия ──
+  var apArmed = 0;
+  $("ms-apgo").addEventListener("click", function () {
+    if (wBusy) return;
+    var b = $("ms-apgo"), p = $("ms-appass").value;
+    if (p.length < 8 || p.length > 63 || !/^[\x20-\x7e]+$/.test(p)) { wstat("Пароль: 8–63 латинских символа, цифры, знаки"); return; }
+    if (Date.now() > apArmed) {
+      apArmed = Date.now() + 4000; b.classList.add("warn"); b.textContent = "Точно сменить? Нажмите ещё раз";
+      setTimeout(function () { if (Date.now() > apArmed) { b.classList.remove("warn"); b.textContent = "Сменить пароль точки"; } }, 4100);
+      return;
+    }
+    apArmed = 0; b.classList.remove("warn"); b.textContent = "Сменить пароль точки";
+    wstat("Сохраняю…"); setWBusy(true);
+    postText("New AP Password", p)
+      .then(function () { return press("Save AP password"); })
+      .then(function () {
+        $("ms-appass").value = ""; setWBusy(false);
+        wstat("Сохранено. Точка перезапустится с новым паролем — подключитесь заново");
+      }, function () { setWBusy(false); wstat("Не удалось отправить"); });
   });
   window.addEventListener("hashchange", function () { if (location.hash === "#wifi") openWifi(); });
 

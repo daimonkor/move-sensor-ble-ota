@@ -16,7 +16,7 @@ Bluetooth proxies**. The sensor never needs Wi-Fi in normal operation.
 ### Features
 
 - **BLE OTA**: flash a new firmware over Bluetooth during the sensor's short wake window (button, service or REST).
-- **Build & flash in one click**: the integration compiles `move-sensor-ble.yaml` in the ESPHome Builder add-on
+- **Build & flash in one click**: the integration compiles the sensor's `move-sensor-ble-<device id>.yaml` in the ESPHome Builder add-on
   and flashes the result over BLE — no file downloads.
 - **Settings over BLE**: detect delay, keep time, climate report interval, voltage factor, LED.
   Changes are queued and applied at the next wake-up; the sensor confirms them.
@@ -59,7 +59,7 @@ Update to a new release through Marketplace:
 | Path | What |
 |---|---|
 | `custom_components/move_sensor_ble_ota/` | Home Assistant integration ([detailed docs, Russian](custom_components/move_sensor_ble_ota/README.md)) |
-| `esphome/` | Sensor firmware: `move-sensor-ble.yaml`, `move_sensor_rtc.h`, service-mode web/AP `move_sensor_ble/`, external component `components/bthome` (BTHome + BLE OTA, DIAG, settings, Wi-Fi reset). Secrets template — `secrets.example.yaml` |
+| `esphome/` | Sensor firmware: one YAML per sensor `move-sensor-ble-<device id>.yaml` + shared `move_sensor_ble/base.yaml`, `move_sensor_rtc.h`, service-mode web/AP `move_sensor_ble/`, external component `components/bthome` (BTHome + BLE OTA, DIAG, settings, Wi-Fi reset). Secrets template — `secrets.example.yaml` |
 | `tools/ble_ota_flash.py` | Build + BLE flash from a terminal (stdlib Python only) |
 | `sync_from_ha.sh` | Copy the firmware files (`esphome/`, `tools/`) from Home Assistant `/config` into this repo |
 
@@ -76,7 +76,7 @@ Issues and pull requests are disabled — this is a personal project published a
 | Папка | Что |
 |---|---|
 | `custom_components/move_sensor_ble_ota/` | Интеграция HA (ставится через HACS как custom repository). Подробно — [её README](custom_components/move_sensor_ble_ota/README.md) |
-| `esphome/` | Прошивка датчика: `move-sensor-ble.yaml`, `move_sensor_rtc.h`, сайт/точка доступа `move_sensor_ble/`, компонент `components/bthome` (BTHome + BLE OTA, DIAG, настройки, сброс Wi-Fi, быстрый тест). Секреты — `secrets.example.yaml` |
+| `esphome/` | Прошивка датчика: свой YAML на датчик `move-sensor-ble-<device id>.yaml` + общая `move_sensor_ble/base.yaml`, `move_sensor_rtc.h`, сайт/точка доступа `move_sensor_ble/`, компонент `components/bthome` (BTHome + BLE OTA, DIAG, настройки, сброс Wi-Fi, быстрый тест). Секреты — `secrets.example.yaml` |
 | `tools/ble_ota_flash.py` | Сборка + прошивка по BLE из терминала, без браузера (только stdlib Python) |
 | `sync_from_ha.sh` | Скопировать файлы прошивки (`esphome/`, `tools/`) из `/Volumes/config` в репозиторий |
 

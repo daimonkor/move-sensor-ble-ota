@@ -178,7 +178,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.13.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.13.1</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -299,8 +299,9 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 <section id="flash">
   <h2><span class="ic bg-violet"><svg class="i"><use href="#i-upload"/></svg></span>Flashing</h2>
   <div class="note"><svg class="i"><use href="#i-info"/></svg>
-    <div><b>Easiest — the single "Build &amp; flash firmware (BLE)" button.</b> The integration compiles
-    <code>move-sensor-ble.yaml</code> in the ESPHome Builder add-on (through the Supervisor, like HA itself), saves the
+    <div><b>Easiest — the single "Build &amp; flash firmware (BLE)" button.</b> The integration compiles this
+    sensor's YAML <code>move-sensor-ble-&lt;device id&gt;.yaml</code> (e.g. <code>move-sensor-ble-148f98.yaml</code>,
+    since 1.13.1; shared firmware — <code>move_sensor_ble/base.yaml</code>) in the ESPHome Builder add-on (through the Supervisor, like HA itself), saves the
     <code>.ota.bin</code> to the firmware folder and flashes the sensor over BLE at the next window. Same via
     the <code>move_sensor_ble_ota.build_and_flash</code> service or <code>POST /api/move_sensor_ble_ota/build</code>.
     Outside HA — the <code>/config/esphome/tools/ble_ota_flash.py</code> script.</div></div>

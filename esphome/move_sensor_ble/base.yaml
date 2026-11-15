@@ -26,8 +26,11 @@
 #              включён - Wi-Fi поднимается, выключен - Wi-Fi не включается вообще.
 
 substitutions:
+  # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
+  # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
   friendly_name: Move Sensor BLE
+  mac_suffix: "true"
   pir_gpio: "3"            # D1
   service_gpio: "4"        # D2
   vbat_gpio: "2"           # D0 / A0
@@ -43,25 +46,29 @@ substitutions:
   led_gpio: "10"           # D10
   sda_gpio: "6"            # D4
   scl_gpio: "7"            # D5
-  # сущность HA с RSSI этого датчика (устройство BTHome -> Signal strength);
-  # поправь после добавления BTHome-устройства в HA, если имя отличается
+  # сущность HA с RSSI этого датчика (устройство BTHome -> Signal strength). Значение по умолчанию —
+  # заглушка: задавай ble_rssi_entity в файле датчика (move-sensor-ble-<ID>.yaml), у каждого своя
   ble_rssi_entity: sensor.move_sensor_ble_signal_strength
-  # Сброс Wi-Fi переключателем: включить сервисный режим wifi_reset_toggles раз подряд, первое и
-  # последнее включения не дальше wifi_reset_window_ms -> сохранённая сеть сбрасывается на сеть
-  # из прошивки (secrets.yaml) БЕЗ отката, LED мигает 6 раз. Считается и через сон (RTC).
+  # Заводской сброс переключателем (2026-11-15): включить сервисный режим wifi_reset_toggles раз подряд,
+  # первое и последнее включения не дальше wifi_reset_window_ms -> сеть роутера сбрасывается на сеть
+  # из прошивки (secrets.yaml) БЕЗ отката И пароль своей точки доступа — на заводской, LED мигает 6 раз.
+  # Считается и через сон (RTC). То же делает команда сброса по BLE из HA (script factory_reset_net).
   wifi_reset_toggles: "5"
   wifi_reset_window_ms: "20000"
   # сеть из прошивки — для сброса (лямбда не умеет !secret напрямую)
   fw_wifi_ssid: !secret wifi_ssid
   fw_wifi_password: !secret wifi_password
+  # заводской пароль своей точки доступа (на наклейке); свой пароль задаётся с сайта датчика
+  fw_ap_password: !secret move_sensor_ap_password
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  # 2026-11-15: одна прошивка на несколько датчиков — к имени добавляется хвост MAC Wi-Fi
-  # (Device ID, напр. 148f98): move-sensor-ble-148f98.local, «Move Sensor BLE 148f98».
-  # Точка доступа — MoveSensorBLE-148F98 (ставится в on_boot ниже).
-  name_add_mac_suffix: true
+  # 2026-11-15: это общий шаблон (move_sensor_ble/base.yaml). В ESPHome Builder у каждого датчика
+  # своя карточка — move-sensor-ble-<Device ID>.yaml в корне esphome/ с именем целиком
+  # (move-sensor-ble-148f98) и mac_suffix: "false". Device ID = хвост MAC Wi-Fi.
+  # Точка доступа — MoveSensorBLE-<DEVICE ID> (ставится в on_boot ниже).
+  name_add_mac_suffix: ${mac_suffix}
   includes:
     - move_sensor_rtc.h
     - move_sensor_ble/ms_ap.h     # своя точка доступа + DNS + лендинг (как у весов и батареи)
@@ -88,6 +95,8 @@ esphome:
               snprintf(ssid, sizeof(ssid), "MoveSensorBLE-%02X%02X%02X", mac[3], mac[4], mac[5]);
               wifi::WiFiAP ap = wifi::global_wifi_component->get_ap();
               ap.set_ssid(ssid);
+              // 2026-11-15: свой пароль точки (с сайта, во флеше) вместо заводского
+              if (id(ap_password_custom).size() >= 8) ap.set_password(id(ap_password_custom));
               wifi::global_wifi_component->set_ap(ap);
             }
             ms::bat_phase = 1;
@@ -96,19 +105,19 @@ esphome:
             // версия сборки (как «Build Version») — HA читает её по BLE (move_sensor_ble_ota)
             id(build_version_text).update();
             id(bth_ota).set_build_version(id(build_version_text).state);
-            // 2026-11-14: сброс Wi-Fi на сеть из прошивки по BLE (команда 0x12 от интеграции HA).
+            // 2026-11-14: сброс Wi-Fi по BLE (команда 0x12 от интеграции HA); с 2026-11-15 — заводской
+            // сброс сети: сеть роутера из прошивки + заводской пароль своей точки (factory_reset_net).
             // В рабочем режиме Wi-Fi выключен — ставим флаг (NVS), сброс при входе в сервисный режим;
             // если уже в сервисном — сразу. LED: 6 вспышек — команда принята.
             id(bth_ota).set_wifi_reset_callback([]() {
               if (id(service_mode)) {
-                id(wifi_reset_pending) = false;
-                ESP_LOGW("ms", "Wi-Fi RESET over BLE: saved network -> firmware network (now)");
-                wifi::global_wifi_component->save_wifi_sta("${fw_wifi_ssid}", "${fw_wifi_password}");
+                ESP_LOGW("ms", "factory reset over BLE: now");
+                id(factory_reset_net).execute();
               } else {
                 id(wifi_reset_pending) = true;
-                ESP_LOGW("ms", "Wi-Fi RESET over BLE: will apply on next service mode");
+                ESP_LOGW("ms", "factory reset over BLE: will apply on next service mode");
+                id(wifi_reset_blink).execute();
               }
-              id(wifi_reset_blink).execute();
             });
             // найти датчик (команда 0x14 IDENTIFY из HA): мигать светодиодом N с, не засыпая
             id(bth_ota).set_identify_callback([](uint8_t sec) {
@@ -179,7 +188,7 @@ wifi:
 
 # Настройка домашней сети с сайта: New Wi-Fi SSID/Password, Reconnect, Scan, Reset to firmware
 packages:
-  wifi_setup: !include move_sensor_ble/wifi_setup.yaml
+  wifi_setup: !include wifi_setup.yaml
 
 api:
   reboot_timeout: 0s
@@ -231,6 +240,18 @@ deep_sleep:
   # по HIGH (новое движение) или по LOW (отпускание PIR), по одному замеру уровня перед сном.
   # Встроенный INVERT_WAKEUP делает похожее, но читает пин отдельно от нашей логики.
 
+# Wi-Fi-канал (2026-11-15): найти датчик (мигать LED 10 с), как кнопка Identify интеграции по BLE
+button:
+  - platform: template
+    name: "Identify"
+    id: identify_btn
+    icon: mdi:led-on
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(identify_left) = 20;   // полсекунды на вспышку -> 10 с
+          id(identify_blink).execute();
+
 globals:
   # сброс Wi-Fi переключателем набран — выполнить после wifi.enable (service_enter)
   # restore_value (2026-11-14): флаг может поставить BLE-команда в рабочем режиме — должен дожить
@@ -239,6 +260,13 @@ globals:
     type: bool
     restore_value: true
     initial_value: "false"
+  # 2026-11-15: свой пароль точки доступа (с сайта датчика, во флеше). Пусто = заводской
+  # (fw_ap_password). Сбрасывается заводским сбросом (5 включений SW2 / BLE).
+  - id: ap_password_custom
+    type: std::string
+    restore_value: true
+    max_restore_data_length: 64
+    initial_value: '""'
   - id: service_mode
     type: bool
     restore_value: false
@@ -378,6 +406,24 @@ sensor:
     accuracy_decimals: 3
     filters:
       - lambda: "return x / id(vbat_factor).state;"
+
+  # счётчики сбросов для Wi-Fi-канала (2026-11-15), как Brownout count / Crash count интеграции
+  - platform: template
+    id: brownout_count
+    name: "Brownout count"
+    icon: mdi:flash-alert
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+    lambda: "return (float) id(bth_ota).diag_brownout();"
+  - platform: template
+    id: crash_count
+    name: "Crash count"
+    icon: mdi:alert-octagon
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+    lambda: "return (float) id(bth_ota).diag_crash();"
 
   # напряжение покоя (сглаженное, с поправкой на просадку под Wi-Fi) — по нему считается Battery.
   # Только API/сайт (сервисный режим), в BTHome не уходит.
@@ -519,10 +565,15 @@ sensor:
           return clamp((x - rssi_min) * 100.0f / (rssi_max - rssi_min), 0.0f, 100.0f);
 
 binary_sensor:
-  # сырой сигнал PIR (сейчас кнопка)
+  # сырой сигнал PIR (выход SR602 до Detect delay / Keep time).
+  # 2026-11-15: виден на сайте в разделе «Отладка» (для разбора ложных срабатываний);
+  # в HA сущность по умолчанию выключена (disabled_by_default), чтобы не множить сенсоры.
   - platform: gpio
     id: pir_raw
-    internal: true
+    name: "PIR raw"
+    icon: mdi:motion-sensor
+    entity_category: diagnostic
+    disabled_by_default: true
     pin:
       number: GPIO${pir_gpio}
       # allow_other_uses убран (2026-11-14): deep_sleep больше не держит D1 — сенсор снова на прерываниях
@@ -723,6 +774,37 @@ text_sensor:
     id: esphome_version_text
     hide_timestamp: true   # без "built ..." — время сборки уже в Build Version
     entity_category: diagnostic
+
+  # Wi-Fi-канал (2026-11-15): то же, что интеграция HA получает по BLE (DIAG 0x09), с теми же
+  # именами — где BLE нет, HA видит это по Wi-Fi (ESPHome). Строки как RESET_REASONS интеграции.
+  - platform: template
+    name: "Last reset reason"
+    id: last_reset_reason_text
+    icon: mdi:restart-alert
+    entity_category: diagnostic
+    update_interval: never
+    lambda: |-
+      static const char *const R[] = {"unknown", "power on", "reset pin", "software", "panic",
+          "watchdog (int)", "watchdog (task)", "watchdog", "deep sleep", "brownout", "sdio", "usb",
+          "jtag", "efuse", "power glitch", "cpu lockup"};
+      uint8_t r = id(bth_ota).diag_last();
+      return {r < sizeof(R) / sizeof(R[0]) ? R[r] : "unknown"};
+
+  # Device ID (2026-11-15) — хвост MAC Wi-Fi заглавными, напр. 148F98: он же в имени
+  # move-sensor-ble-148f98, в SSID точки MoveSensorBLE-148F98 и в имени YAML датчика.
+  # BT MAC = Wi-Fi MAC + 2 (интеграция HA считает тот же ID из BLE-адреса).
+  - platform: template
+    name: "Device ID"
+    id: device_id_text
+    icon: mdi:identifier
+    entity_category: diagnostic
+    update_interval: never
+    lambda: |-
+      uint8_t mac[6];
+      esp_read_mac(mac, ESP_MAC_WIFI_STA);
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%02X%02X%02X", mac[3], mac[4], mac[5]);
+      return {buf};
 
   # Номер сборки vГГГГ.ММ.ДД.ЧЧММСС — из времени сборки ESPHome (см. lambda).
   # Константа сборки: публикуется при входе в сервисный режим (script service_enter).
@@ -1096,13 +1178,18 @@ script:
             ms::svc_on_count = 0;
           }
           ms::svc_on_count++;
-          ESP_LOGI("ms", "service mode ON (switch on #%u of ${wifi_reset_toggles} for Wi-Fi reset)",
+          ESP_LOGI("ms", "service mode ON (switch on #%u of ${wifi_reset_toggles} for factory reset)",
                    (unsigned) ms::svc_on_count);
           if (ms::svc_on_count >= ${wifi_reset_toggles}) {
             ms::svc_on_count = 0;
             id(wifi_reset_pending) = true;
           }
       - component.update: build_version_text
+      - component.update: device_id_text
+      - component.update: last_reset_reason_text
+      - component.update: brownout_count
+      - component.update: crash_count
+      - component.update: ap_password_mode
       - logger.set_level: DEBUG
       - script.stop: go_sleep
       - wifi.enable:
@@ -1111,12 +1198,26 @@ script:
             lambda: "return id(wifi_reset_pending);"
           then:
             - delay: 1s     # дать wifi стартовать после enable
-            - lambda: |-
-                id(wifi_reset_pending) = false;
-                ESP_LOGW("ms", "Wi-Fi RESET by switch: saved network -> firmware network (no rollback)");
-                // пишет в NVS и сразу подключается к сети из прошивки; точка доступа остаётся
-                wifi::global_wifi_component->save_wifi_sta("${fw_wifi_ssid}", "${fw_wifi_password}");
-            - script.execute: wifi_reset_blink
+            - script.execute: factory_reset_net
+
+  # Заводской сброс сети (2026-11-15): сеть роутера -> из прошивки (без отката), пароль своей
+  # точки доступа -> заводской (fw_ap_password, он же на наклейке). Остальные настройки
+  # (Keep time и т.д.) не трогает — их присылает HA. Запуск: 5 включений SW2 за 20 с
+  # (service_enter) или команда сброса по BLE из HA. LED: 6 быстрых вспышек.
+  - id: factory_reset_net
+    then:
+      - lambda: |-
+          id(wifi_reset_pending) = false;
+          id(ap_password_custom) = "";
+          ESP_LOGW("ms", "FACTORY RESET: Wi-Fi -> firmware network, AP password -> default");
+          // пишет в NVS и сразу подключается к сети из прошивки; точка доступа остаётся,
+          // но с заводским паролем — подключённые к ней клиенты отключатся
+          wifi::global_wifi_component->save_wifi_sta("${fw_wifi_ssid}", "${fw_wifi_password}");
+          ms_ap::set_password("${fw_ap_password}");
+      - component.update: ap_password_mode
+      - script.execute: wifi_reset_blink
+      - delay: 200ms        # globals успевают записать новое значение в NVS-очередь
+      - lambda: "global_preferences->sync();"
 
   - id: service_exit
     then:

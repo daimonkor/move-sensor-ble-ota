@@ -100,7 +100,7 @@
         },
         "configuration": {
           "name": "ESPHome YAML",
-          "description": "File in /config/esphome (default move-sensor-ble.yaml)."
+          "description": "File in /config/esphome. Empty = this sensor's move-sensor-ble-<device id>.yaml."
         },
         "start": {
           "name": "Flash after build",
