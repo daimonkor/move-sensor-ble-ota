@@ -109,7 +109,7 @@ def changes(files: list[str], esphome_dir: str, snap: str, flashed_hash: str | N
         return None
     if flashed_hash and man.get("hash") != flashed_hash:
         return None
-    old_files: dict = man.get("files") or {}
+    old_files: dict = {k: v for k, v in (man.get("files") or {}).items() if k != CHANGELOG_REL}
     cur = {_rel(p, esphome_dir): p for p in files}
     out = []
     for rel in sorted(set(old_files) | set(cur)):
@@ -155,15 +155,125 @@ def changed_since(files: list[str], esphome_dir: str, t: float) -> list[dict]:
 
 _STATUS = {"modified": "изменён", "added": "новый", "removed": "удалён"}
 
+# ---------------- v1.16.2: CHANGELOG прошивки (как у аддонов) ----------------
+CHANGELOG_REL = "move_sensor_ble/CHANGELOG.md"
+_SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.M)
+_VER_RE = re.compile(r"v?(\d+\.\d+(?:\.\d+)?)")
+
+
+def read_file(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def parse_changelog(text: str | None) -> list[dict]:
+    """Разделы «## 1.4.0 — 17.11.2026» по порядку (сверху — новые): {heading, version, body}."""
+    if not text:
+        return []
+    heads = list(_SECTION_RE.finditer(text))
+    out = []
+    for i, m in enumerate(heads):
+        end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+        v = _VER_RE.match(m.group(1))
+        out.append({"heading": m.group(1), "version": v.group(1) if v else None,
+                    "body": text[m.end():end].strip()})
+    return out
+
+
+def top_version(text: str | None) -> str | None:
+    for sec in parse_changelog(text):
+        if sec["version"]:
+            return sec["version"]
+    return None
+
+
+def new_sections(cur: str | None, flashed: str | None) -> list[dict]:
+    """Разделы, которых не было в CHANGELOG прошитой сборки. Прошитой копии CHANGELOG нет — только верхний."""
+    secs = parse_changelog(cur)
+    if not secs:
+        return []
+    if flashed is None:
+        return secs[:1]
+    old = {s["heading"] for s in parse_changelog(flashed)}
+    return [s for s in secs if s["heading"] not in old]
+
+
+_KV_RE = re.compile(r"^[+-](\s*)(-\s+)?([\w.-]+):\s*(.*?)\s*(#.*)?$")
+
+
+def friendly(ch: dict | None) -> list[str]:
+    """Понятный пересказ diff: «параметр: было → стало», без комментариев и кода."""
+    out: list[str] = []
+    for it in (ch or {}).get("files", []):
+        if os.path.basename(it["file"]) in SECRET_FILES:
+            out.append(f"секреты (`{it['file']}`) изменены")
+            continue
+        if it["status"] != "modified":
+            out.append(f"`{it['file']}` — {_STATUS.get(it['status'], it['status'])}")
+            continue
+        old, new, comments, other = {}, {}, 0, 0
+        for d in it["diff"]:
+            if d[:1] not in "+-" or d.startswith(("+++", "---")):
+                continue
+            body = d[1:].strip()
+            if not body or body.startswith(("#", "//")):
+                comments += 1
+                continue
+            m = _KV_RE.match(d)
+            if m and it["file"].endswith((".yaml", ".yml")):
+                (old if d[0] == "-" else new)[m.group(3)] = m.group(4)
+            else:
+                other += 1
+        for k in list(new):
+            if k in old:
+                if old[k] != new[k]:
+                    out.append(f"`{k}`: {old[k] or '—'} → {new[k] or '—'}")
+                old.pop(k)
+            else:
+                out.append(f"`{k}`: добавлено ({new[k] or '—'})")
+        out += [f"`{k}`: убрано" for k in old]
+        if other:
+            out.append(f"`{os.path.basename(it['file'])}`: изменена логика ({other} строк)")
+        elif comments and not (old or new):
+            out.append(f"`{os.path.basename(it['file'])}`: только комментарии")
+    return out
+
+
+def render_user(sections: list[dict], ch: dict | None) -> list[str]:
+    """v1.16.2: верх примечаний — записи CHANGELOG (как у аддонов); нет записи — пересказ изменений."""
+    lines: list[str] = []
+    for sec in sections:
+        lines += [f"## {sec['heading']}", sec["body"], ""]
+    if not sections and ch and ch.get("files"):
+        lines += ["## Что нового", "_Для этой сборки нет записи в CHANGELOG прошивки — коротко по файлам:_"]
+        lines += [f"- {x}" for x in friendly(ch)] + [""]
+    return lines
+
+
+def summary_line(sections: list[dict], ch: dict | None) -> str | None:
+    """Одна строка для «Обновлений»: первые пункты CHANGELOG или пересказа."""
+    items: list[str] = []
+    for sec in sections:
+        items += [ln.lstrip("-* ").strip() for ln in sec["body"].splitlines() if ln.lstrip().startswith(("-", "*"))]
+    if not items:
+        items = friendly(ch)
+    if not items:
+        return None
+    text = "; ".join(re.sub(r"`|\*\*", "", x) for x in items[:3])   # «_» в именах (ble_rssi_entity) оставляем
+    return text if len(text) <= 240 else text[:237] + "…"
+
 
 def render(ch: dict | None, fallback: list[dict] | None, fmt_time) -> list[str]:
-    """Markdown-блок «Что изменилось» для release notes."""
+    """Markdown-блок «Технические подробности»: файлы и построчный diff."""
     lines: list[str] = []
     if ch is not None:
         files = ch["files"]
         if not files:
             return lines
-        lines.append("### Что изменилось с прошитой сборки")
+        lines.append("### Технические подробности: файлы с прошитой сборки")
         for it in files:
             stat = f" (+{it['add']} −{it['del']})" if it["add"] or it["del"] else ""
             extra = " — содержимое не показывается" if os.path.basename(it["file"]) in SECRET_FILES else ""

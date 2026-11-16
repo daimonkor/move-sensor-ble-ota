@@ -26,7 +26,7 @@
         "menu_options": {
           "upload": "Upload firmware (.bin)",
           "view": "Display (hidden copies, panel)",
-          "settings": "Options (key, firmware folder)"
+          "settings": "Options (key, firmware folder, images kept)"
         }
       },
       "upload": {
@@ -40,7 +40,11 @@
       "settings": {
         "data": {
           "key": "OTA key (empty = from secrets.yaml)",
-          "firmware_dir": "Firmware folder (.bin)"
+          "firmware_dir": "Firmware folder (.bin)",
+          "keep_images": "Keep last firmware images (.bin), 1–10"
+        },
+        "data_description": {
+          "keep_images": "Older .bin files in the firmware folder are deleted after every build and upload. The image being flashed or waiting for a window is never deleted."
         }
       },
       "view": {

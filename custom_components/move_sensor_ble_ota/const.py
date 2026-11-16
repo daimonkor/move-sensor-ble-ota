@@ -8,6 +8,9 @@ CONF_FIRMWARE_DIR = "firmware_dir"
 
 DEFAULT_NAME = "Move Sensor BLE"
 DEFAULT_FIRMWARE_DIR = "/config/esphome/ota"
+# v1.16.2: сколько последних образов .bin хранить в папке прошивок (остальные удаляются)
+CONF_KEEP_IMAGES = "keep_images"
+DEFAULT_KEEP_IMAGES = 3
 # если ключ в настройках пустой — берём его отсюда (тот же, что в прошивке)
 SECRETS_PATH = "/config/esphome/secrets.yaml"
 SECRET_NAME = "move_sensor_ble_ota_key"

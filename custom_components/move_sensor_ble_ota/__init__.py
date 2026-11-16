@@ -132,6 +132,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # настройки из хранилища; если ещё не читали — воркер ждёт окно и читает их с датчика
     await mgr.async_load()
+    # v1.16.2: в папке прошивок — только последние N образов (после запуска, в фоне)
+    entry.async_create_background_task(hass, mgr.async_prune_firmware(), f"{DOMAIN}_prune_firmware")
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _setup_bthome_names(hass, entry, mgr.address)
     _remove_radio_device(hass, mgr.address)
@@ -391,6 +393,7 @@ class UploadView(HomeAssistantView):
                 result["started"] = True
             except OtaError as err:
                 result["start_error"] = str(err)
+        await mgr.async_prune_firmware(extra={path})
         result["status"] = mgr.status
         return self.json(result)
 

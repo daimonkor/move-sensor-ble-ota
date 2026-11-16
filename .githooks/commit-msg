@@ -1,0 +1,10 @@
+#!/bin/sh
+# Коммит прошивки без типа -> предупреждение (не блокирует): тип решает, попадёт ли пункт в CHANGELOG и куда.
+if git diff --cached --name-only -- esphome/ ':(exclude)esphome/move_sensor_ble/CHANGELOG.md' | grep -q .; then
+  if ! head -1 "$1" | grep -Eq '^(feat|fix|change|perf|remove|release|chore|refactor|docs|test|ci|build|style)(\([^)]*\))?!?: '; then
+    echo "⚠ Коммит меняет прошивку, но без типа. Для CHANGELOG пиши понятно пользователю:" >&2
+    echo "  feat(fw): …  fix(fw): …  change(fw): …   (chore/refactor/docs(fw) — в CHANGELOG не попадёт)" >&2
+    echo "  Без типа пункт разложится по словам; поправить: git commit --amend" >&2
+  fi
+fi
+exit 0

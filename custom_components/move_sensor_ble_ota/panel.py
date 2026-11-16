@@ -91,6 +91,9 @@ def _config(hass: HomeAssistant) -> dict:
                 if fw:   # v1.15.3: когда, каким каналом и как быстро прошивали в последний раз
                     ids.insert(1, {"type": "attribute", "entity": fw, "attribute": "last_flash",
                                    "name": "Last flash", "icon": "mdi:history"})
+                    # v1.16.2: образы в папке прошивок (хранятся последние N)
+                    ids.insert(2, {"type": "attribute", "entity": fw, "attribute": "stored_images",
+                                   "name": "Stored images", "icon": "mdi:folder-zip-outline"})
                 ids.append({"type": "button", "name": "Cancel firmware update", "icon": "mdi:cancel",
                             "action_name": "Cancel",
                             "tap_action": {"action": "perform-action",
@@ -146,7 +149,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.16.1",
+        module_url=f"{STATIC_URL}/panel.js?v=1.16.2",
         config=_config(hass),
         require_admin=False,
     )

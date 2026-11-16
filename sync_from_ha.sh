@@ -13,3 +13,6 @@ cp "$CONFIG/esphome/move_sensor_ble/site_bundle.js" esphome/move_sensor_ble/site
 cp "$CONFIG"/esphome/move-sensor-ble-*.yaml "$CONFIG/esphome/move_sensor_rtc.h" esphome/   # 1.13.1: YAML на каждый датчик
 cp "$CONFIG/esphome/tools/ble_ota_flash.py" tools/
 echo "synced from $CONFIG"
+echo "Коммить прошивку отдельно, понятным пользователю текстом: feat(fw): … / fix(fw): … / change(fw): …"
+echo "После коммита: python3 tools/changelog.py draft   (черновик «Не выпущено» в CHANGELOG, копия — в HA)"
+echo "Релиз прошивки: python3 tools/changelog.py release X.Y.Z"

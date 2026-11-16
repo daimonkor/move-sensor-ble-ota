@@ -54,10 +54,12 @@ from .const import (
     CMD_STATUS,
     CONF_ADDRESS,
     CONF_FIRMWARE_DIR,
+    CONF_KEEP_IMAGES,
     CONF_KEY,
     CTRL_UUID,
     DATA_UUID,
     DEFAULT_FIRMWARE_DIR,
+    DEFAULT_KEEP_IMAGES,
     DEVICE_STATUS,
     DOMAIN,
     RSP_ACK,
@@ -310,6 +312,55 @@ def load_firmware(path: str) -> FirmwareImage:
     return FirmwareImage(path, data, zlib.crc32(data) & 0xFFFFFFFF, project, version, from_factory, elf_sha)
 
 
+def prune_firmware(directory: str, keep: int, protect: set[str] | None = None) -> list[str]:
+    """v1.16.2: оставить в папке прошивок `keep` самых свежих .bin (по времени изменения), остальные удалить.
+    Файлы из protect (прошивается, ждёт окна, последняя сборка) не удаляются никогда. Блокирующая."""
+    keep = max(1, int(keep))
+    prot = {os.path.realpath(p) for p in (protect or set()) if p}
+    try:
+        names = os.listdir(directory)
+    except FileNotFoundError:
+        return []
+    now = time.time()
+    bins, removed = [], []
+    for n in names:
+        p = os.path.join(directory, n)
+        if not os.path.isfile(p) or os.path.islink(p):
+            continue
+        low = n.lower()
+        if low.endswith(".bin"):
+            bins.append((os.path.getmtime(p), p))
+        elif low.endswith(".bin.part") and now - os.path.getmtime(p) > 3600:   # недописанные
+            try:
+                os.remove(p)
+                removed.append(p)
+            except OSError:
+                pass
+    bins.sort(reverse=True)
+    for _, p in bins[keep:]:
+        if os.path.realpath(p) in prot:
+            continue
+        try:
+            os.remove(p)
+            removed.append(p)
+        except OSError as err:
+            _LOGGER.warning("cannot remove old firmware %s: %s", p, err)
+    return removed
+
+
+def firmware_stats(directory: str) -> tuple[int, int]:
+    """(сколько .bin, сколько байт) в папке прошивок. Блокирующая."""
+    n = size = 0
+    try:
+        for e in os.scandir(directory):
+            if e.is_file() and e.name.lower().endswith(".bin"):
+                n += 1
+                size += e.stat().st_size
+    except FileNotFoundError:
+        pass
+    return n, size
+
+
 def newest_firmware(directory: str) -> str | None:
     """Самый свежий *.bin в папке (блокирующая)."""
     try:
@@ -523,6 +574,11 @@ class OtaManager:
         self.fw_changes: dict | None = None        # diff с прошитой копией
         self.fw_changed_since: list | None = None  # без копии: файлы новее сборки на датчике
         self._changes_key: tuple | None = None
+        self.fw_images: tuple[int, int] | None = None   # v1.16.2: (образов .bin, байт) в папке прошивок
+        self.fw_sections: list[dict] = []          # v1.16.2: новые разделы CHANGELOG прошивки
+        self.fw_version_flashed: str | None = None # версия из CHANGELOG прошитой копии
+        self.fw_version_new: str | None = None     # версия из текущего CHANGELOG
+        self.fw_current_section: list[dict] = []   # верхний раздел CHANGELOG прошитой копии
 
     # ================= загрузка / сохранение =================
     async def async_load(self) -> None:
@@ -790,6 +846,26 @@ class OtaManager:
         return self._ota is not None
 
     @property
+    def keep_images(self) -> int:
+        return int(self.entry.options.get(CONF_KEEP_IMAGES) or self.entry.data.get(CONF_KEEP_IMAGES)
+                   or DEFAULT_KEEP_IMAGES)
+
+    async def async_prune_firmware(self, extra: set[str] | None = None) -> None:
+        """v1.16.2: в папке прошивок — только последние keep_images образов."""
+        protect = {self.file, (self.last_build or {}).get("file"), *(extra or set())}
+        try:
+            removed = await self.hass.async_add_executor_job(
+                prune_firmware, self.firmware_dir, self.keep_images, protect)
+            self.fw_images = await self.hass.async_add_executor_job(firmware_stats, self.firmware_dir)
+        except Exception as err:  # noqa: BLE001 — уборка не должна ломать сборку/прошивку
+            _LOGGER.warning("%s: firmware folder cleanup failed: %s", self.name, err)
+            return
+        if removed:
+            _LOGGER.info("%s: removed %d old firmware image(s), keep %d: %s", self.name, len(removed),
+                         self.keep_images, ", ".join(os.path.basename(p) for p in removed))
+        self._notify()
+
+    @property
     def firmware_dir(self) -> str:
         return self.entry.options.get(CONF_FIRMWARE_DIR) or self.entry.data.get(
             CONF_FIRMWARE_DIR, DEFAULT_FIRMWARE_DIR
@@ -876,6 +952,7 @@ class OtaManager:
 
         await self.hass.async_add_executor_job(_write)
         self.last_build.update({"file": path, "size": len(data), "built": dt_util.now().isoformat()})
+        await self.async_prune_firmware(extra={path})
         _LOGGER.info("%s: built %s (%d bytes)", self.name, path, len(data))
         if self._build_cancelled:
             self._build_cancelled = False
@@ -1047,6 +1124,9 @@ class OtaManager:
                 self._notify()
         mtime = await self.hass.async_add_executor_job(config_tree_mtime, ESPHOME_DIR, cfg)
         changed = h != self.config_hash or mtime != self.config_mtime
+        imgs = await self.hass.async_add_executor_job(firmware_stats, self.firmware_dir)   # v1.16.2
+        if imgs != self.fw_images:
+            self.fw_images, changed = imgs, True
         self.config_hash = h
         self.config_mtime = mtime
         if await self._refresh_changes(cfg) or changed:
@@ -1056,6 +1136,10 @@ class OtaManager:
     async def _snapshot_build(self, cfg: str, tree_hash: str | None) -> None:
         def job() -> None:
             files = _config_tree_files(ESPHOME_DIR, cfg)
+            # v1.16.2: CHANGELOG прошивки — в копию (для «что нового»), но не в хеш «YAML изменён»
+            cl = os.path.join(ESPHOME_DIR, fwnotes.CHANGELOG_REL)
+            if os.path.isfile(cl):
+                files = [*files, cl]
             fwnotes.snapshot(files, ESPHOME_DIR, os.path.join(self.snap_root, "build"), tree_hash)
         try:
             await self.hass.async_add_executor_job(job)
@@ -1074,13 +1158,30 @@ class OtaManager:
 
     async def _refresh_changes(self, cfg: str) -> bool:
         """Пересчитать «что изменилось», когда сменился YAML или прошитая сборка. True — изменилось."""
-        key = (self.config_hash, self.flashed_hash, self.firmware_version)
+        cl_cur = os.path.join(ESPHOME_DIR, fwnotes.CHANGELOG_REL)
+        cl_old = os.path.join(self.snap_root, "flashed", fwnotes.CHANGELOG_REL)
+
+        def mt(p: str) -> float | None:
+            try:
+                return os.path.getmtime(p)
+            except OSError:
+                return None
+        cl_key = await self.hass.async_add_executor_job(lambda: (mt(cl_cur), mt(cl_old)))
+        key = (self.config_hash, self.flashed_hash, self.firmware_version, cl_key)
         if key == self._changes_key:
             return False
         self._changes_key = key
+        # v1.16.2: версии прошивки из CHANGELOG (прошитая копия / текущий файл)
+        cur_text, old_text = await self.hass.async_add_executor_job(
+            lambda: (fwnotes.read_file(cl_cur), fwnotes.read_file(cl_old)))
+        self.fw_version_flashed = fwnotes.top_version(old_text)
+        self.fw_current_section = fwnotes.parse_changelog(old_text)[:1]
+        self.fw_version_new = fwnotes.top_version(cur_text)
         if not (self.config_hash and self.flashed_hash and self.config_hash != self.flashed_hash):
             self.fw_changes = self.fw_changed_since = None
+            self.fw_sections = []
             return True
+        self.fw_sections = fwnotes.new_sections(cur_text, old_text)
         built = build_time(self.firmware_version)
 
         def job():

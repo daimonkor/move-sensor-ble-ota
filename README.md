@@ -64,3 +64,7 @@ Wi-Fi, прошивка по Bluetooth через прокси ESPHome (или �
 **Работа с репозиторием**: интеграция — источник здесь (правка → `version` в `manifest.json` и значок в `docs/index*.html` →
 push → релиз `vX.Y.Z`); прошивка — рабочая копия в `/config/esphome`, перед коммитом `./sync_from_ha.sh`. Документация —
 только `custom_components/move_sensor_ble_ota/docs/` (RU `index.html`, UK `index.uk.html`, EN `index.en.html`), на GitHub Pages публикуется сама.
+**CHANGELOG прошивки** — `esphome/move_sensor_ble/CHANGELOG.md` (его показывает карточка обновления прошивки в HA).
+Коммиты прошивки — текстом для пользователя: `feat(fw): …`, `fix(fw): …`, `change(fw): …` (`chore/refactor/docs(fw)` в
+CHANGELOG не попадают). `python3 tools/changelog.py draft` — черновик «Не выпущено» из коммитов, `release X.Y.Z` — версия
+с датой (пункты потом перечитать глазами пользователя), CHANGELOG копируется и в HA.

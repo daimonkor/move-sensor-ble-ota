@@ -1,0 +1,8 @@
+#!/bin/sh
+# Коммит менял прошивку (esphome/, кроме самого CHANGELOG) -> обновить черновик «Не выпущено».
+# CHANGELOG остаётся изменённым, но не закоммиченным: черновик коммитится вместе с релизом прошивки.
+root=$(git rev-parse --show-toplevel)
+if git diff-tree --no-commit-id --name-only -r HEAD -- esphome/ ':(exclude)esphome/move_sensor_ble/CHANGELOG.md' | grep -q .; then
+  python3 "$root/tools/changelog.py" draft || echo "changelog draft: ошибка (коммит не затронут)"
+fi
+exit 0

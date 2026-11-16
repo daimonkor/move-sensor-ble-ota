@@ -39,13 +39,20 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
 
     @property
     def installed_version(self) -> str | None:
-        return self.mgr.build_label(self.mgr.firmware_version)   # «build 16.11 13:48»
+        label = self.mgr.build_label(self.mgr.firmware_version)   # «build 16.11 13:48»
+        v = self.mgr.fw_version_flashed                           # v1.16.2: «1.3.1 · build 16.11 13:48»
+        return f"{v} · {label}" if v and label else label
 
     @property
     def latest_version(self) -> str | None:
-        if self.mgr.firmware_version is None:
+        m = self.mgr
+        if m.firmware_version is None:
             return None
-        return self.mgr.new_build_label or self.installed_version
+        if not m.new_build_label:
+            return self.installed_version
+        if m.fw_version_new and m.fw_version_new != m.fw_version_flashed:
+            return f"{m.fw_version_new} · new build"                # версия из CHANGELOG прошивки
+        return m.new_build_label
 
     def version_is_newer(self, latest_version: str, installed_version: str) -> bool:
         # версии — метки сборок, не semver: другая = новее
@@ -67,10 +74,12 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
         if m.error:
             return f"Ошибка: {m.error}"[:250]
         if self.latest_version and self.latest_version != self.installed_version:
+            line = fwnotes.summary_line(m.fw_sections, m.fw_changes)
+            if line:
+                return line[:250]
             files = m.changed_files_short
-            text = (f"Изменено: {files}. " if files else "YAML датчика изменён — новая сборка. ") + \
-                "Подробно — «Примечания к выпуску»."
-            return text[:250]
+            return ((f"Изменено: {files}. " if files else "YAML датчика изменён — новая сборка. ")
+                    + "Подробно — «Примечания к выпуску».")[:250]
         if m.last_flash_summary:
             return f"Last flash: {m.last_flash_summary}"
         return None
@@ -78,8 +87,10 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
     @property
     def extra_state_attributes(self) -> dict:
         lf = self.mgr.last_flash or {}
+        imgs = self.mgr.fw_images
+        stored = (f"{imgs[0]} · {imgs[1] / 1048576:.1f} MB (keep {self.mgr.keep_images})" if imgs else None)
         return {"last_flash": self.mgr.last_flash_summary, "last_flash_channel": lf.get("channel"),
-                "last_flash_result": lf.get("result")}
+                "last_flash_result": lf.get("result"), "stored_images": stored}
 
     async def async_release_notes(self) -> str | None:
         m = self.mgr
@@ -87,10 +98,15 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
         def fmt(ts: float) -> str:
             return dt_util.as_local(dt_util.utc_from_timestamp(ts)).strftime("%d.%m %H:%M")
 
-        lines = fwnotes.render(m.fw_changes, m.fw_changed_since, fmt)
-        if lines:
-            lines += ["", "### Как ставится"]
+        pending = bool(self.latest_version and self.latest_version != self.installed_version)
+        if pending:
+            lines = fwnotes.render_user(m.fw_sections, m.fw_changes)
+        else:   # обновления нет — что в прошивке на датчике (верхний раздел её CHANGELOG)
+            lines = fwnotes.render_user(m.fw_current_section, None) if m.fw_current_section else []
+        tech = fwnotes.render(m.fw_changes, m.fw_changed_since, fmt)
+        lines += [*tech, ""] if tech else []
         lines += [
+            "### Как ставится",
             "Сборка из YAML датчика в аддоне ESPHome и прошивка: **по Wi-Fi сразу**, если датчик в сервисном "
             "режиме (WiFi включён), иначе **по BLE** в ближайшее пробуждение (движение перед датчиком будит его). "
             "Оборвался Wi-Fi — продолжит по BLE. Перезапуск HA задание не отменяет. "

@@ -23,6 +23,9 @@ from homeassistant.helpers.selector import (
     BooleanSelector,
     FileSelector,
     FileSelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -32,7 +35,8 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .const import CONF_ADDRESS, CONF_FIRMWARE_DIR, CONF_KEY, DEFAULT_FIRMWARE_DIR, DEFAULT_NAME, DOMAIN, device_id
+from .const import (CONF_ADDRESS, CONF_FIRMWARE_DIR, CONF_KEEP_IMAGES, CONF_KEY, DEFAULT_FIRMWARE_DIR,
+                    DEFAULT_KEEP_IMAGES, DEFAULT_NAME, DOMAIN, device_id)
 
 BTHOME_UUID = "0000fcd2-0000-1000-8000-00805f9b34fb"
 CONF_FIRMWARE = "firmware"
@@ -172,6 +176,7 @@ class MoveSensorBleOtaOptions(OptionsFlow):
                         started = "да — ждём пробуждения датчика (PIR или телеметрия)"
                     except OtaError as err:
                         started = f"не запущено: {err}"
+                await mgr.async_prune_firmware(extra={path})
                 # abort, а не create_entry: сохранение опций перезагрузило бы интеграцию и прервало прошивку
                 return self.async_abort(
                     reason="firmware_uploaded",
@@ -202,6 +207,7 @@ class MoveSensorBleOtaOptions(OptionsFlow):
                 data={
                     CONF_KEY: (user_input.get(CONF_KEY) or "").strip(),
                     CONF_FIRMWARE_DIR: user_input.get(CONF_FIRMWARE_DIR) or DEFAULT_FIRMWARE_DIR,
+                    CONF_KEEP_IMAGES: int(user_input.get(CONF_KEEP_IMAGES) or DEFAULT_KEEP_IMAGES),
                 }
             )
         cur = {**self.config_entry.data, **self.config_entry.options}
@@ -211,6 +217,8 @@ class MoveSensorBleOtaOptions(OptionsFlow):
                     TextSelectorConfig(type=TextSelectorType.PASSWORD)
                 ),
                 vol.Optional(CONF_FIRMWARE_DIR, default=cur.get(CONF_FIRMWARE_DIR, DEFAULT_FIRMWARE_DIR)): TextSelector(),
+                vol.Optional(CONF_KEEP_IMAGES, default=int(cur.get(CONF_KEEP_IMAGES, DEFAULT_KEEP_IMAGES))):
+                    NumberSelector(NumberSelectorConfig(min=1, max=10, step=1, mode=NumberSelectorMode.BOX)),
             }
         )
         return self.async_show_form(step_id="settings", data_schema=schema)
