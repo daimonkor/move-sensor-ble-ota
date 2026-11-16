@@ -263,6 +263,7 @@ class FirmwareImage:
     project: str
     version: str
     from_factory: bool
+    elf_sha: str | None = None   # v1.15.3: первые 4 байта app_elf_sha256 — хвост версии на датчике
 
 
 @dataclass
@@ -304,7 +305,8 @@ def load_firmware(path: str) -> FirmwareImage:
     if len(desc) >= 80 and struct.unpack_from("<I", desc, 0)[0] == 0xABCD5432:
         version = desc[16:48].split(b"\0", 1)[0].decode(errors="replace")
         project = desc[48:80].split(b"\0", 1)[0].decode(errors="replace")
-    return FirmwareImage(path, data, zlib.crc32(data) & 0xFFFFFFFF, project, version, from_factory)
+    elf_sha = desc[144:148].hex() if len(desc) >= 148 and desc[0:4] == b"\x32\x54\xcd\xab" else None
+    return FirmwareImage(path, data, zlib.crc32(data) & 0xFFFFFFFF, project, version, from_factory, elf_sha)
 
 
 def newest_firmware(directory: str) -> str | None:
@@ -448,6 +450,10 @@ class OtaManager:
         self.tx_power_dbm: int | None = None     # мощность BLE-рекламы из YAML прошивки (bthome: tx_power)
         self._build_cancelled = False      # «Отмена» во время сборки — собранное не шить
         self.last_channel: str | None = None   # канал последней прошивки (BLE / Wi-Fi)
+        # v1.15.3: итог последней прошивки: at, channel, seconds (сама прошивка, без ожидания окна),
+        # speed_kbs, bytes, result (flashed / already_on_sensor)
+        self.last_flash: dict | None = None
+        self._flash_t0: float | None = None
         self._wifi_lock = asyncio.Lock()   # запись настроек по Wi-Fi и сеанс BLE не идут одновременно
         # v1.14.1: {"reason": "auth"|"no_key", "key_fp": ..., "since": iso} — подключения на паузе
         self.auth_block: dict | None = None
@@ -521,6 +527,7 @@ class OtaManager:
         self.applied = data.get("applied", {})
         self.target = data.get("target") or dict(self.applied)   # миграция со старых версий
         self.flashed_hash = data.get("flashed_hash")
+        self.last_flash = data.get("last_flash") if isinstance(data.get("last_flash"), dict) else None
         ts_k = data.get("key_ok_at")
         self.key_ok_at = dt_util.parse_datetime(ts_k) if ts_k else None
         rv = data.get("rev") or {}
@@ -592,6 +599,7 @@ class OtaManager:
                 "target": self.target,
                 "rev": {"seen": self.rev_seen, "own": self.rev_own, "capable": self.rev_capable},
                 "flashed_hash": self.flashed_hash,
+                "last_flash": self.last_flash,
                 "key_ok_at": self.key_ok_at.isoformat() if self.key_ok_at else None,
                 # v1.15: задание прошивки переживает перезапуск HA (файл + срок ожидания окна)
                 "job": self._job_snapshot(),
@@ -787,6 +795,7 @@ class OtaManager:
             "last_result": self.last_result,
             "device_version_before": self.device_version,
             "device_version_now": self.firmware_version,
+            "last_flash": self.last_flash,
             "device_battery": self.device_battery,
             "error": self.error,
             "attempts": self.attempts,
@@ -892,6 +901,19 @@ class OtaManager:
                 "move_sensor_ble_ota_key в secrets.yaml) — прошивка не запущена")
         self.file = path
         self.new_version = image.version
+        # v1.15.3: эта сборка уже на датчике (тот же хеш образа в версии) — не прошиваем зря
+        sha = getattr(image, "elf_sha", None)
+        if sha and self.firmware_version and self.firmware_version.endswith("-" + sha):
+            now = dt_util.now()
+            if self._build_hash and self.last_build and path == self.last_build.get("file"):
+                self.flashed_hash = self._build_hash
+            self.last_flash = {"at": now.isoformat(), "channel": None, "seconds": 0, "speed_kbs": None,
+                               "bytes": len(image.data), "result": "already_on_sensor"}
+            self.error = None
+            self._set(ST_SUCCESS, progress=100, started=now, finished=now)
+            self._save()
+            _LOGGER.info("%s: %s is already on the sensor — nothing to flash", self.name, sha)
+            return
         self.error = None
         self.progress = 0
         self.attempts = 0
@@ -952,6 +974,8 @@ class OtaManager:
 
     def _set(self, status: str | None = None, **kw) -> None:
         if status is not None:
+            if status == ST_FLASHING and self.status != ST_FLASHING:
+                self._flash_t0 = time.monotonic()
             self.status = status
             if self._unsub_reset is not None:
                 self._unsub_reset()
@@ -1010,6 +1034,24 @@ class OtaManager:
         if h != self.config_hash:
             self.config_hash = h
             self._notify()
+
+    @property
+    def last_flash_summary(self) -> str | None:
+        """v1.15.3: «14:03 · Wi-Fi · 11 s · 118 kB/s» или «14:03 · already on the sensor»."""
+        lf = self.last_flash
+        if not lf:
+            return None
+        at = dt_util.parse_datetime(lf.get("at") or "")
+        when = dt_util.as_local(at).strftime("%d.%m %H:%M") if at else "?"
+        if lf.get("result") == "already_on_sensor":
+            return f"{when} · already on the sensor, not flashed"
+        parts = [when, lf.get("channel") or "?"]
+        if lf.get("seconds") is not None:
+            sec = lf["seconds"]
+            parts.append(f"{sec:.0f} s" if sec < 120 else f"{sec / 60:.1f} min")
+        if lf.get("speed_kbs"):
+            parts.append(f"{lf['speed_kbs']:.0f} kB/s")
+        return " · ".join(parts)
 
     @property
     def key_state(self) -> str:
@@ -1087,11 +1129,25 @@ class OtaManager:
         from homeassistant.helpers.dispatcher import async_dispatcher_send  # noqa: PLC0415
         from .const import SIGNAL_SETTINGS_EVENT  # noqa: PLC0415
 
-        data = {"changes": {k: {"from": v[0], "to": v[1]} for k, v in changes.items()},
-                "summary": ", ".join(f"{k}: {v[0]} → {v[1]}" for k, v in changes.items()),
+        def fmt(v):   # v1.15.3: 32.0 -> 32 (ESPHome по Wi-Fi отдаёт float)
+            return int(v) if isinstance(v, float) and v.is_integer() else v
+
+        data = {"changes": {k: {"from": fmt(v[0]), "to": fmt(v[1])} for k, v in changes.items()},
+                "summary": ", ".join(f"{k}: {fmt(v[0])} → {fmt(v[1])}" for k, v in changes.items()),
                 "channel": channel, "settings_revision": self.rev_seen}
-        _LOGGER.info("%s: settings %s (%s): %s", self.name, kind, channel, data["summary"])
-        async_dispatcher_send(self.hass, SIGNAL_SETTINGS_EVENT.format(self.entry.entry_id), kind, data)
+
+        @callback
+        def send(_now=None) -> None:   # @callback: async_call_later иначе вызовет её в потоке
+            data["settings_revision"] = self.rev_seen
+            _LOGGER.info("%s: settings %s (%s): %s", self.name, kind, channel, data["summary"])
+            async_dispatcher_send(self.hass, SIGNAL_SETTINGS_EVENT.format(self.entry.entry_id), kind, data)
+
+        if kind == "saved_wifi":
+            # v1.15.3: номер правки датчик присылает отдельной сущностью сразу после значения — дождаться,
+            # чтобы в событии был номер ПОСЛЕ этой записи
+            async_call_later(self.hass, 1.5, send)
+        else:
+            send()
 
     @callback
     def _on_rev(self, rev: int, via: str) -> None:
@@ -1667,6 +1723,7 @@ class OtaManager:
             self._set(ST_ERROR, error=f"после перезапуска HA: {err}", finished=dt_util.now())
 
     def _flash_success(self, channel: str) -> None:
+        size = len(self._ota.image.data) if self._ota is not None else None
         self._ota = None
         # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
         self._need_read = True
@@ -1675,7 +1732,11 @@ class OtaManager:
         if self._build_hash and self.file and self.last_build and self.file == self.last_build.get("file"):
             self.flashed_hash = self._build_hash   # v1.15: на датчике — эта сборка
         self.last_channel = channel
-        self._set(ST_SUCCESS, progress=100, finished=dt_util.now())
+        now = dt_util.now()
+        secs = round(time.monotonic() - self._flash_t0, 1) if self._flash_t0 is not None else None
+        self.last_flash = {"at": now.isoformat(), "channel": channel, "seconds": secs,
+                           "speed_kbs": self.speed_kbs, "bytes": size, "result": "flashed"}
+        self._set(ST_SUCCESS, progress=100, finished=now)
         self._save()
         _LOGGER.info("%s: OTA done over %s, device reboots", self.name, channel)
 

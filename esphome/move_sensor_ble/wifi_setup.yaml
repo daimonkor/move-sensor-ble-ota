@@ -68,6 +68,7 @@ text:
     id: new_wifi_ssid
     mode: text
     optimistic: true
+    initial_value: ""
     max_length: 32
     entity_category: config
     icon: "mdi:wifi-plus"

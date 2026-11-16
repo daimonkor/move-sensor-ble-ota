@@ -1337,6 +1337,11 @@ script:
             // Ждёт сброс из HA (BLE) — не мигаем: сейчас будут 6 быстрых, без каши из серий.
             id(service_blink).execute((int) ms::svc_on_count);
           }
+      - lambda: |-
+          // v1.15.3: пустые поля ввода вместо «unknown» в HA
+          if (id(new_wifi_ssid).state.empty()) id(new_wifi_ssid).publish_state("");
+          if (id(new_wifi_pw).empty()) id(new_wifi_password).publish_state("");
+          if (id(new_ap_pw).empty()) id(new_ap_password).publish_state("");
       - component.update: build_version_text
       - component.update: device_id_text
       - component.update: last_reset_reason_text
@@ -1382,6 +1387,13 @@ script:
       - lambda: |-
           id(service_mode) = false;
           ESP_LOGI("ms", "service mode OFF");
+          // v1.15.3: сказать HA «ухожу» (DisconnectRequest), иначе HA ждёт таймаут ~1,5 мин и
+          // держит Link = Wi-Fi. Сокет сервера не закрываем (on_shutdown закрыл бы его до перезагрузки).
+          for (auto &c : api::global_api_server->active_clients()) {
+            api::DisconnectRequest req;
+            if (!c->send_message(req)) ESP_LOGW("ms", "API disconnect not sent");
+          }
+      - delay: 500ms
       - logger.set_level: INFO
       - wifi.disable:
       - script.execute: motion_eval

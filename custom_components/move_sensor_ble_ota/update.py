@@ -63,19 +63,30 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             return f"Ошибка: {m.error}"[:250]
         if self.latest_version and self.latest_version != self.installed_version:
             return "YAML датчика изменён — новая сборка. Ключ OTA проверяется после сборки."
+        if m.last_flash_summary:
+            return f"Last flash: {m.last_flash_summary}"
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        lf = self.mgr.last_flash or {}
+        return {"last_flash": self.mgr.last_flash_summary, "last_flash_channel": lf.get("channel"),
+                "last_flash_result": lf.get("result")}
 
     async def async_release_notes(self) -> str | None:
         m = self.mgr
         lines = [
             "Сборка из YAML датчика в аддоне ESPHome и прошивка: **по Wi-Fi сразу**, если датчик в сервисном "
             "режиме (WiFi включён), иначе **по BLE** в ближайшее пробуждение (движение перед датчиком будит его). "
-            "Оборвался Wi-Fi — продолжит по BLE. Перезапуск HA задание не отменяет.",
+            "Оборвался Wi-Fi — продолжит по BLE. Перезапуск HA задание не отменяет. "
+            "Если эта сборка уже на датчике (тот же хеш образа) — прошивки не будет.",
             "",
             f"- На датчике: `{m.firmware_version}`",
             f"- YAML сейчас: `{m.config_hash}`, прошит: `{m.flashed_hash}`",
         ]
-        if m.last_result:
+        if m.last_flash_summary:
+            lines.append(f"- Последняя прошивка: {m.last_flash_summary}")
+        elif m.last_result:
             lines.append(f"- Последняя прошивка: {m.last_result}")
         if m.error:
             lines.append(f"- Ошибка: {m.error}")

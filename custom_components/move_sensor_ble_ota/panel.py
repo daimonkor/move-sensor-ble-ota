@@ -87,6 +87,10 @@ def _config(hass: HomeAssistant) -> dict:
                     "action_name": "Open", "tap_action": {"action": "navigate",
                                                           "navigation_path": f"/config/integrations/integration/{DOMAIN}"}})
             if title == "Firmware":
+                fw = reg.async_get_entity_id("update", DOMAIN, f"{mgr.address}_firmware")
+                if fw:   # v1.15.3: когда, каким каналом и как быстро прошивали в последний раз
+                    ids.insert(1, {"type": "attribute", "entity": fw, "attribute": "last_flash",
+                                   "name": "Last flash", "icon": "mdi:history"})
                 ids.append({"type": "button", "name": "Cancel firmware update", "icon": "mdi:cancel",
                             "action_name": "Cancel",
                             "tap_action": {"action": "perform-action",
@@ -142,7 +146,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.15.2",
+        module_url=f"{STATIC_URL}/panel.js?v=1.15.3",
         config=_config(hass),
         require_admin=False,
     )
