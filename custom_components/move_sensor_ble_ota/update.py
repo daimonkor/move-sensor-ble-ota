@@ -16,6 +16,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from homeassistant.util import dt as dt_util
+
+from . import fwnotes
 from .const import DOMAIN, ST_FLASHING
 from .entity import OtaEntity
 from .ota import OtaError
@@ -64,7 +67,10 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
         if m.error:
             return f"Ошибка: {m.error}"[:250]
         if self.latest_version and self.latest_version != self.installed_version:
-            return "YAML датчика изменён — новая сборка. Ключ OTA проверяется после сборки."
+            files = m.changed_files_short
+            text = (f"Изменено: {files}. " if files else "YAML датчика изменён — новая сборка. ") + \
+                "Подробно — «Примечания к выпуску»."
+            return text[:250]
         if m.last_flash_summary:
             return f"Last flash: {m.last_flash_summary}"
         return None
@@ -77,7 +83,14 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
 
     async def async_release_notes(self) -> str | None:
         m = self.mgr
-        lines = [
+
+        def fmt(ts: float) -> str:
+            return dt_util.as_local(dt_util.utc_from_timestamp(ts)).strftime("%d.%m %H:%M")
+
+        lines = fwnotes.render(m.fw_changes, m.fw_changed_since, fmt)
+        if lines:
+            lines += ["", "### Как ставится"]
+        lines += [
             "Сборка из YAML датчика в аддоне ESPHome и прошивка: **по Wi-Fi сразу**, если датчик в сервисном "
             "режиме (WiFi включён), иначе **по BLE** в ближайшее пробуждение (движение перед датчиком будит его). "
             "Оборвался Wi-Fi — продолжит по BLE. Перезапуск HA задание не отменяет. "

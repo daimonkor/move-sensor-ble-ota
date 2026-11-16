@@ -30,6 +30,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from . import fwnotes
 from .const import (
     CMD_ABORT,
     CMD_AUTH,
@@ -517,6 +518,11 @@ class OtaManager:
         self.flashed_hash: str | None = None
         self._build_hash: str | None = None
         self._ticks = 0
+        # v1.16: копии файлов сборки (build / flashed) — для release notes прошивки
+        self.snap_root = hass.config.path(".storage", DOMAIN, entry.entry_id)
+        self.fw_changes: dict | None = None        # diff с прошитой копией
+        self.fw_changed_since: list | None = None  # без копии: файлы новее сборки на датчике
+        self._changes_key: tuple | None = None
 
     # ================= загрузка / сохранение =================
     async def async_load(self) -> None:
@@ -831,6 +837,7 @@ class OtaManager:
         await self.async_auth_gate("build and flash")
         cfg = await self.hass.async_add_executor_job(self.resolve_config, configuration)
         self._build_hash = await self.hass.async_add_executor_job(config_tree_hash, ESPHOME_DIR, cfg)
+        await self._snapshot_build(cfg, self._build_hash)
         self.last_build = {"configuration": cfg, "started": dt_util.now().isoformat(), "config_hash": self._build_hash}
         self._build_cancelled = False
         self._set(ST_BUILDING, progress=0, error=None, finished=None, file=None, new_version=None)
@@ -908,6 +915,7 @@ class OtaManager:
             now = dt_util.now()
             if self._build_hash and self.last_build and path == self.last_build.get("file"):
                 self.flashed_hash = self._build_hash
+                self._promote_snapshot()
             prev = self.last_flash if (self.last_flash or {}).get("result") == "flashed" else None
             if prev is not None:
                 # v1.15.5: запись о настоящей прошивке остаётся, проверка — отдельным полем
@@ -1038,10 +1046,63 @@ class OtaManager:
                 self._save()
                 self._notify()
         mtime = await self.hass.async_add_executor_job(config_tree_mtime, ESPHOME_DIR, cfg)
-        if h != self.config_hash or mtime != self.config_mtime:
-            self.config_hash = h
-            self.config_mtime = mtime
+        changed = h != self.config_hash or mtime != self.config_mtime
+        self.config_hash = h
+        self.config_mtime = mtime
+        if await self._refresh_changes(cfg) or changed:
             self._notify()
+
+    # ================= v1.16: release notes прошивки =================
+    async def _snapshot_build(self, cfg: str, tree_hash: str | None) -> None:
+        def job() -> None:
+            files = _config_tree_files(ESPHOME_DIR, cfg)
+            fwnotes.snapshot(files, ESPHOME_DIR, os.path.join(self.snap_root, "build"), tree_hash)
+        try:
+            await self.hass.async_add_executor_job(job)
+        except Exception as err:  # noqa: BLE001 — без копии просто не будет diff
+            _LOGGER.warning("%s: build snapshot failed: %s", self.name, err)
+
+    def _promote_snapshot(self) -> None:
+        async def job() -> None:
+            try:
+                await self.hass.async_add_executor_job(fwnotes.promote, self.snap_root, self.flashed_hash)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("%s: snapshot promote failed: %s", self.name, err)
+            self._changes_key = None
+            await self.async_refresh_config_hash()
+        self.hass.async_create_task(job())
+
+    async def _refresh_changes(self, cfg: str) -> bool:
+        """Пересчитать «что изменилось», когда сменился YAML или прошитая сборка. True — изменилось."""
+        key = (self.config_hash, self.flashed_hash, self.firmware_version)
+        if key == self._changes_key:
+            return False
+        self._changes_key = key
+        if not (self.config_hash and self.flashed_hash and self.config_hash != self.flashed_hash):
+            self.fw_changes = self.fw_changed_since = None
+            return True
+        built = build_time(self.firmware_version)
+
+        def job():
+            files = _config_tree_files(ESPHOME_DIR, cfg)
+            ch = fwnotes.changes(files, ESPHOME_DIR, os.path.join(self.snap_root, "flashed"), self.flashed_hash)
+            since = fwnotes.changed_since(files, ESPHOME_DIR, built) if ch is None and built else None
+            return ch, since
+        try:
+            self.fw_changes, self.fw_changed_since = await self.hass.async_add_executor_job(job)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("%s: release notes diff failed: %s", self.name, err)
+            self.fw_changes = self.fw_changed_since = None
+        return True
+
+    @property
+    def changed_files_short(self) -> str | None:
+        """«base.yaml, move-sensor-ble-148f98.yaml» — для краткого описания обновления."""
+        items = (self.fw_changes or {}).get("files") or self.fw_changed_since or []
+        if not items:
+            return None
+        names = [os.path.basename(i["file"]) for i in items]
+        return ", ".join(names[:4]) + (f" и ещё {len(names) - 4}" if len(names) > 4 else "")
 
     @staticmethod
     def build_label(version: str | None) -> str | None:
@@ -1760,6 +1821,7 @@ class OtaManager:
         self._rebooted_after_flash = False
         if self._build_hash and self.file and self.last_build and self.file == self.last_build.get("file"):
             self.flashed_hash = self._build_hash   # v1.15: на датчике — эта сборка
+            self._promote_snapshot()
         self.last_channel = channel
         now = dt_util.now()
         secs = round(time.monotonic() - self._flash_t0, 1) if self._flash_t0 is not None else None
