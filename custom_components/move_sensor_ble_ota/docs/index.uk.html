@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Move Sensor BLE OTA — документація</title>
+<style>
+:root{
+  color-scheme:light dark;
+  --bg:#f4f6fb; --card:#ffffff; --fg:#1b1f2a; --muted:#5c6476; --line:#e3e7f0; --code:#eef1f7;
+  --blue:#3d7bff; --blue-2:#6a5cff; --teal:#14b8a6; --green:#22c55e; --amber:#f59e0b; --red:#ef4444; --violet:#8b5cf6; --sky:#0ea5e9;
+  --shadow:0 1px 2px rgba(20,30,60,.06),0 8px 24px rgba(20,30,60,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0d1017; --card:#151a24; --fg:#e6e9f0; --muted:#97a0b3; --line:#232b3a; --code:#0f141d;
+         --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:0 20px 64px}
+a{color:var(--blue)}
+code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);padding:.12em .4em;border-radius:5px}
+pre{background:var(--code);border:1px solid var(--line);padding:14px 16px;border-radius:12px;overflow-x:auto;margin:10px 0}
+pre code{background:none;padding:0;font-size:12.5px}
+svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* hero */
+.hero{margin:0 0 28px;padding:40px 20px 34px;color:#fff;
+  background:radial-gradient(1200px 400px at 0% 0%,#5b8cff 0%,transparent 60%),linear-gradient(120deg,#3d7bff 0%,#6a5cff 55%,#14b8a6 120%)}
+.hero-in{max-width:1000px;margin:0 auto;display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.logo{width:84px;height:84px;border-radius:22px;background:#fff2;display:grid;place-items:center;box-shadow:0 10px 30px #0003;backdrop-filter:blur(4px)}
+.logo svg{width:84px;height:84px}
+.hero h1{margin:0;font-size:32px;line-height:1.15;letter-spacing:-.01em}
+.hero p{margin:6px 0 12px;opacity:.92;max-width:640px}
+.badges{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#ffffff26;border:1px solid #ffffff40;padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600}
+.badge svg{width:14px;height:14px}
+
+/* toc */
+.toc{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 26px}
+.toc a{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--fg);background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:999px;font-size:13.5px;box-shadow:var(--shadow)}
+.toc a svg{width:16px;height:16px;color:var(--blue)}
+.toc a:hover{border-color:var(--blue)}
+/* вкладки (v1.15): разделы показываются по одному; без JS — длинная страница, как раньше */
+.js-tabs .toc{position:sticky;top:0;z-index:5;padding:10px 0;margin:0 0 18px;background:var(--bg)}
+.js-tabs .toc a.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.js-tabs .toc a.active svg{color:#fff}
+.js-tabs main>section{display:none}
+.js-tabs main>section.active{display:block}
+
+/* sections */
+section{margin:34px 0}
+h2{display:flex;align-items:center;gap:10px;font-size:22px;margin:0 0 14px}
+h2 .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:#fff}
+h2 .ic svg{width:20px;height:20px}
+h3{margin:18px 0 8px;font-size:16px}
+.lead{color:var(--muted);margin:-4px 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;counter-reset:s}
+.step{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;box-shadow:var(--shadow)}
+.step .num{position:absolute;top:12px;right:14px;font-weight:800;font-size:28px;opacity:.12}
+.step .ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:#fff;margin-bottom:10px}
+.step b{display:block;margin-bottom:4px}
+.step span{color:var(--muted);font-size:14px}
+
+/* entity cards */
+.ent{display:flex;gap:12px;align-items:flex-start}
+.ent .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none}
+.ent .ico svg{width:20px;height:20px}
+.ent b{display:block}
+.ent small{color:var(--muted);font-size:13.5px;display:block;margin-top:2px}
+.kind{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 7px;border-radius:6px;margin-left:6px;vertical-align:2px}
+
+/* chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 12.5px/1 ui-monospace,Menlo,monospace;padding:5px 9px;border-radius:999px;border:1px solid}
+.arrow{color:var(--muted)}
+.c-gray{color:#64748b;background:#64748b14;border-color:#64748b55}
+.c-amber{color:#d97706;background:#f59e0b18;border-color:#f59e0b66}
+.c-sky{color:#0284c7;background:#0ea5e918;border-color:#0ea5e966}
+.c-teal{color:#0d9488;background:#14b8a618;border-color:#14b8a666}
+.c-blue{color:#3d7bff;background:#3d7bff18;border-color:#3d7bff66}
+.c-green{color:#16a34a;background:#22c55e18;border-color:#22c55e66}
+.c-red{color:#dc2626;background:#ef444418;border-color:#ef444466}
+.c-violet{color:#7c3aed;background:#8b5cf618;border-color:#8b5cf666}
+
+/* tables */
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{background:var(--code);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+td .cell{display:flex;gap:8px;align-items:center}
+td .cell svg{width:18px;height:18px}
+
+/* callouts */
+.note{display:flex;gap:12px;padding:14px 16px;border-radius:14px;border:1px solid;margin:12px 0}
+.note svg{width:22px;height:22px;flex:none;margin-top:1px}
+.note.info{background:#3d7bff12;border-color:#3d7bff55}
+.note.info svg{color:var(--blue)}
+.note.warn{background:#f59e0b14;border-color:#f59e0b66}
+.note.warn svg{color:var(--amber)}
+.note.ok{background:#22c55e12;border-color:#22c55e55}
+.note.ok svg{color:var(--green)}
+
+/* numbered list */
+ol.steps{list-style:none;padding:0;margin:0;counter-reset:n}
+ol.steps li{position:relative;padding:2px 0 12px 42px;counter-increment:n}
+ol.steps li::before{content:counter(n);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;background:linear-gradient(135deg,var(--blue),var(--blue-2))}
+
+.trouble .card{display:flex;gap:12px}
+.trouble .card svg{width:22px;height:22px;flex:none;color:var(--amber);margin-top:2px}
+.trouble b{display:block;margin-bottom:2px}
+.trouble small{color:var(--muted);font-size:13.5px}
+
+footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* colors for icon tiles */
+.bg-blue{background:linear-gradient(135deg,#3d7bff,#5b8cff)} .bg-violet{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
+.bg-teal{background:linear-gradient(135deg,#0d9488,#2dd4bf)} .bg-green{background:linear-gradient(135deg,#16a34a,#4ade80)}
+.bg-amber{background:linear-gradient(135deg,#d97706,#fbbf24)} .bg-red{background:linear-gradient(135deg,#dc2626,#f87171)}
+.bg-sky{background:linear-gradient(135deg,#0284c7,#38bdf8)} .bg-slate{background:linear-gradient(135deg,#475569,#94a3b8)}
+.t-blue{color:#3d7bff;background:#3d7bff1c} .t-violet{color:#7c3aed;background:#8b5cf61c} .t-teal{color:#0d9488;background:#14b8a61c}
+.t-green{color:#16a34a;background:#22c55e1c} .t-amber{color:#d97706;background:#f59e0b1f} .t-red{color:#dc2626;background:#ef44441c}
+.t-sky{color:#0284c7;background:#0ea5e91c} .t-slate{color:#475569;background:#64748b1f}
+@media (prefers-color-scheme:dark){ .t-slate{color:#94a3b8} }
+.mylinks{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px}.mylinks img{height:32px;display:block}
+.lang{display:inline-flex;margin-top:14px;border:1px solid rgba(255,255,255,.35);border-radius:999px;overflow:hidden}.lang a{padding:5px 14px;color:#fff;text-decoration:none;font-weight:600;font-size:13px}.lang a.on{background:rgba(255,255,255,.25)}
+a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)}
+</style>
+</head>
+<body>
+
+<!-- набор иконок -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.4 6.4-1.5 6.4-6.9a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.7s-1.2-.4-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.3 5.1 1.7 5.1 1.7a5 5 0 0 0-.1 3.7 5.4 5.4 0 0 0-1.5 3.7c0 5.4 3.3 6.5 6.4 6.9a3.4 3.4 0 0 0-.9 2.6V22"/></symbol>
+    <symbol id="i-bt" viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-radar" viewBox="0 0 24 24"><path d="M4.9 19.1a10 10 0 0 1 0-14.2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="M22 4 12 14l-3-3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+    <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/><path d="M6 11v2"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+    <symbol id="i-progress" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></symbol>
+    <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6 2h12M6 22h12"/><path d="M7 2v4a5 5 0 0 0 10 0V2M7 22v-4a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></symbol>
+    <symbol id="i-divide" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5"/><path d="M5 12h14"/><circle cx="12" cy="18" r="1.5"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7l10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h3l3-8 4 16 3-8h7"/></symbol>
+    <symbol id="i-truck" viewBox="0 0 24 24"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9 4.5 3h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 13v8h14v-8"/><path d="M10 21v-5h4v5"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-api" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+  </defs>
+</svg>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#3d7bff"/><g transform="translate(3 2.5) scale(.78)" fill="#fff"><circle cx="13.5" cy="3.6" r="2"/><path d="M9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3A7.3 7.3 0 0 0 19 13v-2a5 5 0 0 1-4.3-2.4l-1-1.6a2 2 0 0 0-2.5-.8L6 8.3V13h2V9.6z"/></g></svg>
+    </div>
+    <div>
+      <h1>Move Sensor BLE OTA</h1>
+      <p>Прошивка по повітрю та віддалені налаштування для батарейного датчика руху — по Bluetooth,
+         через Bluetooth-проксі ESPHome. Датчик спить, Wi-Fi не потрібен.</p>
+      <div class="badges">
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.16.0</span>
+        <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
+        <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
+        <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
+        <a class="badge" href="https://github.com/daimonkor/move-sensor-ble-ota" target="_blank" rel="noopener"><svg class="i"><use href="#i-github"/></svg>GitHub</a>
+      </div>
+      <div class="lang"><a href="index.html?lang=ru" data-lang="ru">RU</a><a href="index.uk.html" class="on" data-lang="uk">UK</a><a href="index.en.html" data-lang="en">EN</a></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<nav class="toc">
+  <a href="#start"><svg class="i"><use href="#i-chip"/></svg>Швидкий старт</a>
+  <a href="#how"><svg class="i"><use href="#i-wave"/></svg>Як працює</a>
+  <a href="#install"><svg class="i"><use href="#i-store"/></svg>Встановлення</a>
+  <a href="#setup"><svg class="i"><use href="#i-sliders"/></svg>Як налаштувати</a>
+  <a href="#flash"><svg class="i"><use href="#i-upload"/></svg>Як прошивати</a>
+  <a href="#settings"><svg class="i"><use href="#i-cog"/></svg>Налаштування датчика</a>
+  <a href="#migrate"><svg class="i"><use href="#i-truck"/></svg>Перенесення на новий HA</a>
+  <a href="#entities"><svg class="i"><use href="#i-layers"/></svg>Сутності</a>
+  <a href="#security"><svg class="i"><use href="#i-shield"/></svg>Захист</a>
+  <a href="#api"><svg class="i"><use href="#i-api"/></svg>API</a>
+  <a href="#protocol"><svg class="i"><use href="#i-bt"/></svg>Протокол</a>
+  <a href="#trouble"><svg class="i"><use href="#i-alert"/></svg>Діагностика</a>
+</nav>
+
+<!-- БЫСТРЫЙ СТАРТ -->
+<section id="start">
+  <h2><span class="ic bg-green"><svg class="i"><use href="#i-chip"/></svg></span>Швидкий старт</h2>
+  <p class="lead">Від деталей на столі до руху в Home Assistant. Потрібні Home Assistant з аддоном <b>ESPHome Builder</b>,
+    інтеграція <b>Bluetooth</b> і <b>Bluetooth-проксі ESPHome</b> поруч із датчиком. Файли — у
+    <a href="https://github.com/daimonkor/move-sensor-ble-ota" target="_blank" rel="noopener">репозиторії на GitHub</a>.</p>
+  <ol class="steps">
+    <li><b>Спаяти</b> XIAO ESP32-C3, PIR SR602, SHT41 і LiPo за шапкою
+      <a href="https://github.com/daimonkor/move-sensor-ble-ota/blob/main/esphome/move_sensor_ble/base.yaml" target="_blank" rel="noopener"><code>esphome/move_sensor_ble/base.yaml</code></a>
+      (піни, дільник, LED, сервісний перемикач).</li>
+    <li><b>Скопіювати прошивку</b> у Home Assistant: усе з <code>esphome/</code> репозиторію → <code>/config/esphome/</code>.</li>
+    <li><b>Секрети</b>: <code>secrets.example.yaml</code> → <code>/config/esphome/secrets.yaml</code> (або дописати рядки у свій) і заповнити
+      Wi-Fi роутера, пароль своєї точки доступу датчика і <code>move_sensor_ble_ota_key</code> — будь-який довгий випадковий рядок,
+      наприклад <code>openssl rand -hex 16</code>. Інтеграція бере той самий ключ із цього файлу.</li>
+    <li><b>Файл датчика</b>: <code>move-sensor-ble-148f98.yaml</code> → <code>move-sensor-ble-new.yaml</code>, виправити <code>name</code> /
+      <code>friendly_name</code>. У ESPHome Builder: <b>Install → Plug into this computer</b> (USB, лише перший раз).</li>
+    <li><b>Device ID</b> — останні 6 hex-цифр MAC Wi-Fi датчика (у лозі встановлення ESPHome та в імені точки доступу
+      <code>MoveSensorBLE-XXXXXX</code>). Перейменувати файл на <code>move-sensor-ble-&lt;id&gt;.yaml</code> і вписати id у <code>name</code>:
+      збірка по BLE шукає саме цей файл.</li>
+    <li><b>Інтеграція</b>: кнопки у «Встановленні» → <b>Завантажити</b> → перезапуск → <b>Додати інтеграцію</b> → вибрати датчик.
+      Інтеграція знаходить його сама за BLE-рекламою — окрема інтеграція BTHome не потрібна. Поле <b>Ключ OTA</b> залишити порожнім.</li>
+    <li><b>Сигнал на сайті датчика</b>: у файлі датчика <code>ble_rssi_entity</code> = сутність <b>Signal</b> пристрою Move Sensor BLE,
+      потім <b>Firmware → Встановити</b>.</li>
+    <li><b>Перевірка</b>: помахати — <i>Occupancy</i> вмикається, LED блимає 1 раз; через <i>Keep time</i> — «вільно» і 2 спалахи.
+      <i>Settings status</i> після першого пробудження — <i>In sync</i>.</li>
+  </ol>
+  <div class="note info"><svg class="i"><use href="#i-info"/></svg>
+    <div>Далі прошивка — сутність <b>Firmware</b> («Встановити»), без USB; налаштування й дані — пристрій <b>Move Sensor BLE</b>
+    і панель у меню. Wi-Fi потрібен лише в <b>сервісному режимі</b> (перемикач на D2, LED — 3 повільні спалахи): сайт датчика —
+    <code>http://100.64.4.1/</code> на його точці доступу.</div></div>
+</section>
+
+<!-- КАК РАБОТАЕТ -->
+<section id="how">
+  <h2><span class="ic bg-blue"><svg class="i"><use href="#i-wave"/></svg></span>Як це працює</h2>
+  <p class="lead">Датчик майже весь час у глибокому сні. Прокинувшись від PIR або за таймером телеметрії, він
+    ~4,5 с надсилає BTHome-рекламу. Інтеграція ловить це вікно і за одне підключення робить усю роботу.</p>
+  <div class="flow">
+    <div class="step"><div class="num">1</div><div class="ico bg-violet"><svg class="i"><use href="#i-moon"/></svg></div>
+      <b>Датчик прокидається</b><span>PIR або таймер «Climate report interval». Реклама стає такою, до якої можна підключитися.</span></div>
+    <div class="step"><div class="num">2</div><div class="ico bg-sky"><svg class="i"><use href="#i-radar"/></svg></div>
+      <b>HA ловить рекламу</b><span>Через Bluetooth-проксі ESPHome — той, що чує датчик найкраще.</span></div>
+    <div class="step"><div class="num">3</div><div class="ico bg-blue"><svg class="i"><use href="#i-link"/></svg></div>
+      <b>Одне підключення</b><span>Авторизація ключем → налаштування → прошивка. Поки клієнт підключений, датчик не спить.</span></div>
+    <div class="step"><div class="num">4</div><div class="ico bg-green"><svg class="i"><use href="#i-check"/></svg></div>
+      <b>Готово</b><span>Датчик засинає або перезавантажується в нову прошивку. Не встигли — чекаємо наступне вікно.</span></div>
+  </div>
+  <div class="note info"><svg class="i"><use href="#i-info"/></svg>
+    <div>Робота з’являється, лише якщо є що робити: змінені налаштування, перше читання або запитана прошивка.
+    Інакше інтеграція не чіпає ні проксі, ні датчик. Пришвидшити вікно — помахати рукою перед датчиком.</div></div>
+</section>
+
+<!-- УСТАНОВКА -->
+<section id="install">
+  <h2><span class="ic bg-sky"><svg class="i"><use href="#i-store"/></svg></span>Встановлення</h2>
+  <p class="lead">Що потрібно заздалегідь: інтеграція <b>Bluetooth</b> у HA і хоча б один <b>Bluetooth-проксі ESPHome</b>
+    поруч із датчиком (<code>bluetooth_proxy:</code> на ESP32 — активні підключення ввімкнені за замовчуванням).
+    На датчику — прошивка з <code>ble_ota:</code> у блоці <code>bthome:</code>.</p>
+  <div class="mylinks">
+    <a href="/_my_redirect/hacs_repository?owner=daimonkor&amp;repository=move-sensor-ble-ota&amp;category=integration" class="ha-nav"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Відкрити репозиторій у Marketplace"></a>
+    <a href="/_my_redirect/config_flow_start?domain=move_sensor_ble_ota" class="ha-nav"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Додати інтеграцію"></a>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--blue)"><use href="#i-store"/></svg>З Marketplace (HA 2026.11+)</b>
+      <ol class="steps" style="margin-top:10px">
+        <li>Кнопка <b>Open your Home Assistant… repository</b> вище відкриє репозиторій просто в Marketplace (до 2026.11 — у HACS). Без кнопки: Налаштування → <b>Marketplace</b> → <b>Додати за посиланням</b>.</li>
+        <li>Вставити адресу GitHub-репозиторію інтеграції, тип <b>Integration</b>.</li>
+        <li>Відкрити <b>Move Sensor BLE OTA</b> → <b>Встановити</b> → перезапустити HA.</li>
+        <li>Далі — «Як налаштувати». Оновлення прийдуть у Marketplace самі з новим релізом.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--teal)"><use href="#i-box"/></svg>Вручну</b>
+      <ol class="steps" style="margin-top:10px">
+        <li>Скопіювати теку <code>move_sensor_ble_ota</code> у <code>/config/custom_components/</code> (Samba / SSH / File editor).</li>
+        <li>Перезапустити Home Assistant.</li>
+        <li>Далі — «Як налаштувати». Оновлювати — заміною теки й перезапуском.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="note info"><svg class="i"><use href="#i-info"/></svg>
+    <div>У HA 2026.11 HACS вбудований у систему як <b>Marketplace</b>. Репозиторій для нього — той самий формат, що був у HACS:
+    публічний GitHub, <code>hacs.json</code> у корені, інтеграція в <code>custom_components/move_sensor_ble_ota/</code>, іконка в
+    <code>brand/</code>, GitHub-реліз із номером версії.</div></div>
+  <div class="note"><svg class="i"><use href="#i-refresh"/></svg>
+    <div><b>Оновлення.</b> Нова версія — це GitHub-реліз. HA покаже її в <b>Налаштування → Оновлення</b>
+    (перевірити одразу: Marketplace → Move Sensor BLE OTA → ⋮ → <b>Оновити інформацію</b>) → <b>Оновити</b> → перезапустити HA.
+    Сутності, налаштування й статистика зберігаються.</div></div>
+  <h3 style="margin-top:22px">Відео</h3>
+  <div class="grid g2">
+    <div class="card"><b>Встановлення з нуля</b><small style="color:var(--muted);display:block;margin:4px 0 10px">Кнопка в README → Marketplace → Встановити → майстер → датчик відповів у перше вікно (≈30 с)</small>
+      <video src="media/install.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
+    <div class="card"><b>Оновлення</b><small style="color:var(--muted);display:block;margin:4px 0 10px">Новий реліз на GitHub → Налаштування → Оновлення → Оновити → перезапуск HA</small>
+      <video src="media/update.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
+  </div>
+</section>
+
+<!-- НАСТРОЙКА -->
+<section id="setup">
+  <h2><span class="ic bg-teal"><svg class="i"><use href="#i-sliders"/></svg></span>Як налаштувати</h2>
+  <div class="grid g2">
+    <div class="card">
+      <ol class="steps">
+        <li>Налаштування → Пристрої та служби → <b>Додати інтеграцію</b> → <b>Move Sensor BLE OTA</b>.</li>
+        <li><b>Bluetooth-адреса</b> — вибрати датчик зі списку BTHome-пристроїв (їх зараз чує HA) або вписати вручну.</li>
+        <li><b>Ключ OTA</b> — залишити порожнім: візьметься <code>move_sensor_ble_ota_key</code> з <code>/config/esphome/secrets.yaml</code>.
+            Якщо конфіги ESPHome лежать в іншому місці — вписати той самий ключ, що в прошивці.</li>
+        <li><b>Тека прошивок</b> — за замовчуванням <code>/config/esphome/ota</code>.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <b>Після додавання</b>
+      <ul style="margin:8px 0 0;padding-left:18px">
+        <li>Сутності «… (BLE)» з’являться на сторінці того самого пристрою, що й BTHome-датчик.</li>
+        <li>Під час першого пробудження інтеграція прочитає налаштування та версію: <span class="chip c-gray">Not read yet</span> → <span class="chip c-gray">Nothing pending</span>.</li>
+        <li>Змінити ключ або теку: сторінка інтеграції → <b>Налаштувати → «Параметри»</b>.</li>
+        <li>Документація — кнопки «Документація» (сторінка інтеграції) і «Відвідати» (сторінка пристрою).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ПРОШИВКА -->
+<section id="flash">
+  <h2><span class="ic bg-violet"><svg class="i"><use href="#i-upload"/></svg></span>Як прошивати</h2>
+  <div class="note"><svg class="i"><use href="#i-info"/></svg>
+    <div><b>Найпростіше — сутність оновлення «Firmware» → «Встановити» (v1.15; раніше кнопка Build &amp; flash).</b> Нова версія з’являється, коли YAML датчика змінено після останньої прошивки. Інтеграція сама збере YAML
+    цього датчика <code>move-sensor-ble-&lt;device id&gt;.yaml</code> (напр. <code>move-sensor-ble-148f98.yaml</code>,
+    з 1.13.1; спільна прошивка — <code>move_sensor_ble/base.yaml</code>) в аддоні ESPHome Builder (через Supervisor, як сам HA), покладе
+    <code>.ota.bin</code> у теку прошивок і прошиє датчик: у сервісному режимі — одразу по Wi-Fi, інакше по BLE в найближче вікно (обірвався Wi-Fi — продовжить по BLE). Те саме —
+    сервіс <code>move_sensor_ble_ota.build_and_flash</code> або <code>POST /api/move_sensor_ble_ota/build</code>.
+    Поза HA — скрипт <code>/config/esphome/tools/ble_ota_flash.py</code>.</div></div>
+  <div class="grid g2">
+    <div class="card">
+      <b>Вручну, своїм файлом</b>
+      <ol class="steps">
+        <li>У ESPHome: <b>Install → Manual download → OTA format</b> (<code>*.ota.bin</code>). Підійде і <code>factory.bin</code> — застосунок виріжеться сам.</li>
+        <li>Налаштування → Пристрої та служби → <b>Move Sensor BLE OTA</b> → <b>Налаштувати → «Завантажити прошивку (.bin)»</b>.</li>
+        <li>Вибрати файл, залишити галочку <b>«Одразу запустити прошивку по BLE»</b>.</li>
+        <li>Дочекатися пробудження датчика (або помахати рукою). ~7 КБ/с через проксі — образ 1,25 МБ ≈ 3 хв.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <b>Хід прошивки (сутність «Firmware», атрибути <code>/status</code>)</b>
+      <div class="chips">
+        <span class="chip c-gray">idle</span><span class="arrow">→</span>
+        <span class="chip c-teal">building %</span><span class="arrow">→</span>
+        <span class="chip c-amber">waiting</span><span class="arrow">→</span>
+        <span class="chip c-sky">connecting</span><span class="arrow">→</span>
+        <span class="chip c-blue">flashing %</span><span class="arrow">→</span>
+        <span class="chip c-green">success</span>
+      </div>
+      <div class="chips"><span class="chip c-red">error</span><span class="chip c-violet">cancelled</span></div>
+      <small style="color:var(--muted)"><code>building</code> — лише під час збірки («Встановити», <code>build_and_flash</code>). Після збірки ключ OTA в образі звіряється з ключем інтеграції — не збігся → помилка, прошивка не починається. Скасування — служба <code>move_sensor_ble_ota.cancel</code> або кнопка на панелі. Після <code>success</code> — одразу <code>idle</code> і 0 %, щойно датчик відповів новою версією (запасний таймер 2 хв). Обрив зв’язку → <code>waiting</code>, повтор у наступне вікно.</small>
+    </div>
+  </div>
+  <div class="note warn"><svg class="i"><use href="#i-alert"/></svg>
+    <div>По повітрю змінюється лише застосунок. Таблиця розділів (<code>partitions_c3_4mb.csv</code>) — лише по USB.
+    Першу прошивку з підтримкою BLE OTA теж залити по USB або Wi-Fi (сервісний режим).</div></div>
+</section>
+
+<!-- НАСТРОЙКИ -->
+<section id="settings">
+  <h2><span class="ic bg-amber"><svg class="i"><use href="#i-cog"/></svg></span>Налаштування датчика</h2>
+  <p class="lead">Змінюєш значення в HA — воно йде в найближче пробудження і застосовується як із сервісного режиму
+    (перевірка min/max, збереження у флеш).</p>
+  <table>
+    <tr><th>Налаштування</th><th>Діапазон</th><th>Коли діє</th></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-hourglass"/></svg>Detect delay</div></td><td>0–5000 мс</td><td>з наступного спрацювання PIR</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-timer"/></svg>Keep time</div></td><td>5–600 с</td><td>з наступного «зайнято»</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--teal)"><use href="#i-thermo"/></svg>Climate report interval</div></td><td>0–240 хв</td><td>під час наступного засинання</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-bulb"/></svg>Motion tracking LED</div></td><td>увімк / вимк</td><td>одразу</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:#64748b"><use href="#i-divide"/></svg>Voltage factor</div></td><td>1,5–2,5</td><td>одразу (перерахунок напруги)</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-thermo"/></svg>Temperature / Humidity offset</div></td><td>−10…+10 °C / −20…+20 %, крок 0,1</td><td>з наступного виміру; поправка температури перераховує й вологість за точкою роси</td></tr>
+  </table>
+  <div class="chips" style="margin-top:14px">
+    <b style="margin-right:4px">Settings status:</b>
+    <span class="chip c-gray">In sync</span><span style="color:var(--muted);font-size:13px">усе на датчику як у HA</span>
+    <span class="chip c-amber">Waiting for wake-up</span><span style="color:var(--muted);font-size:13px">в атрибуті pending — що саме</span>
+    <span class="chip c-gray">Not read yet</span>
+    <span class="chip c-red">Error</span>
+    <span style="color:var(--muted);font-size:13px">Що сталося — подія <b>Settings change</b>: saved_wifi / saved_ble / changed_on_sensor / restored (було → стало, у журналі та історії)</span>
+  </div>
+</section>
+
+<!-- ПЕРЕНОС -->
+<section id="migrate">
+  <h2><span class="ic bg-violet"><svg class="i"><use href="#i-truck"/></svg></span>Перенесення на новий Home Assistant</h2>
+  <div class="grid g2">
+    <div class="card">
+      <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--green)"><use href="#i-check"/></svg>Через повну резервну копію HA — найпростіше</b>
+      <ol class="steps" style="margin-top:10px">
+        <li>Старий HA: Налаштування → Система → Резервні копії → <b>повна</b> копія.</li>
+        <li>Новий HA: під час першого запуску «Відновити з резервної копії».</li>
+        <li>Переїде все: тека інтеграції, запис з адресою та ключем, збережені налаштування
+            (<code>.storage/move_sensor_ble_ota.*</code>), прошивки в <code>/config/esphome/ota</code>, <code>secrets.yaml</code>.</li>
+        <li>Перевірити, що Bluetooth-проксі ESPHome підключений до нового HA і BTHome-датчик видно.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--amber)"><use href="#i-box"/></svg>Начисто, без резервної копії</b>
+      <ol class="steps" style="margin-top:10px">
+        <li>Підключити до нового HA Bluetooth-проксі (інтеграція ESPHome) і додати датчик у <b>BTHome</b>.</li>
+        <li>Встановити інтеграцію — з Marketplace або вручну (розділ «Встановлення»).</li>
+        <li><b>Ключ:</b> перенести рядок <code>move_sensor_ble_ota_key</code> у <code>/config/esphome/secrets.yaml</code> нового HA
+            або вписати його під час додавання. Без нього датчик не пустить («немає авторизації»).</li>
+        <li>Додати інтеграцію з тією самою Bluetooth-адресою. Налаштування прочитаються з датчика під час першого пробудження.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="note warn"><svg class="i"><use href="#i-key"/></svg>
+    <div>Ключ — єдине, що не можна відновити з датчика. Зберігай його разом з ESPHome-конфігами.
+    Якщо ключ втрачено — змінити його в <code>secrets.yaml</code> і залити прошивку по USB або Wi-Fi (сервісний режим).</div></div>
+</section>
+
+<!-- СУЩНОСТИ -->
+<section id="entities">
+  <h2><span class="ic bg-teal"><svg class="i"><use href="#i-layers"/></svg></span>Сутності</h2>
+  <p class="lead">v1.15: один пристрій <b>Move Sensor BLE</b> — дані й налаштування датчика незалежно від каналу (BLE або Wi-Fi). Копії в ESPHome- і BTHome-пристрої приховані (не вимкнені). Панель <b>Move Sensor BLE</b> у боковому меню.</p>
+
+  <h3>Дані датчика (v1.15)</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Occupancy / Temperature / Humidity / Battery / Voltage<span class="kind t-blue">sensor</span></b><small>З будь-якого каналу: BLE (реклама BTHome) або Wi-Fi (ESPHome-пристрій датчика) — перемагає найсвіжіше. В атрибутах — джерело та час</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Link / Signal / Signal level<span class="kind t-sky">sensor</span></b><small>Канал зв’язку: <code>wifi</code> — ESPHome API підключений (WiFi на датчику ввімкнений), інакше <code>ble</code>. Signal — RSSI цього каналу, дБм; Signal level — те саме у % (−90 дБм = 0 %, −30 дБм = 100 %)</small></div></div>
+    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-layers"/></svg></span>
+      <div><b>Приховані копії<span class="kind t-slate">auto</span></b><small>Ті самі сутності в ESPHome- і BTHome-пристрої приховані (мітка <i>Move Sensor BLE</i>), продовжують працювати. В ESPHome-пристрої на виду лише Wi-Fi і сервісний режим. <i>Налаштувати → Вигляд</i>: показати приховані / знову приховати, панель у меню. Видалення інтеграції повертає приховане</small></div></div>
+  </div>
+
+  <h3>Прошивка</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-upload"/></svg></span>
+      <div><b>Firmware<span class="kind t-violet">update</span></b><small>Замість Flash / Build &amp; flash / Cancel / OTA status / OTA progress / Firmware version. В «Оновленнях» — «Move Sensor BLE firmware»: встановлена «build 16.11 13:48», нова «new build · YAML changed …». «Встановити» — збірка, перевірка ключа OTA, прошивка по Wi-Fi одразу (сервісний режим) або по BLE в найближче пробудження; обірвався Wi-Fi — продовжить по BLE; переживає перезапуск HA; та сама збірка, що вже на датчику, повторно не прошивається; Last flash — час, канал, тривалість, швидкість; «Примітки до випуску» — які файли прошивки змінені з прошитої збірки та порядковий diff (secrets.yaml не показується, ключі й паролі — ***). Прошивка «Встановити» в самому ESPHome Builder ключ не перевіряє</small></div></div>
+  </div>
+
+  <h3>Сервіс</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Device ID / Identify (BLE)<span class="kind t-sky">sensor · button</span></b><small>ID — хвіст MAC Wi-Fi (148F98): в імені move-sensor-ble-148f98.local, SSID MoveSensorBLE-148F98 і на сайті датчика. Identify — LED блимає 10 с у найближче пробудження</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Reset Wi-Fi to default (BLE)<span class="kind t-sky">button</span></b><small>Датчик повернеться до мережі Wi-Fi з прошивки (під час входу в сервісний режим); LED 6 спалахів</small></div></div>
+  </div>
+
+  <h3>Діагностика перезавантажень і зв’язку</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-timer"/></svg></span>
+      <div><b>Last seen<span class="kind t-green">sensor</span></b><small>Останній пакет BTHome. Норма — не рідше Climate report interval; довше двох інтервалів — розряд, збій або немає зв’язку. В атрибутах — packet id, Wake count, батарея, RSSI, проксі</small></div></div>
+    <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
+      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Прогноз діб до розряду за трендом Battery % з останнього заряджання; потрібно ≥ 1 доби даних</small></div></div>
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>Скільки разів за добу було «зайнято»; учора — в атрибутах</small></div></div>
+    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>
+      <div><b>Wakes since midnight<span class="kind t-violet">sensor</span></b><small>Пробудження за добу: усього, з пакетом і тихі (без радіо)</small></div></div>
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-hourglass"/></svg></span>
+      <div><b>Last motion<span class="kind t-blue">sensor</span></b><small>Останнє свіже спрацювання PIR (новий підйом після LOW). Поки «зайнято», датчик надсилає його не частіше разу на 2 хв</small></div></div>
+    <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
+      <div><b>PIR stuck<span class="kind t-red">binary</span></b><small>«Зайнято», і свіжих спрацювань немає довше порогу <i>PIR stuck after</i> (людина ворушиться поруч — не проблема; у прошивки до 2026-11-16 — просто «зайнято» довше порогу): обрив дроту PIR, тепло/сонце в лінзі, просідання живлення</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-tag"/></svg></span>
+      <div><b>Імена BTHome<span class="kind t-slate">auto</span></b><small>«Count» → Wake count (з v1.14.2 застиг: Wake count їде у своєму блоці реклами), бінарна «Батарея» → Battery low (з v1.14.2 не передається). Лише ім’я (entity_id попередній) і лише якщо не перейменовано вручну</small></div></div>
+    <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
+      <div><b>Brownout count<span class="kind t-amber">sensor</span></b><small>Перезавантаження через просідання живлення — кінець розряду або просідання під радіо</small></div></div>
+    <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
+      <div><b>Crash count<span class="kind t-red">sensor</span></b><small>Збої прошивки: panic + watchdog (докладно — в атрибутах)</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Last reset reason<span class="kind t-slate">sensor</span></b><small>Причина останнього завантаження «не зі сну»: power on, brownout, software, panic…</small></div></div>
+  </div>
+
+  <h3>Налаштування</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-hourglass"/></svg></span>
+      <div><b>Detect delay (BLE)<span class="kind t-amber">number</span></b><small>Скільки PIR має тримати сигнал, мс</small></div></div>
+    <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-timer"/></svg></span>
+      <div><b>Keep time (BLE)<span class="kind t-amber">number</span></b><small>Скільки тримати «зайнято» після руху, с</small></div></div>
+    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-thermo"/></svg></span>
+      <div><b>Climate report interval (BLE)<span class="kind t-teal">number</span></b><small>Як часто надсилати температуру/вологість, хв</small></div></div>
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-bulb"/></svg></span>
+      <div><b>Motion tracking LED (BLE)<span class="kind t-blue">switch</span></b><small>Світлодіод спрацювань</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Motion / Climate window (BLE)<span class="kind t-sky">number</span></b><small>Скільки датчик рекламує після пакета, мс. Коротше — довше батарея</small></div></div>
+    <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Auto advertising window<span class="kind t-green">switch</span></b><small>Вікна за рівнем сигналу: ≥ −75 дБм 800/1500 мс, ≥ −85 1500/2500, слабше 3000/4500; пропуск клімат-пакета — на добу довше. Ручне вікно вимикає авто</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
+      <div><b>Voltage factor (BLE)<span class="kind t-slate">number</span></b><small>Множник дільника батареї (калібрування за тестером)</small></div></div>
+    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-thermo"/></svg></span>
+      <div><b>Temperature / Humidity offset (BLE)<span class="kind t-teal">number</span></b><small>Плюс або мінус до SHT41: −10…+10 °C, −20…+20 %. Поправка температури перераховує вологість за точкою роси, потім додається поправка вологості. Потрібна прошивка з поправками</small></div></div>
+    <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-cog"/></svg></span>
+      <div><b>Settings status<span class="kind t-green">sensor</span></b><small>In sync / Waiting for wake-up / Not read yet / Error. Що сталося — подія <i>Settings change</i>: записано по Wi-Fi або BLE, прийнято з датчика, повернуто після скидання</small></div></div>
+    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Read settings (BLE)<span class="kind t-violet">button</span></b><small>Прочитати фактичні значення з датчика в найближче вікно. З v1.15 правки на сайті датчика та в ESPHome приймаються самі — за номером правки (росте з кожною правкою; 0 — стертий флеш → HA повертає свої значення)</small></div></div>
+  </div>
+</section>
+
+<!-- ЗАЩИТА -->
+<section id="security">
+  <h2><span class="ic bg-green"><svg class="i"><use href="#i-shield"/></svg></span>Захист і надійність</h2>
+  <div class="grid g4">
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-key"/></svg></span><div><b>HMAC-ключ</b><small><code>move_sensor_ble_ota_key</code> з <code>esphome/secrets.yaml</code>; одноразовий nonce</small></div></div>
+    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-chip"/></svg></span><div><b>Лише свій образ</b><small>звірка <code>project_name</code>; CRC-32 і перевірка ESP-IDF</small></div></div>
+    <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span><div><b>Поріг батареї</b><small>нижче 30 % OTA відхиляється</small></div></div>
+    <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-undo"/></svg></span><div><b>Відкат</b><small>не пройшла <code>safe_mode</code> 15 с — завантажувач поверне стару</small></div></div>
+  </div>
+</section>
+
+<!-- API -->
+<section id="api">
+  <h2><span class="ic bg-slate"><svg class="i"><use href="#i-api"/></svg></span>API для автоматизацій</h2>
+  <table>
+    <tr><th>Що</th><th>Як</th></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--teal)"><use href="#i-terminal"/></svg>Зібрати й прошити</div></td><td><code>POST /api/move_sensor_ble_ota/build[?configuration=…&amp;start=0&amp;timeout=180]</code> — відповідь одразу, збірка у фоні; або сервіс <code>move_sensor_ble_ota.build_and_flash</code></td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--violet)"><use href="#i-upload"/></svg>Завантажити й прошити</div></td><td><code>POST /api/move_sensor_ble_ota/upload?filename=&lt;ім’я&gt;.bin&amp;start=1</code> — тіло: файл, токен адміністратора</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-bt"/></svg>Прошити</div></td><td>сервіс <code>move_sensor_ble_ota.flash</code> (<code>file</code>, <code>timeout</code>, <code>config_entry_id</code>)</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--red)"><use href="#i-x"/></svg>Скасувати</div></td><td>сервіс <code>move_sensor_ble_ota.cancel</code></td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--violet)"><use href="#i-refresh"/></svg>Прочитати налаштування</div></td><td>сервіс <code>move_sensor_ble_ota.read_settings</code></td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-cog"/></svg>Змінити налаштування</div></td><td><code>number.set_value</code> / <code>switch.turn_on|off</code> на «… (BLE)»</td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--green)"><use href="#i-info"/></svg>Стан</div></td><td><code>GET /api/move_sensor_ble_ota/status</code></td></tr>
+  </table>
+<pre><code># зібрати й прошити однією командою
+curl -X POST -H "Authorization: Bearer $HA_TOKEN" \
+  "http://homeassistant.local:8123/api/move_sensor_ble_ota/build"
+
+# поза HA, без браузера (збірка + прошивка)
+python3 /config/esphome/tools/ble_ota_flash.py
+
+# завантажити готовий файл
+curl -X POST -H "Authorization: Bearer $HA_TOKEN" \
+  --data-binary @move-sensor-ble.ota.bin \
+  "http://homeassistant.local:8123/api/move_sensor_ble_ota/upload?filename=move-sensor-ble.ota.bin&amp;start=1"</code></pre>
+</section>
+
+<!-- ПРОТОКОЛ -->
+<section id="protocol">
+  <h2><span class="ic bg-blue"><svg class="i"><use href="#i-bt"/></svg></span>Протокол GATT</h2>
+  <p class="lead">Сервіс <code>6d730001-626c-6f74-4d6f-766553656e73</code>. Усі числа little-endian.</p>
+  <table>
+    <tr><th>Характеристика</th><th>Команди</th></tr>
+    <tr><td><code>…0002</code> CTRL<br><small style="color:var(--muted)">write + notify</small></td>
+        <td><code>HELLO</code> nonce · <code>AUTH</code> HMAC · <code>INFO</code> версія · <code>GET/SET</code> налаштування ·
+            <code>BEGIN</code> розмір+CRC · <code>STATUS</code> · <code>END</code> · <code>ABORT</code></td></tr>
+    <tr><td><code>…0003</code> DATA<br><small style="color:var(--muted)">write without response</small></td>
+        <td><code>offset:u32 + дані</code> (≤ 240 Б), блоки 4096 Б, після кожного — ACK у CTRL; кожен 4-й пакет із підтвердженням</td></tr>
+  </table>
+  <p style="color:var(--muted);font-size:13.5px">Повний опис — у шапці <code>components/bthome/ble_ota.h</code> (прошивка) і <code>const.py</code> (інтеграція).</p>
+</section>
+
+<!-- ДИАГНОСТИКА -->
+<section id="trouble" class="trouble">
+  <h2><span class="ic bg-red"><svg class="i"><use href="#i-alert"/></svg></span>Діагностика</h2>
+  <div class="grid g2">
+    <div class="card"><svg class="i"><use href="#i-hourglass"/></svg><div><b>Довго <code>waiting</code></b><small>Датчик не прокидається або проксі його не чує. Помахати рукою; перевірити, що проксі з <code>bluetooth_proxy:</code> (активні підключення) поруч.</small></div></div>
+    <div class="card"><svg class="i"><use href="#i-refresh"/></svg><div><b>Цикл <code>connecting → flashing → waiting</code></b><small>Датчик рве зв’язок. Дивитися лог датчика в сервісному режимі (тег <code>ble_ota</code>) — там причина.</small></div></div>
+    <div class="card"><svg class="i"><use href="#i-cog"/></svg><div><b>Settings status: <code>error</code></b><small>«неправильний стан/команда» — на датчику прошивка без команд налаштувань. Неправильний ключ — «немає авторизації».</small></div></div>
+    <div class="card"><svg class="i"><use href="#i-battery"/></svg><div><b>«батарея нижче порогу»</b><small>Зарядити датчик або змінити <code>min_battery</code> у YAML.</small></div></div>
+  </div>
+<pre><code>logger:
+  logs:
+    custom_components.move_sensor_ble_ota: debug
+    bleak_esphome: debug</code></pre>
+</section>
+
+<footer>
+  <svg class="i" style="color:var(--blue)"><use href="#i-book"/></svg>
+  Move Sensor BLE OTA · інтеграція <code>move_sensor_ble_ota</code> · прошивка <code>components/bthome/ble_ota.*</code>
+</footer>
+
+</main>
+<script>
+/* Язык / language: явный выбор запоминается; без выбора — язык пользователя HA (или браузера). */
+(function(){
+  var K='move_sensor_ble_ota_docs_lang';
+  document.querySelectorAll('.lang a').forEach(function(a){a.addEventListener('click',function(){try{localStorage.setItem(K,a.dataset.lang)}catch(e){}})});
+  if(!document.documentElement.lang.startsWith('ru'))return;
+  if(/[?&]lang=ru/.test(location.search))return;
+  var saved=null;try{saved=localStorage.getItem(K)}catch(e){}
+  if(saved==='ru')return;
+  var l='';
+  try{var ha=window.parent.document.querySelector('home-assistant');l=(ha&&ha.hass&&ha.hass.language)||''}catch(e){}
+  if(!l)l=navigator.language||'';
+  if(saved==='en'||!/^(ru|uk|be)/i.test(l))location.replace('index.en.html'+location.hash);
+})();
+</script>
+<script>
+/* Кнопки My Home Assistant: страница открыта в iframe-панели HA (sandbox без top-navigation),
+   поэтому переходим так же, как сам фронтенд HA: pushState в родителе + событие location-changed. */
+document.querySelectorAll('a.ha-nav').forEach(function(a){
+  a.addEventListener('click',function(e){
+    try{
+      var w=window.parent;
+      if(w&&w!==window&&w.location.origin===location.origin){
+        e.preventDefault();
+        w.history.pushState(null,'',a.getAttribute('href'));
+        w.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:false}}));
+      }
+    }catch(err){}
+  });
+});
+</script>
+<script>
+/* Вкладки / tabs (v1.15): один раздел за раз; ссылки #раздел и якоря внутри разделов открывают нужную вкладку;
+   последняя вкладка запоминается. */
+(function(){
+  var K='move_sensor_ble_ota_docs_tab';
+  var secs=[].slice.call(document.querySelectorAll('main>section'));
+  var links=[].slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if(!secs.length||!links.length)return;
+  document.documentElement.classList.add('js-tabs');
+  function secOf(id){
+    var el=id&&document.getElementById(id);
+    while(el&&el.parentElement&&!(el.tagName==='SECTION'&&el.parentElement.tagName==='MAIN'))el=el.parentElement;
+    return (el&&el.tagName==='SECTION')?el:null;
+  }
+  function show(id,scroll){
+    var s=secOf(id)||secs[0];
+    secs.forEach(function(x){x.classList.toggle('active',x===s)});
+    links.forEach(function(a){a.classList.toggle('active',a.getAttribute('href')==='#'+s.id)});
+    try{localStorage.setItem(K,s.id)}catch(e){}
+    if(scroll){var t=document.getElementById(id);if(t&&t!==s)t.scrollIntoView();else window.scrollTo(0,document.querySelector('.toc').offsetTop);}
+  }
+  links.forEach(function(a){a.addEventListener('click',function(e){
+    e.preventDefault();var id=a.getAttribute('href').slice(1);
+    try{history.replaceState(null,'','#'+id)}catch(err){}
+    show(id,true);
+  })});
+  window.addEventListener('hashchange',function(){show(location.hash.slice(1),true)});
+  var start=location.hash.slice(1);
+  if(!start){try{start=localStorage.getItem(K)||''}catch(e){}}
+  show(start,!!location.hash);
+})();
+</script>
+<script>
+/* Вне Home Assistant (GitHub Pages): ссылки /_my_redirect/… ведут через my.home-assistant.io */
+(function(){ if(location.pathname.indexOf('/move_sensor_ble_ota/')===0) return;
+  document.querySelectorAll('a[href^="/_my_redirect/"]').forEach(function(a){
+    a.href='https://my.home-assistant.io/redirect/'+a.getAttribute('href').slice('/_my_redirect/'.length); a.classList.remove('ha-nav'); a.target='_blank'; });
+})();
+</script>
+</body>
+</html>

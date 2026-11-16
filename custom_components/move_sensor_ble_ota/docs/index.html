@@ -191,7 +191,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
         <a class="badge" href="https://github.com/daimonkor/move-sensor-ble-ota" target="_blank" rel="noopener"><svg class="i"><use href="#i-github"/></svg>GitHub</a>
       </div>
-      <div class="lang"><a href="index.html?lang=ru" class="on" data-lang="ru">RU</a><a href="index.en.html" data-lang="en">EN</a></div>
+      <div class="lang"><a href="index.html?lang=ru" class="on" data-lang="ru">RU</a><a href="index.uk.html" data-lang="uk">UK</a><a href="index.en.html" data-lang="en">EN</a></div>
     </div>
   </div>
 </header>
@@ -592,6 +592,7 @@ curl -X POST -H "Authorization: Bearer $HA_TOKEN" \
   var l='';
   try{var ha=window.parent.document.querySelector('home-assistant');l=(ha&&ha.hass&&ha.hass.language)||''}catch(e){}
   if(!l)l=navigator.language||'';
+  if(saved==='uk'||(!saved&&/^uk/i.test(l))){location.replace('index.uk.html'+location.hash);return}
   if(saved==='en'||!/^(ru|uk|be)/i.test(l))location.replace('index.en.html'+location.hash);
 })();
 </script>

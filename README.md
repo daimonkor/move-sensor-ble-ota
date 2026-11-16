@@ -18,7 +18,8 @@ ESPHome Bluetooth proxies (or Wi-Fi in service mode), a sidebar panel. The senso
 
 **[daimonkor.github.io/move-sensor-ble-ota](https://daimonkor.github.io/move-sensor-ble-ota/index.en.html)** —
 quick start (from parts to motion in HA), install, setup, firmware, sensor settings, entities, API, BLE protocol,
-troubleshooting. The same pages open inside Home Assistant: integration page → **Documentation**.
+troubleshooting. English · [Русский](https://daimonkor.github.io/move-sensor-ble-ota/?lang=ru) · [Українська](https://daimonkor.github.io/move-sensor-ble-ota/index.uk.html).
+The same pages open inside Home Assistant: integration page → **Documentation** (in the HA user's language).
 
 ## Install
 
@@ -54,11 +55,12 @@ Wi-Fi, прошивка по Bluetooth через прокси ESPHome (или �
 
 **📖 Документация: [daimonkor.github.io/move-sensor-ble-ota](https://daimonkor.github.io/move-sensor-ble-ota/?lang=ru)** —
 быстрый старт (от деталей до движения в HA), установка, настройка, прошивка, настройки датчика, сущности, API, протокол,
-диагностика. Те же страницы — внутри Home Assistant: страница интеграции → **Документация**.
+диагностика. Те же страницы — внутри Home Assistant: страница интеграции → **Документация** (на языке пользователя HA).
+Українською: [daimonkor.github.io/move-sensor-ble-ota/index.uk.html](https://daimonkor.github.io/move-sensor-ble-ota/index.uk.html).
 
 **Установка**: кнопки вверху → **Marketplace** (HA 2026.11+) или HACS → **Скачать** → перезапуск → **Добавить интеграцию** →
 выбрать датчик. Обновления — GitHub-релизы, приходят в **Настройки → Обновления**. Видео — выше.
 
 **Работа с репозиторием**: интеграция — источник здесь (правка → `version` в `manifest.json` и значок в `docs/index*.html` →
 push → релиз `vX.Y.Z`); прошивка — рабочая копия в `/config/esphome`, перед коммитом `./sync_from_ha.sh`. Документация —
-только `custom_components/move_sensor_ble_ota/docs/` (RU `index.html`, EN `index.en.html`), на GitHub Pages публикуется сама.
+только `custom_components/move_sensor_ble_ota/docs/` (RU `index.html`, UK `index.uk.html`, EN `index.en.html`), на GitHub Pages публикуется сама.
