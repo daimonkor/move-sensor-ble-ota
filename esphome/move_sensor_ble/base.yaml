@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.4.0"
+  fw_version: "1.4.1"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -60,7 +60,7 @@ substitutions:
   # 2026-11-15: было 5 включений за 20 с — по просьбе Димы 3 за 10 с
   wifi_reset_toggles: "3"
   # 1.4.0: через сколько минут сервисный режим (Wi-Fi) выключается сам, если переключатель забыли; 0 — никогда
-  service_timeout_min: "30"
+  service_timeout_min: "0"
   wifi_reset_window_ms: "10000"
   # сеть из прошивки — для сброса (лямбда не умеет !secret напрямую)
   fw_wifi_ssid: !secret wifi_ssid
@@ -955,6 +955,7 @@ interval:
     then:
       - lambda: "if (ms::rev_pending) id(bth_ota).rev_commit();"
   # 1.4.0: забытый сервисный переключатель — через service_timeout_min мин Wi-Fi выключается,
+  # 1.4.1: по умолчанию 0 = таймаута нет, сервисный режим держится, пока включён переключатель;
   # датчик работает как обычно; снова в сервисный режим — выключить и включить переключатель
   - interval: 10s
     then:
