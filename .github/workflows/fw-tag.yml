@@ -1,0 +1,37 @@
+# Тег прошивки fw-X.Y.Z ставит сам GitHub: версия — fw_version в esphome/move_sensor_ble/base.yaml.
+# Срабатывает на пуш в main с изменением base.yaml/CHANGELOG и по кнопке (Run workflow).
+# Тег — на последний коммит, где fw_version стала такой (обычно «release(fw): X.Y.Z»). Уже есть — ничего не делает.
+name: Firmware tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - esphome/move_sensor_ble/base.yaml
+      - esphome/move_sensor_ble/CHANGELOG.md
+      - .github/workflows/fw-tag.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Create fw-X.Y.Z tag
+        run: |
+          set -e
+          v=$(sed -n 's/^  fw_version: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' esphome/move_sensor_ble/base.yaml | head -1)
+          if [ -z "$v" ]; then echo "fw_version не найдена"; exit 0; fi
+          tag="fw-$v"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then echo "$tag уже есть"; exit 0; fi
+          # коммит релиза этой версии, иначе текущий
+          sha=$(git log -1 --format=%H -E --grep="^release(\(fw\))?: $v\b" || true)
+          [ -n "$sha" ] || sha=$(git rev-parse HEAD)
+          git tag "$tag" "$sha"
+          git push origin "refs/tags/$tag"
+          echo "created $tag at $sha"
