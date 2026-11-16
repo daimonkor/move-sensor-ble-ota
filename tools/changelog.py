@@ -5,7 +5,8 @@
   python3 tools/changelog.py release 1.4.0     # «Не выпущено» -> «## 1.4.0 — дата», чистка, тег fw-1.4.0
   python3 tools/changelog.py show              # что войдёт в черновик (без записи)
 
-Коммиты прошивки — те, что меняют esphome/ (кроме самого CHANGELOG). Последний релиз — тег fw-X.Y.Z,
+Коммиты прошивки — те, что меняют esphome/ (кроме самого CHANGELOG). Последний релиз — коммит
+«release(fw): X.Y.Z» (его делает тот, кто выпускает: git commit -m "release(fw): X.Y.Z"), иначе тег fw-X.Y.Z,
 иначе последний коммит, менявший CHANGELOG. Пиши сообщения так, как их прочитает пользователь:
   feat(fw): Защита батареи от глубокого разряда      -> Добавлено
   fix(fw): Датчик не засыпает посреди прошивки       -> Исправлено
@@ -47,6 +48,11 @@ def git(*args: str) -> str:
 
 
 def base_ref() -> str | None:
+    # 1) последний коммит релиза прошивки «release(fw): X.Y.Z» — есть в истории везде, теги пушить не обязательно
+    rel = git("log", "-1", "--format=%H", "-E", "--grep=^release(\\(fw\\))?: ", "--", REL).strip()
+    if rel:
+        return rel
+    # 2) тег fw-X.Y.Z
     tags = [t for t in git("tag", "--list", "fw-*", "--sort=-v:refname").split() if t]
     if tags:
         return tags[0]
@@ -205,7 +211,7 @@ def release(version: str, date: str | None = None) -> None:
     set_fw_version(version)
     print(f"release {version} -> {REL}\n"
           f"Дальше: перечитать пункты глазами пользователя (переписать понятнее, по-русски), проверить конфиг\n"
-          f"ESPHome (fw_version в base.yaml), закоммитить и поставить тег: git tag fw-{version}")
+          f"ESPHome (fw_version в base.yaml) и закоммитить: git commit -am \"release(fw): {version}\"")
 
 
 if __name__ == "__main__":
