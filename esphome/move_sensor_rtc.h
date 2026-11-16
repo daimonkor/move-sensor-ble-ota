@@ -96,6 +96,25 @@ static RTC_DATA_ATTR uint32_t test_tx_ms = 0;
 static inline uint32_t tx_window_ms(uint32_t def_ms) { return (test_mode() && test_tx_ms) ? test_tx_ms : def_ms; }
 
 
+// ---- Защита батареи (1.4.0, 2026-11-16). Без неё на разряженном LiPo датчик просыпался как обычно,
+// пока не срабатывала защита банки (~2.5-3.0 В) — глубокий разряд сокращает жизнь аккумулятора.
+//  bat_low  (<= 10 %, снимается от 15 %): климат в BAT_LOW_CLIMATE_MULT раз реже, LED срабатываний не мигает.
+//  bat_crit (покой <= BAT_CRIT_V, снимается от BAT_RESUME_V — подзарядили): PIR не будит, датчик спит
+//           BAT_CRIT_CHECK_MS и на проверке шлёт пакет (HA видит батарею); будит и сервисный переключатель.
+static RTC_DATA_ATTR bool bat_low = false;
+static RTC_DATA_ATTR bool bat_crit = false;
+static constexpr float BAT_CRIT_V = 3.50f;     // ~2 % по lipo_pct
+static constexpr float BAT_RESUME_V = 3.65f;   // ~7 %: подзарядили (скачок напряжения при зарядке > 0.1 В)
+static constexpr uint32_t BAT_LOW_CLIMATE_MULT = 4;
+static constexpr uint32_t BAT_CRIT_CHECK_MS = 6UL * 3600 * 1000;
+
+// ---- Таймаут сервисного режима (1.4.0). Забытый включённым переключатель держал Wi-Fi (~80-100 мА),
+// пока не сядет батарея. Через service_timeout_min (base.yaml) мин после входа Wi-Fi выключается, датчик
+// работает как обычно и до выключения переключателя в сервисный режим не входит (будит его LOW на D2).
+static RTC_DATA_ATTR bool svc_timed_out = false;
+static uint32_t svc_since = 0;   // millis() входа в сервисный режим
+
+
 // ---- Отчёт о климате не реже Climate report interval (2026-11-14).
 // Раньше климат уходил только на переходах занято/свободно и по таймеру в режиме «свободно».
 // Пока «занято» и PIR повторно срабатывал (motion again), пакетов не было вовсе — температура
@@ -106,7 +125,10 @@ static RTC_DATA_ATTR int64_t climate_last_ms = 0;   // 0 = после холод
 static inline uint32_t climate_interval_ms(float minutes) {
   if (test_mode()) return TEST_WAKE_MS;
   if (std::isnan(minutes) || minutes < 1.0f) return 0;
-  return (uint32_t) (minutes * 60000.0f);
+  // 1.4.0: батарея разряжена — отчёт реже (не дольше 4 ч)
+  float m = bat_low ? minutes * BAT_LOW_CLIMATE_MULT : minutes;
+  if (m > 240.0f) m = 240.0f;
+  return (uint32_t) (m * 60000.0f);
 }
 // пора слать (допуск 2 с: пробуждение по таймеру + загрузка не должны пропустить срок)
 static inline bool climate_due(uint32_t ci) {
@@ -136,7 +158,6 @@ static inline uint32_t cap_sleep_ms(int64_t want_ms, uint32_t ci) {
 //           которую меряем сами: (замер без радио) − (первый замер под Wi-Fi).
 static RTC_DATA_ATTR float bat_vf = 0;      // сглаженное напряжение покоя, 0 = нет истории
 static RTC_DATA_ATTR int8_t bat_pct = -1;   // последний отправленный %, -1 = нет истории
-static RTC_DATA_ATTR bool bat_low = false;  // флаг "батарея разряжена" (с гистерезисом)
 static RTC_DATA_ATTR float bat_factor_used = 0;  // Voltage factor, с которым посчитан bat_vf (2026-11-15)
 
 // ---- Напряжение в пакет BTHome (2026-11-16, v1.15.5): среднее за 10 замеров (замер — раз за

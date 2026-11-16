@@ -27,6 +27,9 @@
 #              включён - Wi-Fi поднимается, выключен - Wi-Fi не включается вообще.
 
 substitutions:
+  # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
+  # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
+  fw_version: "1.4.0"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -56,6 +59,8 @@ substitutions:
   # Считается и через сон (RTC). То же делает команда сброса по BLE из HA (script factory_reset_net).
   # 2026-11-15: было 5 включений за 20 с — по просьбе Димы 3 за 10 с
   wifi_reset_toggles: "3"
+  # 1.4.0: через сколько минут сервисный режим (Wi-Fi) выключается сам, если переключатель забыли; 0 — никогда
+  service_timeout_min: "30"
   wifi_reset_window_ms: "10000"
   # сеть из прошивки — для сброса (лямбда не умеет !secret напрямую)
   fw_wifi_ssid: !secret wifi_ssid
@@ -66,6 +71,10 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  # версия прошивки для ESPHome (видна в ESPHome-устройстве в HA, сервисный режим)
+  project:
+    name: daimonkor.move_sensor_ble
+    version: ${fw_version}
   # 2026-11-15: это общий шаблон (move_sensor_ble/base.yaml). В ESPHome Builder у каждого датчика
   # своя карточка — move-sensor-ble-<Device ID>.yaml в корне esphome/ с именем целиком
   # (move-sensor-ble-148f98) и mac_suffix: "false". Device ID = хвост MAC Wi-Fi.
@@ -216,9 +225,16 @@ packages:
 
 api:
   reboot_timeout: 0s
+  # 1.4.0: шифрование API (сервисный режим, датчик в домашней сети). HA берёт ключ сам из ESPHome Builder
+  # (повторная авторизация ESPHome-устройства после прошивки); ключ — move_sensor_api_key в secrets.yaml
+  encryption:
+    key: !secret move_sensor_api_key
 
 ota:
   - platform: esphome
+    # 1.4.0: без пароля любой в домашней сети мог залить прошивку по Wi-Fi, пока включён сервисный режим.
+    # ESPHome Builder и интеграция (прошивка по Wi-Fi) берут его из этого YAML. BLE OTA — свой ключ (bthome: ble_ota)
+    password: !secret move_sensor_ota_password
 
 # Откат прошивки (как в весах и CAN-шине): новая прошивка считается рабочей, если
 # проработала boot_is_good_after без краша. Если упала/перезагрузилась раньше —
@@ -435,6 +451,12 @@ sensor:
             // разряжена: <= 10 % (~3.69 В покоя), снимаем флаг только от 15 %
             if (p <= 10) ms::bat_low = true;
             else if (p >= 15) ms::bat_low = false;
+            // 1.4.0: критический разряд — по напряжению покоя (сглаженному), выход — после подзарядки
+            const bool was_crit = ms::bat_crit;
+            if (ms::bat_vf > 0 && ms::bat_vf <= ms::BAT_CRIT_V) ms::bat_crit = true;
+            else if (ms::bat_vf >= ms::BAT_RESUME_V) ms::bat_crit = false;
+            if (ms::bat_crit != was_crit)
+              ESP_LOGW("bat", "critical battery %s (%.3f V rest)", ms::bat_crit ? "ON - PIR off, check every 6 h" : "OFF - recharged", ms::bat_vf);
             ESP_LOGI("bat", "measured %.3f V -> rest %.3f V (avg %.3f) -> %d %%%s",
                      x, v, ms::bat_vf, p, ms::bat_low ? " LOW" : "");
             id(battery_pct).publish_state(p);
@@ -912,9 +934,11 @@ text_sensor:
       // + 8 hex SHA-256 образа (2026-11-14): время сборки ESPHome меняется только при правке YAML,
       // а правка .h/.cpp (компоненты, includes) давала тот же номер — теперь версия уникальна всегда
       const uint8_t *sha = esp_app_get_description()->app_elf_sha256;
-      char buf[40];
-      snprintf(buf, sizeof(buf), "v%04d.%02d.%02d.%02d%02d%02d-%02x%02x%02x%02x", year, month, day, hh, mm, ss,
-               sha[0], sha[1], sha[2], sha[3]);
+      // 1.4.0: версия прошивки — первой («1.4.0 v2026.11.16.171328-078195f0»): ответ INFO по BLE
+      // обрезается по MTU, при обрезке теряется хвост, а версия остаётся
+      char buf[56];
+      snprintf(buf, sizeof(buf), "%s v%04d.%02d.%02d.%02d%02d%02d-%02x%02x%02x%02x", "${fw_version}",
+               year, month, day, hh, mm, ss, sha[0], sha[1], sha[2], sha[3]);
       return {std::string(buf)};
 
   - platform: template
@@ -930,6 +954,19 @@ interval:
   - interval: 200ms
     then:
       - lambda: "if (ms::rev_pending) id(bth_ota).rev_commit();"
+  # 1.4.0: забытый сервисный переключатель — через service_timeout_min мин Wi-Fi выключается,
+  # датчик работает как обычно; снова в сервисный режим — выключить и включить переключатель
+  - interval: 10s
+    then:
+      - lambda: |-
+          if (!id(service_mode) || !id(service_by_switch)) return;
+          const uint32_t limit = ${service_timeout_min}UL * 60000UL;
+          if (limit == 0 || millis() - ms::svc_since < limit) return;
+          ESP_LOGW("ms", "service mode timeout (%u min): Wi-Fi off until the switch is turned off",
+                   (unsigned) ${service_timeout_min});
+          ms::svc_timed_out = true;
+          id(service_by_switch) = false;
+          id(service_exit).execute();
   # сервисный переключатель: следим за уровнем на D2
   - interval: 200ms
     then:
@@ -940,7 +977,8 @@ interval:
           // дважды в счётчике заводского сброса. Ждём первого состояния.
           if (!id(service_btn).has_state()) return;
           const bool sw = id(service_btn).state;
-          if (sw && !id(service_by_switch)) {
+          if (!sw) ms::svc_timed_out = false;   // 1.4.0: выключили — следующее включение снова сервисный режим
+          if (sw && !id(service_by_switch) && !ms::svc_timed_out) {
             id(service_by_switch) = true;
             id(service_enter).execute();
           } else if (!sw && id(service_by_switch)) {
@@ -1021,9 +1059,15 @@ script:
           // холодном старте (после потери питания). Уровень читаем прямо с пина: фильтр
           // binary_sensor к этому моменту ещё не отработал. Выключен -> Wi-Fi не поднимаем.
           const bool sw_on = gpio_get_level((gpio_num_t) ${service_gpio}) != 0;
-          if (by_service || sw_on) {
+          // 1.4.0: сервисный режим закончился по таймауту — не входим, пока переключатель не выключат
+          // проснулись от ВЫКЛЮЧЕНИЯ переключателя (ждали LOW после таймаута) — это не вход в сервисный режим
+          const bool waited_off = ms::svc_timed_out;
+          if (!sw_on) ms::svc_timed_out = false;
+          if (((by_service && !waited_off) || sw_on) && !ms::svc_timed_out) {
             id(service_by_switch) = true;
             id(service_enter).execute();
+          } else if (sw_on) {
+            ESP_LOGI("ms", "service switch still ON after timeout - normal mode until it is turned off");
           }
       - script.execute: motion_eval
 
@@ -1226,7 +1270,8 @@ script:
             # PIR больше не ждём (2026-11-14): при HIGH на D1 спим с пробуждением по LOW.
             - wait_until:
                 condition:
-                  lambda: "return !id(service_btn).state;"
+                  # 1.4.0: после таймаута сервисного режима переключатель может быть включён — не ждём
+                  lambda: "return !id(service_btn).state || ms::svc_timed_out;"
                 timeout: 30s
             # BLE OTA/настройки — защёлка ПРЯМО перед сном (2026-11-14): реклама становится
             # неподключаемой, ждём 300 мс, не успел ли клиент подключиться; подключён — не спим,
@@ -1254,20 +1299,28 @@ script:
                   lambda: "return id(identify_left) <= 0;"
                 timeout: 65s
             - lambda: |-
-                // сервисный переключатель (D2) будит по HIGH
-                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${service_gpio}, ESP_GPIO_WAKEUP_GPIO_HIGH);
+                // сервисный переключатель (D2) будит по HIGH; 1.4.0: после таймаута сервисного режима он ещё
+                // включён (HIGH) — будить по LOW (выключили), иначе пробуждение сразу и по кругу
+                const bool svc_wait_off = ms::svc_timed_out && gpio_get_level((gpio_num_t) ${service_gpio}) != 0;
+                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${service_gpio},
+                    svc_wait_off ? ESP_GPIO_WAKEUP_GPIO_LOW : ESP_GPIO_WAKEUP_GPIO_HIGH);
                 // PIR (D1): ОДИН замер уровня -> и уровень пробуждения, и флаг pir_held.
                 // HIGH -> будить по LOW (отпускание), LOW -> будить по HIGH (новое движение).
                 // Подтяжку на время сна IDF ставит сам по уровню (LOW-wake -> pull-up), SR602
                 // выход push-pull через R1 1 кОм, так что подтяжка его не перебивает.
-                const bool pir_high = gpio_get_level((gpio_num_t) ${pir_gpio}) != 0;
-                ms::pir_held = pir_high;
-                if (!pir_high && ms::occupied && ms::keep_pending()) {
-                  ms::keep_start((int) id(keep_time).state);   // отпустил прямо перед сном
-                  ESP_LOGI("ms", "pir released before sleep, OFF in %d s", (int) id(keep_time).state);
+                // 1.4.0: критический разряд — PIR не будит (см. ms::bat_crit), только таймер проверки и переключатель
+                if (ms::bat_crit) {
+                  ms::pir_held = false;
+                } else {
+                  const bool pir_high = gpio_get_level((gpio_num_t) ${pir_gpio}) != 0;
+                  ms::pir_held = pir_high;
+                  if (!pir_high && ms::occupied && ms::keep_pending()) {
+                    ms::keep_start((int) id(keep_time).state);   // отпустил прямо перед сном
+                    ESP_LOGI("ms", "pir released before sleep, OFF in %d s", (int) id(keep_time).state);
+                  }
+                  esp_deep_sleep_enable_gpio_wakeup(1ULL << ${pir_gpio},
+                      pir_high ? ESP_GPIO_WAKEUP_GPIO_LOW : ESP_GPIO_WAKEUP_GPIO_HIGH);
                 }
-                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${pir_gpio},
-                    pir_high ? ESP_GPIO_WAKEUP_GPIO_LOW : ESP_GPIO_WAKEUP_GPIO_HIGH);
                 // LED во сне: без удержания пин D10 не управляется и LED может светиться
                 // весь сон. Фиксируем LOW и держим до пробуждения (снимается в on_boot).
                 id(dbg_led).turn_off();
@@ -1277,6 +1330,19 @@ script:
                 #if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP && !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
                 gpio_deep_sleep_hold_en();
                 #endif
+            # 1.4.0: критический разряд — спим BAT_CRIT_CHECK_MS (6 ч), на проверке пакет с батареей;
+            # подзарядили (покой >= BAT_RESUME_V) — снова обычная работа. Будит и сервисный переключатель.
+            - if:
+                condition:
+                  lambda: "return ms::bat_crit;"
+                then:
+                  - logger.log:
+                      level: WARN
+                      format: "critical battery: sleep %u h, PIR wake off"
+                      args: ["(unsigned) (ms::BAT_CRIT_CHECK_MS / 3600000UL)"]
+                  - deep_sleep.enter:
+                      id: ds
+                      sleep_duration: !lambda "return ms::BAT_CRIT_CHECK_MS;"
             - if:
                 condition:
                   lambda: "return ms::pir_held;"
@@ -1318,9 +1384,9 @@ script:
                               - deep_sleep.enter:
                                   id: ds
                                   sleep_duration: !lambda |-
-                                    uint32_t d = ms::test_mode() ? ms::TEST_WAKE_MS
-                                               : (id(climate_interval).state >= 1.0f ? (uint32_t) (id(climate_interval).state * 60000.0f)
-                                                                                    : UINT32_MAX);
+                                    // 1.4.0: через climate_interval_ms — быстрый тест и «батарея разряжена» (реже) там же
+                                    const uint32_t ci = ms::climate_interval_ms(id(climate_interval).state);
+                                    uint32_t d = ci ? ci : UINT32_MAX;
                                     // повтор «свободно» (2026-11-15): проснуться не позже его срока
                                     if (ms::off_repeat_ms != 0) {
                                       int64_t r = ms::off_repeat_ms - ms::now_ms();
@@ -1337,6 +1403,7 @@ script:
     then:
       - lambda: |-
           id(service_mode) = true;
+          ms::svc_since = millis();   // 1.4.0: отсчёт таймаута сервисного режима
           // счётчик включений переключателя для сброса Wi-Fi (RTC, переживает сон)
           const int64_t now = ms::now_ms();
           if (ms::svc_on_count == 0 || now - ms::svc_first_ms > ${wifi_reset_window_ms}) {
@@ -1468,7 +1535,8 @@ script:
     then:
       - if:
           condition:
-            lambda: "return id(debug_led_enable).state;"
+            # 1.4.0: батарея разряжена — LED срабатываний не тратит её (в сервисном режиме мигает)
+            lambda: "return id(debug_led_enable).state && (!ms::bat_low || id(service_mode));"
           then:
             # пауза в темноте перед вспышками, чтобы серию было легко сосчитать
             - lambda: |-
