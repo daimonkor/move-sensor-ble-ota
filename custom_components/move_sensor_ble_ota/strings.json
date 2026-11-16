@@ -32,7 +32,6 @@
         "title": "Move Sensor BLE OTA",
         "menu_options": {
           "upload": "Upload firmware (.bin)",
-          "view": "Display (hidden copies, panel)",
           "settings": "Options (key, firmware folder, images kept)"
         }
       },
@@ -57,14 +56,6 @@
           "ota_password": "For flashing over Wi-Fi in service mode (sensor firmware 1.4.0+). Stored in /config/esphome/secrets.yaml (move_sensor_ota_password). Empty — keep the current one, or generate a random one and save it if there is none. To view or change: ESPHome Builder → Secrets.",
           "api_key": "32 bytes, base64. Encrypts the sensor–HA link in service mode; the integration puts it into the sensor's ESPHome device itself — no confirmation after flashing. Stored in secrets.yaml (move_sensor_api_key). Empty — keep the current one, or generate and save one if there is none."
         }
-      },
-      "view": {
-        "title": "Display",
-        "description": "Copies of the sensor data and settings on the ESPHome and BTHome devices are hidden — the Move Sensor BLE device shows them from either channel. Hidden entities keep working (history, automations).",
-        "data": {
-          "show_hidden": "Show hidden ESPHome / BTHome copies",
-          "show_panel": "Show the Move Sensor BLE panel in the sidebar"
-        }
       }
     },
     "error": {
@@ -73,8 +64,7 @@
     },
     "abort": {
       "firmware_uploaded": "Uploaded {file}: project {project}, version {version}, {size} KB{factory}. Flashing started: {started}. Progress: «Firmware» on the device page.",
-      "not_loaded": "Integration is not loaded — restart Home Assistant.",
-      "view_saved": "Saved."
+      "not_loaded": "Integration is not loaded — restart Home Assistant."
     }
   },
   "services": {

@@ -74,7 +74,9 @@ class DuplicateHider:
     async def async_start(self) -> None:
         loaded = await self.store.async_load()
         if isinstance(loaded, dict):
-            self.data = {"show": bool(loaded.get("show")), "entities": loaded.get("entities") or {}}
+            # v1.17.1: пункта «Вид» больше нет — копии всегда скрыты (показанные раньше скрываются снова;
+            # показать отдельную копию — на странице устройства HA, «+N скрытых объектов»)
+            self.data = {"show": False, "entities": loaded.get("entities") or {}}
         self._unsub.append(self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._reg_event))
         self._unsub.append(self.hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, self._reg_event))
         # полный проход при каждом запуске: события create, пришедшие до нас, потеряны

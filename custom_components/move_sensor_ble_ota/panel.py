@@ -53,18 +53,11 @@ SECTIONS = [
 ]
 
 
+_STALE_DONE = f"{DOMAIN}_panel_store_removed"
+
+
 def _store(hass: HomeAssistant) -> Store:
     return Store(hass, 1, f"{DOMAIN}.panel")
-
-
-async def async_panel_shown(hass: HomeAssistant) -> bool:
-    data = await _store(hass).async_load()
-    return True if not isinstance(data, dict) else bool(data.get("show", True))
-
-
-async def async_set_panel_shown(hass: HomeAssistant, show: bool) -> None:
-    await _store(hass).async_save({"show": bool(show)})
-    await async_update_panel(hass)
 
 
 def _config(hass: HomeAssistant) -> dict:
@@ -81,7 +74,7 @@ def _config(hass: HomeAssistant) -> dict:
                 if eid:
                     ids.append(eid)
             if title == "BLE":
-                # «Настроить» — ключ OTA и папка прошивок, «Вид» (страница интеграции)
+                # «Настроить» — ключ OTA и папка прошивок (страница интеграции)
                 ids.insert(6 if len(ids) > 6 else len(ids), {
                     "type": "button", "name": "Configure (OTA key, display)", "icon": "mdi:cog",
                     "action_name": "Open", "tap_action": {"action": "navigate",
@@ -130,8 +123,11 @@ def _config(hass: HomeAssistant) -> dict:
 async def async_update_panel(hass: HomeAssistant) -> None:
     """Зарегистрировать/обновить/убрать панель (по галочке и наличию датчиков)."""
     _remove_own(hass)
-    if not hass.data.get(DOMAIN) or not await async_panel_shown(hass):
+    if not hass.data.get(DOMAIN):   # v1.17.1: панель всегда (убрать из меню — «Изменить боковую панель» HA)
         return
+    if not hass.data.get(_STALE_DONE):   # настройка «показывать панель» из убранного пункта «Вид» больше не нужна
+        hass.data[_STALE_DONE] = True
+        await _store(hass).async_remove()
     if not hass.data.get(_STATIC_DONE):
         from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
 
@@ -149,7 +145,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.17.0",
+        module_url=f"{STATIC_URL}/panel.js?v=1.17.1",
         config=_config(hass),
         require_admin=False,
     )
