@@ -2,7 +2,7 @@
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Release](https://img.shields.io/github/v/release/daimonkor/move-sensor-ble-ota)](https://github.com/daimonkor/move-sensor-ble-ota/releases)
-[![Docs](https://img.shields.io/badge/docs-RU%20%7C%20EN-4F46E5.svg)](https://daimonkor.github.io/move-sensor-ble-ota/)
+[![Docs](https://img.shields.io/badge/docs-RU%20%7C%20UK%20%7C%20EN-4F46E5.svg)](https://daimonkor.github.io/move-sensor-ble-ota/)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=daimonkor&repository=move-sensor-ble-ota&category=integration)
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=move_sensor_ble_ota)
