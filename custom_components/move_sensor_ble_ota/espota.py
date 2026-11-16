@@ -1,13 +1,15 @@
 """Прошивка по Wi-Fi штатным OTA ESPHome (v1.15, сервисный режим датчика).
 
-Минимальный клиент протокола ESPHome OTA (порт 3232), по мотивам esphome/espota2.py (MIT):
-без пароля (у датчика `ota: - platform: esphome` без password) и без шифрования Noise.
+Минимальный клиент протокола ESPHome OTA (порт 3232), по мотивам esphome/espota2.py (MIT).
+v1.17.0: пароль OTA (прошивка датчика 1.4.0+, `ota: password: !secret move_sensor_ota_password`) —
+вызов-ответ SHA256 (или MD5 у старых прошивок): hash(пароль + nonce + cnonce). Шифрования Noise нет.
 Блокирующий — вызывать в executor.
 """
 from __future__ import annotations
 
 import gzip
 import hashlib
+import secrets
 import socket
 import time
 from collections.abc import Callable
@@ -26,6 +28,8 @@ RESPONSE_SUPPORTS_COMPRESSION = 0x46
 RESPONSE_CHUNK_OK = 0x47
 RESPONSE_FEATURE_FLAGS = 0x48
 CLIENT_FEATURE_SUPPORTS_COMPRESSION = 0x01
+CLIENT_FEATURE_SUPPORTS_SHA256_AUTH = 0x02
+_AUTH = {RESPONSE_REQUEST_SHA256_AUTH: (hashlib.sha256, 64), RESPONSE_REQUEST_AUTH: (hashlib.md5, 32)}
 OTA_VERSION_2_0 = 2
 BLOCK = 8192
 _ERRORS = {
@@ -79,7 +83,7 @@ def _send(sock: socket.socket, data: bytes, what: str) -> None:
 
 
 def upload(host: str, image: bytes, on_progress: Callable[[int], None] | None = None,
-           port: int = OTA_PORT, timeout: float = 20.0) -> float:
+           port: int = OTA_PORT, timeout: float = 20.0, password: str | None = None) -> float:
     """Залить образ приложения (firmware.ota.bin). Возвращает скорость, кБ/с."""
     try:
         sock = socket.create_connection((host, port), timeout=timeout)
@@ -89,7 +93,7 @@ def upload(host: str, image: bytes, on_progress: Callable[[int], None] | None = 
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         _send(sock, MAGIC_BYTES, "magic")
         version = _recv(sock, 2, "версия OTA", RESPONSE_OK)[1]
-        _send(sock, bytes([CLIENT_FEATURE_SUPPORTS_COMPRESSION]), "features")
+        _send(sock, bytes([CLIENT_FEATURE_SUPPORTS_COMPRESSION | CLIENT_FEATURE_SUPPORTS_SHA256_AUTH]), "features")
         feat = _recv(sock, 1, "features", None)[0]
         if feat == RESPONSE_FEATURE_FLAGS:
             feat = _recv(sock, 1, "feature flags", None)[0]
@@ -100,7 +104,18 @@ def upload(host: str, image: bytes, on_progress: Callable[[int], None] | None = 
         auth = _recv(sock, 1, "авторизация", (RESPONSE_AUTH_OK, RESPONSE_REQUEST_AUTH,
                                                RESPONSE_REQUEST_SHA256_AUTH))[0]
         if auth != RESPONSE_AUTH_OK:
-            raise EspOtaError("датчик требует пароль OTA ESPHome — интеграция шлёт без пароля")
+            if not password:
+                raise EspOtaError("датчик требует пароль OTA ESPHome — нет move_sensor_ota_password в "
+                                  "/config/esphome/secrets.yaml")
+            hash_func, n = _AUTH[auth]
+            nonce = _recv(sock, n, "nonce", None)
+            cnonce = secrets.token_hex(n // 2)
+            _send(sock, cnonce.encode(), "cnonce")
+            h = hash_func()
+            for part in (password.encode("utf-8"), nonce, cnonce.encode()):
+                h.update(part)
+            _send(sock, h.hexdigest().encode(), "ответ авторизации")
+            _recv(sock, 1, "авторизация", RESPONSE_AUTH_OK)
         sock.settimeout(90.0)
         _send(sock, len(payload).to_bytes(4, "big"), "размер")
         _recv(sock, 1, "подготовка", RESPONSE_UPDATE_PREPARE_OK)

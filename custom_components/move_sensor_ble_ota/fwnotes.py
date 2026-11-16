@@ -201,14 +201,41 @@ def new_sections(cur: str | None, flashed: str | None) -> list[dict]:
     return [s for s in secs if s["heading"] not in old]
 
 
-_KV_RE = re.compile(r"^[+-](\s*)(-\s+)?([\w.-]+):\s*(.*?)\s*(#.*)?$")
+def _vkey(v: str) -> tuple:
+    return tuple(int(x) for x in v.split("."))
+
+
+def sections_after(cur: str | None, device_version: str) -> list[dict]:
+    """v1.17.0: версия на датчике известна (её сообщает прошивка) — разделы новее неё + черновик сверху."""
+    out = []
+    for sec in parse_changelog(cur):
+        if sec["version"] is None:
+            if not out or out[-1]["version"] is None:   # «Не выпущено» — над выпущенными
+                out.append(sec)
+            continue
+        if _vkey(sec["version"]) > _vkey(device_version):
+            out.append(sec)
+    return out
+
+
+def section_for(text: str | None, version: str) -> list[dict]:
+    """Раздел CHANGELOG этой версии (что сейчас на датчике)."""
+    return [s for s in parse_changelog(text) if s["version"] == version][:1]
+
+
+_KV_RE = re.compile(r"^[+-](\s*)(-\s+)?([\w.-]+):(?!:)\s*(.*?)\s*(#.*)?$")
+FRIENDLY_MAX = 6
+
+
 
 
 def friendly(ch: dict | None) -> list[str]:
-    """Понятный пересказ diff: «параметр: было → стало», без комментариев и кода."""
+    """Короткий пересказ diff, когда нет записи в CHANGELOG: значения настроек (substitutions, отступ 2)
+    «было → стало», всё остальное — одной строкой на файл; не больше FRIENDLY_MAX пунктов."""
     out: list[str] = []
     for it in (ch or {}).get("files", []):
-        if os.path.basename(it["file"]) in SECRET_FILES:
+        name = os.path.basename(it["file"])
+        if name in SECRET_FILES:
             out.append(f"секреты (`{it['file']}`) изменены")
             continue
         if it["status"] != "modified":
@@ -223,22 +250,26 @@ def friendly(ch: dict | None) -> list[str]:
                 comments += 1
                 continue
             m = _KV_RE.match(d)
-            if m and it["file"].endswith((".yaml", ".yml")):
+            # настройка — простая строка «  ключ: значение» верхнего уровня substitutions (отступ 2)
+            if (m and it["file"].endswith((".yaml", ".yml")) and len(m.group(1)) == 2 and not m.group(2)
+                    and m.group(4) and not m.group(4).startswith(("|", ">"))):
                 (old if d[0] == "-" else new)[m.group(3)] = m.group(4)
             else:
                 other += 1
         for k in list(new):
             if k in old:
                 if old[k] != new[k]:
-                    out.append(f"`{k}`: {old[k] or '—'} → {new[k] or '—'}")
+                    out.append(f"`{k}`: {old[k]} → {new[k]}")
                 old.pop(k)
             else:
-                out.append(f"`{k}`: добавлено ({new[k] or '—'})")
-        out += [f"`{k}`: убрано" for k in old]
+                out.append(f"`{k}`: новый параметр ({new[k]})")
+        out += [f"`{k}`: параметр убран" for k in old]
         if other:
-            out.append(f"`{os.path.basename(it['file'])}`: изменена логика ({other} строк)")
+            out.append(f"`{name}`: изменены логика и конфигурация ({other} строк)")
         elif comments and not (old or new):
-            out.append(f"`{os.path.basename(it['file'])}`: только комментарии")
+            out.append(f"`{name}`: только комментарии")
+    if len(out) > FRIENDLY_MAX:
+        out = out[:FRIENDLY_MAX - 1] + [f"и ещё {len(out) - FRIENDLY_MAX + 1} — в «Технических подробностях»"]
     return out
 
 

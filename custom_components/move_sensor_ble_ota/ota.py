@@ -212,11 +212,20 @@ def config_tree_mtime(esphome_dir: str, device_yaml: str) -> float:
     return m
 
 
+def fw_semver(version: str | None) -> str | None:
+    """v1.17.0: версия прошивки из строки INFO датчика («1.4.0 v2026…» -> «1.4.0»); старые — None."""
+    import re  # noqa: PLC0415
+
+    m = re.match(r"\s*(\d+\.\d+\.\d+)(?:\s|$)", version or "")
+    return m.group(1) if m else None
+
+
 def build_time(version: str | None) -> float | None:
     """Время сборки из версии прошивки vYYYY.MM.DD.HHMMSS-<sha> (местное время HA), epoch."""
     import re  # noqa: PLC0415
 
-    m = re.match(r"v?(\d{4})\.(\d{2})\.(\d{2})\.(\d{2})(\d{2})(\d{2})", version or "")
+    # v1.17.0: прошивка 1.4.0+ отдаёт «1.4.0 v2026.11.16.171328-<sha>» — метка сборки после версии
+    m = re.search(r"(?:^|\s)v?(\d{4})\.(\d{2})\.(\d{2})\.(\d{2})(\d{2})(\d{2})", version or "")
     if not m:
         return None
     y, mo, d, hh, mi, ss = (int(x) for x in m.groups())
@@ -386,6 +395,23 @@ def read_secret_key() -> str | None:
     except OSError:
         return None
     return None
+
+
+def read_secret(name: str) -> str | None:
+    """v1.17.0: любой ключ из /config/esphome/secrets.yaml (блокирующая)."""
+    try:
+        with open(SECRETS_PATH, encoding="utf-8") as f:
+            for line in f:
+                s = line.strip()
+                if s.startswith(name + ":"):
+                    v = s.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+                    return v or None
+    except OSError:
+        return None
+    return None
+
+
+OTA_PASSWORD_SECRET = "move_sensor_ota_password"   # пароль ESPHome OTA (Wi-Fi), прошивка 1.4.0+
 
 
 def unpack_settings(payload: bytes) -> dict:
@@ -1176,12 +1202,17 @@ class OtaManager:
             lambda: (fwnotes.read_file(cl_cur), fwnotes.read_file(cl_old)))
         self.fw_version_flashed = fwnotes.top_version(old_text)
         self.fw_current_section = fwnotes.parse_changelog(old_text)[:1]
+        dev = fw_semver(self.firmware_version)   # v1.17.0: версию сообщает сама прошивка (1.4.0+)
+        if dev:
+            self.fw_version_flashed = dev
+            self.fw_current_section = fwnotes.section_for(cur_text, dev) or self.fw_current_section
         self.fw_version_new = fwnotes.top_version(cur_text)
         if not (self.config_hash and self.flashed_hash and self.config_hash != self.flashed_hash):
             self.fw_changes = self.fw_changed_since = None
             self.fw_sections = []
             return True
-        self.fw_sections = fwnotes.new_sections(cur_text, old_text)
+        self.fw_sections = (fwnotes.sections_after(cur_text, dev) if dev
+                            else fwnotes.new_sections(cur_text, old_text))
         built = build_time(self.firmware_version)
 
         def job():
@@ -1955,7 +1986,9 @@ class OtaManager:
             loop.call_soon_threadsafe(_upd)
 
         try:
-            self.speed_kbs = round(await self.hass.async_add_executor_job(upload, host, image.data, prog), 1)
+            pw = await self.hass.async_add_executor_job(read_secret, OTA_PASSWORD_SECRET)
+            self.speed_kbs = round(await self.hass.async_add_executor_job(
+                lambda: upload(host, image.data, prog, password=pw)), 1)
         except EspOtaCommitted as err:
             _LOGGER.warning("%s: Wi-Fi OTA: image sent, final answer lost (%s) - assuming success", self.name, err)
         except EspOtaNetworkError as err:
