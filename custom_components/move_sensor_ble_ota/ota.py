@@ -168,10 +168,9 @@ WIFI_ECHO_S = 5.0   # сколько ждём эхо своей записи п�
 _CFG_EXT = (".yaml", ".yml", ".h", ".hpp", ".c", ".cpp", ".py", ".js", ".css", ".html")
 
 
-def config_tree_hash(esphome_dir: str, device_yaml: str) -> str:
-    """Хеш YAML датчика + move_sensor_ble/ + components/bthome/ + move_sensor_rtc.h + secrets.yaml
-    (блокирующая). Копии (.bak*), кэши, этикетки и папка прошивок не входят."""
-    h = hashlib.sha256()
+def _config_tree_files(esphome_dir: str, device_yaml: str) -> list[str]:
+    """Файлы сборки: YAML датчика + move_sensor_ble/ + components/bthome/ + move_sensor_rtc.h + secrets.yaml.
+    Копии (.bak*), кэши, этикетки и папка прошивок не входят. Блокирующая."""
     files = [os.path.join(esphome_dir, device_yaml), os.path.join(esphome_dir, "move_sensor_rtc.h"),
              os.path.join(esphome_dir, "secrets.yaml")]
     for sub in ("move_sensor_ble", os.path.join("components", "bthome")):
@@ -183,7 +182,13 @@ def config_tree_hash(esphome_dir: str, device_yaml: str) -> str:
                     continue
                 if fn.lower().endswith(_CFG_EXT):
                     files.append(os.path.join(dirpath, fn))
-    for path in files:
+    return files
+
+
+def config_tree_hash(esphome_dir: str, device_yaml: str) -> str:
+    """Хеш файлов сборки (блокирующая)."""
+    h = hashlib.sha256()
+    for path in _config_tree_files(esphome_dir, device_yaml):
         try:
             with open(path, "rb") as f:
                 h.update(os.path.relpath(path, esphome_dir).encode())
@@ -191,6 +196,31 @@ def config_tree_hash(esphome_dir: str, device_yaml: str) -> str:
         except OSError:
             continue
     return h.hexdigest()[:12]
+
+
+def config_tree_mtime(esphome_dir: str, device_yaml: str) -> float:
+    """Время последней правки файлов сборки, epoch (блокирующая)."""
+    m = 0.0
+    for path in _config_tree_files(esphome_dir, device_yaml):
+        try:
+            m = max(m, os.path.getmtime(path))
+        except OSError:
+            continue
+    return m
+
+
+def build_time(version: str | None) -> float | None:
+    """Время сборки из версии прошивки vYYYY.MM.DD.HHMMSS-<sha> (местное время HA), epoch."""
+    import re  # noqa: PLC0415
+
+    m = re.match(r"v?(\d{4})\.(\d{2})\.(\d{2})\.(\d{2})(\d{2})(\d{2})", version or "")
+    if not m:
+        return None
+    y, mo, d, hh, mi, ss = (int(x) for x in m.groups())
+    try:
+        return datetime(y, mo, d, hh, mi, ss, tzinfo=dt_util.DEFAULT_TIME_ZONE).timestamp()
+    except ValueError:
+        return None
 
 
 def read_tx_power(esphome_dir: str) -> int | None:
@@ -968,8 +998,15 @@ class OtaManager:
             self.tx_power_dbm = tx
             self._notify()
         if self.flashed_hash is None:
-            self.flashed_hash = h   # первый запуск: считаем, что на датчике текущий YAML
-            self._save()
+            # первый запуск (обновление с 1.14): на датчике текущий YAML, если файлы не новее сборки
+            # на датчике; новее (обновили прошивку в /config/esphome) — предложить «Установить»
+            # версию датчика ещё не знаем — решим, когда прочитаем её по BLE
+            built = build_time(self.firmware_version)
+            if built is not None:
+                mtime = await self.hass.async_add_executor_job(config_tree_mtime, ESPHOME_DIR, cfg)
+                self.flashed_hash = "older" if mtime > built + 120 else h
+                self._save()
+                self._notify()
         if h != self.config_hash:
             self.config_hash = h
             self._notify()
@@ -1747,6 +1784,8 @@ class OtaManager:
             self.firmware_seen = dt_util.now()
             self._save()
             self._notify()
+            if self.flashed_hash is None:   # первый запуск: теперь можно сравнить YAML со сборкой
+                self.hass.async_create_task(self.async_refresh_config_hash())
             # после успешной прошивки датчик перезагрузился и ответил — итог подтверждён:
             # сразу idle / 0 % (не ждать RESULT_HOLD_S); итог остаётся в атрибуте last_result
             # подтверждение — только после перезагрузки датчика (сброс Wake count) и с новой версией;
