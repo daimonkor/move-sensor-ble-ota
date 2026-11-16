@@ -248,7 +248,7 @@ DOCS_PANEL = "move-sensor-ble-ota-docs"
 
 
 async def _register_docs(hass: HomeAssistant) -> None:
-    """Документация (docs/index.html из README.md) прямо в HA: кнопка «Документация» на странице
+    """Документация (docs/index*.html — единственный источник, тот же сайт на GitHub Pages) прямо в HA: кнопка «Документация» на странице
     интеграции (manifest.documentation) и «Посетить» на странице устройства (скрытая панель)."""
     flag = f"{DOMAIN}_docs_registered"
     if hass.data.get(flag):

@@ -5,7 +5,7 @@ set -e
 OWNER="$1"; REPO="${2:-move-sensor-ble-ota}"
 cd "$(dirname "$0")/.."
 INT=custom_components/move_sensor_ble_ota
-for f in README.md $INT/README.md $INT/docs/index.html; do
+for f in README.md $INT/docs/index.html $INT/docs/index.en.html; do
   sed -i.tmp -e "s#OWNER/move-sensor-ble-ota#$OWNER/$REPO#g" \
              -e "s#owner=OWNER#owner=$OWNER#g" \
              -e "s#repository=move-sensor-ble-ota#repository=$REPO#g" "$f" && rm -f "$f.tmp"
@@ -17,4 +17,4 @@ m=json.load(open(p))
 m["codeowners"]=["@"+o]
 json.dump(m,open(p,"w"),indent=2,ensure_ascii=False); open(p,"a").write("\n")
 PY
-grep -rn "OWNER" README.md $INT/README.md $INT/docs/index.html || echo "OK: OWNER заменён на $OWNER"
+grep -rn "OWNER" README.md $INT/docs/index.html $INT/docs/index.en.html || echo "OK: OWNER заменён на $OWNER"

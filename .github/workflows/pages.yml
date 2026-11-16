@@ -1,0 +1,40 @@
+# Документация: один источник — custom_components/move_sensor_ble_ota/docs (её же показывает HA).
+# Публикуется на GitHub Pages при каждом изменении: https://daimonkor.github.io/move-sensor-ble-ota/
+name: Docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "custom_components/move_sensor_ble_ota/docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect site
+        run: |
+          mkdir -p _site
+          cp -r custom_components/move_sensor_ble_ota/docs/. _site/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

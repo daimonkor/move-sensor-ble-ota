@@ -6,7 +6,8 @@ substitutions:
   friendly_name: Move Sensor BLE 148f98
   mac_suffix: "false"
   # RSSI этого датчика в HA: устройство BTHome -> Signal strength (у каждого датчика своя сущность)
-  ble_rssi_entity: sensor.koridor_move_sensor_signal_strength
+  # 2026-11-16: Signal (dBm) интеграции Move Sensor BLE (BTHome-устройство удалено)
+  ble_rssi_entity: sensor.koridor_move_sensor_ble_signal_2
 
 packages:
   base: !include move_sensor_ble/base.yaml

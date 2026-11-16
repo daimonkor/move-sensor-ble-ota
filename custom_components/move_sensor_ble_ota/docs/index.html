@@ -199,6 +199,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
 <main>
 
 <nav class="toc">
+  <a href="#start"><svg class="i"><use href="#i-chip"/></svg>Быстрый старт</a>
   <a href="#how"><svg class="i"><use href="#i-wave"/></svg>Как работает</a>
   <a href="#install"><svg class="i"><use href="#i-store"/></svg>Установка</a>
   <a href="#setup"><svg class="i"><use href="#i-sliders"/></svg>Как настроить</a>
@@ -211,6 +212,38 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <a href="#protocol"><svg class="i"><use href="#i-bt"/></svg>Протокол</a>
   <a href="#trouble"><svg class="i"><use href="#i-alert"/></svg>Диагностика</a>
 </nav>
+
+<!-- БЫСТРЫЙ СТАРТ -->
+<section id="start">
+  <h2><span class="ic bg-green"><svg class="i"><use href="#i-chip"/></svg></span>Быстрый старт</h2>
+  <p class="lead">От деталей на столе до движения в Home Assistant. Нужны Home Assistant с аддоном <b>ESPHome Builder</b>,
+    интеграция <b>Bluetooth</b> и <b>Bluetooth-прокси ESPHome</b> рядом с датчиком. Файлы — в
+    <a href="https://github.com/daimonkor/move-sensor-ble-ota" target="_blank" rel="noopener">репозитории на GitHub</a>.</p>
+  <ol class="steps">
+    <li><b>Спаять</b> XIAO ESP32-C3, PIR SR602, SHT41 и LiPo по шапке
+      <a href="https://github.com/daimonkor/move-sensor-ble-ota/blob/main/esphome/move_sensor_ble/base.yaml" target="_blank" rel="noopener"><code>esphome/move_sensor_ble/base.yaml</code></a>
+      (пины, делитель, LED, сервисный переключатель).</li>
+    <li><b>Скопировать прошивку</b> в Home Assistant: всё из <code>esphome/</code> репозитория → <code>/config/esphome/</code>.</li>
+    <li><b>Секреты</b>: <code>secrets.example.yaml</code> → <code>/config/esphome/secrets.yaml</code> (или дописать строки в свой) и заполнить
+      Wi-Fi роутера, пароль своей точки доступа датчика и <code>move_sensor_ble_ota_key</code> — любая длинная случайная строка,
+      например <code>openssl rand -hex 16</code>. Интеграция берёт тот же ключ из этого файла.</li>
+    <li><b>Файл датчика</b>: <code>move-sensor-ble-148f98.yaml</code> → <code>move-sensor-ble-new.yaml</code>, поправить <code>name</code> /
+      <code>friendly_name</code>. В ESPHome Builder: <b>Install → Plug into this computer</b> (USB, только первый раз).</li>
+    <li><b>Device ID</b> — последние 6 hex-цифр MAC Wi-Fi датчика (в логе установки ESPHome и в имени точки доступа
+      <code>MoveSensorBLE-XXXXXX</code>). Переименовать файл в <code>move-sensor-ble-&lt;id&gt;.yaml</code> и вписать id в <code>name</code>:
+      сборка по BLE ищет именно этот файл.</li>
+    <li><b>Интеграция</b>: кнопки в «Установке» → <b>Скачать</b> → перезапуск → <b>Добавить интеграцию</b> → выбрать датчик.
+      Интеграция находит его сама по BLE-рекламе — отдельная интеграция BTHome не нужна. Поле <b>Ключ OTA</b> оставить пустым.</li>
+    <li><b>Сигнал на сайте датчика</b>: в файле датчика <code>ble_rssi_entity</code> = сущность <b>Signal</b> устройства Move Sensor BLE,
+      затем <b>Firmware → Установить</b>.</li>
+    <li><b>Проверка</b>: помахать — <i>Occupancy</i> включается, LED мигает 1 раз; через <i>Keep time</i> — «свободно» и 2 вспышки.
+      <i>Settings status</i> после первого пробуждения — <i>In sync</i>.</li>
+  </ol>
+  <div class="note info"><svg class="i"><use href="#i-info"/></svg>
+    <div>Дальше прошивка — сущность <b>Firmware</b> («Установить»), без USB; настройки и данные — устройство <b>Move Sensor BLE</b>
+    и панель в меню. Wi-Fi нужен только в <b>сервисном режиме</b> (переключатель на D2, LED — 3 медленные вспышки): сайт датчика —
+    <code>http://100.64.4.1/</code> на его точке доступа.</div></div>
+</section>
 
 <!-- КАК РАБОТАЕТ -->
 <section id="how">
@@ -608,6 +641,13 @@ document.querySelectorAll('a.ha-nav').forEach(function(a){
   var start=location.hash.slice(1);
   if(!start){try{start=localStorage.getItem(K)||''}catch(e){}}
   show(start,!!location.hash);
+})();
+</script>
+<script>
+/* Вне Home Assistant (GitHub Pages): ссылки /_my_redirect/… ведут через my.home-assistant.io */
+(function(){ if(location.pathname.indexOf('/move_sensor_ble_ota/')===0) return;
+  document.querySelectorAll('a[href^="/_my_redirect/"]').forEach(function(a){
+    a.href='https://my.home-assistant.io/redirect/'+a.getAttribute('href').slice('/_my_redirect/'.length); a.classList.remove('ha-nav'); a.target='_blank'; });
 })();
 </script>
 </body>

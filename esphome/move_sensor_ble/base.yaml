@@ -47,9 +47,9 @@ substitutions:
   led_gpio: "10"           # D10
   sda_gpio: "6"            # D4
   scl_gpio: "7"            # D5
-  # сущность HA с RSSI этого датчика (устройство BTHome -> Signal strength). Значение по умолчанию —
+  # сущность HA с RSSI этого датчика (2026-11-16: Signal (dBm) устройства Move Sensor BLE). Значение по умолчанию —
   # заглушка: задавай ble_rssi_entity в файле датчика (move-sensor-ble-<ID>.yaml), у каждого своя
-  ble_rssi_entity: sensor.move_sensor_ble_signal_strength
+  ble_rssi_entity: sensor.move_sensor_ble_signal
   # Заводской сброс переключателем (2026-11-15): включить сервисный режим wifi_reset_toggles раз подряд,
   # первое и последнее включения не дальше wifi_reset_window_ms -> сеть роутера сбрасывается на сеть
   # из прошивки (secrets.yaml) БЕЗ отката И пароль своей точки доступа — на заводской, LED мигает 6 раз.
