@@ -18,7 +18,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class PirStuckSensor(OtaEntity, BinarySensorEntity):
-    """ON, если датчик показывает «занято» непрерывно дольше «PIR stuck after».
+    """ON, если датчик показывает «занято» и свежих срабатываний PIR нет дольше «PIR stuck after»
+    (прошивка со своим блоком, v1.14.2; у старой — «занято» непрерывно дольше порога).
     Причины: отвалился провод сигнала PIR (во сне по LOW на D1 подтяжка вверх — пин читается HIGH),
     тепло/солнце/сквозняк в поле линзы, просадка питания SR602, влага."""
 
@@ -39,4 +40,5 @@ class PirStuckSensor(OtaEntity, BinarySensorEntity):
             "occupied_since": since.isoformat() if since else None,
             "occupied_min": round((dt_util.utcnow() - since).total_seconds() / 60, 1) if since else 0,
             "threshold_min": self.mgr.stuck_threshold_min,
+            "last_motion": self.mgr.last_motion.isoformat() if self.mgr.last_motion else None,
         }

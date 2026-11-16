@@ -337,20 +337,20 @@ bthome:
       id: battery_pct
     - type: voltage
       id: vbat
-    - type: count_uint16
-      id: wake_counter
     - type: temperature
       id: env_temp
     - type: humidity
       id: env_hum
-    # Пакет: 10 (заголовок + packet id) + 14 (сенсоры) + 4 (бинарные) = 28 из 31 байта.
+    # Пакет: 10 (заголовок + packet id) + 11 (сенсоры) + 2 (occupancy) = 23 байта BTHome
+    # + 8 байт свой блок (Manufacturer Specific Data 0xFFFF, set_custom_data) = 31 из 31.
+    # Battery low убран 2026-11-16 (дублирует Battery %). Wake count с 2026-11-16 (v1.14.2) —
+    # в своём блоке: wake uint16 LE, settings_rev uint8 (0 = ещё нет, будет в 1.15),
+    # motion_count uint8 (свежие срабатывания PIR). BTHome-сущность «Count» в HA застынет.
     # Счётчики сбросов (brownout/panic/watchdog) в BTHome НЕ идут — их читает интеграция
     # move_sensor_ble_ota командой DIAG (components/bthome/ble_ota.*), 2026-11-14.
   binary_sensors:
     - type: occupancy
       id: occupancy
-    - type: battery_low
-      id: battery_low
 
 # ----------------------------------------------------------------- сенсоры
 sensor:
@@ -411,7 +411,6 @@ sensor:
                      x, v, ms::bat_vf, p, ms::bat_low ? " LOW" : "");
             id(battery_pct).publish_state(p);
             id(bth_ota).set_battery_percent(p);   // порог для BLE OTA
-            id(battery_low).publish_state(ms::bat_low);
             id(vbat_rest).publish_state(ms::bat_vf);
 
   # сырое напряжение на пине D0, БЕЗ пересчёта делителя (АЦП как есть) — для отладки.
@@ -604,6 +603,7 @@ binary_sensor:
     # PIR отпустил, пока плата не спит (например, в окне отправки) — Keep time с этого момента
     on_release:
       - lambda: |-
+          ms::pir_low_seen = true;   // следующий подъём — свежее срабатывание (2026-11-16)
           if (ms::occupied && ms::keep_pending()) {
             ms::keep_start((int) id(keep_time).state);
             ESP_LOGI("ms", "pir released (awake), OFF in %d s", (int) id(keep_time).state);
@@ -630,12 +630,6 @@ binary_sensor:
     name: "Occupancy"
     icon: mdi:motion-sensor
     device_class: occupancy
-
-  - platform: template
-    id: battery_low
-    name: "Battery low"
-    icon: mdi:battery-alert-variant-outline
-    device_class: battery
 
   # сервисный режим только для чтения: включается и выключается ТОЛЬКО переключателем SW2 (D2)
   - platform: template
@@ -890,6 +884,8 @@ interval:
                 id(vbat).update();
                 id(climate_read).execute();
                 id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+                { const uint8_t cd[4] = {(uint8_t) (ms::wake_count & 0xFF), (uint8_t) ((ms::wake_count >> 8) & 0xFF), 0, ms::motion_count};
+                  id(bth).set_custom_data(0xFFFF, cd, sizeof(cd)); }
 
 # ------------------------------------------------------------------ логика
 script:
@@ -939,6 +935,9 @@ script:
           // по D1 — это отпускание (LOW), а не новое движение. Если к этому моменту на D1 снова
           // HIGH — motion_eval увидит уровень и посчитает это повторным движением.
           id(woke_by_pir) = (cause == ESP_SLEEP_WAKEUP_GPIO) && !by_service && !ms::pir_held;
+          // свежее срабатывание (2026-11-16): проснулись от фронта PIR — до него был LOW;
+          // на пине сейчас LOW — следующий подъём будет новым фронтом
+          if (id(woke_by_pir) || gpio_get_level((gpio_num_t) ${pir_gpio}) == 0) ms::pir_low_seen = true;
           ms::pir_held = false;   // решается заново перед следующим сном (go_sleep)
           // Сервисный режим задаёт только переключатель на D2 — и при пробуждении, и при
           // холодном старте (после потери питания). Уровень читаем прямо с пина: фильтр
@@ -957,6 +956,7 @@ script:
       - script.stop: go_sleep
       # PIR отпустил во сне / пока грузились (фронта on_release не было) — Keep time с этого момента
       - lambda: |-
+          if (gpio_get_level((gpio_num_t) ${pir_gpio}) == 0) ms::pir_low_seen = true;
           if (ms::occupied && ms::keep_pending() && gpio_get_level((gpio_num_t) ${pir_gpio}) == 0) {
             ms::keep_start((int) id(keep_time).state);
             ESP_LOGI("ms", "pir released, OFF in %d s", (int) id(keep_time).state);
@@ -988,12 +988,22 @@ script:
                   - lambda: |-
                       id(woke_by_pir) = false;
                       ms::off_repeat_ms = 0;   // новое движение — повтор OFF не нужен
+                      const bool fresh = ms::motion_fresh_take();   // 2026-11-16
                       if (!ms::occupied) {
                         ms::occupied = true;
-                        ESP_LOGI("ms", "motion confirmed -> ON");
+                        ESP_LOGI("ms", "motion confirmed -> ON (fresh=%d, motion #%u)", fresh, (unsigned) ms::motion_count);
                         id(send_state).execute(true, true);
+                      } else if (fresh && !id(tx_pending) &&
+                                 ms::now_ms() - ms::motion_tx_ms >= ms::MOTION_REFRESH_MS) {
+                        // «занято» держится, человек шевелится: пакет не чаще раза в 2 мин,
+                        // без мигания, окно — Motion window (2026-11-16)
+                        ESP_LOGI("ms", "motion again (motion #%u), keep time restarted -> refresh sent",
+                                 (unsigned) ms::motion_count);
+                        id(send_state).execute(true, false);
+                        id(tx_motion) = true;
                       } else {
-                        ESP_LOGI("ms", "motion again, keep time restarted");
+                        ESP_LOGI("ms", "motion again (fresh=%d, motion #%u), keep time restarted",
+                                 fresh, (unsigned) ms::motion_count);
                       }
                   # Keep time считается с отпускания PIR. Рабочий режим: НЕ ждём отпускания
                   # бодрствуя — ставим «ждём» (KEEP_PENDING), go_sleep уснёт с пробуждением по LOW.
@@ -1082,6 +1092,10 @@ script:
           id(climate_read).execute();
           ms::climate_last_ms = ms::now_ms();   // климат уходит в этом пакете
           id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+          // свой блок рекламы (2026-11-16): wake uint16 LE, settings_rev (0 = нет до 1.15), motion_count
+          { const uint8_t cd[4] = {(uint8_t) (ms::wake_count & 0xFF), (uint8_t) ((ms::wake_count >> 8) & 0xFF), 0, ms::motion_count};
+            id(bth).set_custom_data(0xFFFF, cd, sizeof(cd)); }
+          if (state) ms::motion_tx_ms = ms::now_ms();
           // повтор «свободно» (2026-11-15): любой пакет со «свободно» его выполняет. Флаг ставит
           // ветка keep time ПОСЛЕ этого вызова — сама её отправка его не сбрасывает.
           if (!state) ms::off_repeat_ms = 0;

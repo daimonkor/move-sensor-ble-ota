@@ -48,6 +48,7 @@ from .const import (
     SERVICE_RESET_WIFI,
     SERVICE_FAST_TEST,
 )
+from .hidden import async_rollback_unhide
 from .ota import OtaError, OtaManager, load_firmware
 
 _LOGGER = logging.getLogger(__name__)
@@ -133,6 +134,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _setup_bthome_names(hass, entry, mgr.address)
     _remove_radio_device(hass, mgr.address)
+    # v1.14.2: защита отката — показать то, что скрыла более новая версия (1.15+)
+    await async_rollback_unhide(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True
 

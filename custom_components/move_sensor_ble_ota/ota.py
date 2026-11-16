@@ -142,6 +142,19 @@ def bthome_parse(data: bytes) -> dict:
     return out
 
 
+# Свой блок рекламы (прошивка с 2026-11-16, v1.14.2): Manufacturer Specific Data, company 0xFFFF,
+# после данных BTHome. Данные: wake u16 LE, settings_rev u8 (0 = нет, появится в 1.15),
+# motion_count u8 (свежие срабатывания PIR, по кругу). BTHome этот блок не видит.
+CUSTOM_COMPANY_ID = 0xFFFF
+
+
+def custom_parse(manufacturer_data: dict) -> dict:
+    data = (manufacturer_data or {}).get(CUSTOM_COMPANY_ID)
+    if not data or len(data) < 4:
+        return {}
+    return {"wake": int.from_bytes(data[0:2], "little"), "settings_rev": data[2], "motion_count": data[3]}
+
+
 class OtaError(Exception):
     """Ошибка, после которой повторять в следующее окно бессмысленно."""
 
@@ -369,6 +382,9 @@ class OtaManager:
         self.occupied: bool | None = None
         self.occupied_since: datetime | None = None
         self.stuck_threshold_min: int = 30
+        # --- свежие срабатывания PIR (прошивка со своим блоком, v1.14.2): Last motion
+        self.last_motion: datetime | None = None
+        self.motion_count: int | None = None      # последний виденный счётчик из своего блока
         # --- авто-окно рекламы (2026-11-14): по RSSI и пропущенным климат-пакетам
         self.auto_window: bool = True
         self.rssi_hist: list[int] = []            # RSSI последних пакетов (новый packet id)
@@ -414,6 +430,9 @@ class OtaManager:
         ts_os = data.get("occupied_since")
         self.occupied_since = dt_util.parse_datetime(ts_os) if ts_os else None
         self.stuck_threshold_min = int(data.get("stuck_threshold_min") or 30)
+        ts_lm = data.get("last_motion")
+        self.last_motion = dt_util.parse_datetime(ts_lm) if ts_lm else None
+        self.motion_count = data.get("motion_count")
         aw = data.get("auto_window") or {}
         self.auto_window = aw.get("on", True)
         self.rssi_hist = aw.get("rssi") or []
@@ -459,6 +478,8 @@ class OtaManager:
                 "occupied": self.occupied,
                 "occupied_since": self.occupied_since.isoformat() if self.occupied_since else None,
                 "stuck_threshold_min": self.stuck_threshold_min,
+                "last_motion": self.last_motion.isoformat() if self.last_motion else None,
+                "motion_count": self.motion_count,
                 "auto_window": {
                     "on": self.auto_window,
                     "rssi": self.rssi_hist,
@@ -809,6 +830,9 @@ class OtaManager:
         data = service_info.service_data.get(BTHOME_UUID_FULL, b"")
         parsed = bthome_parse(data)
         if data:
+            # свой блок (v1.14.2): Wake count и счётчик срабатываний; у старой прошивки его нет —
+            # Wake count остаётся из BTHome (0x3D)
+            parsed.update(custom_parse(service_info.manufacturer_data))
             self._mark_seen(service_info, parsed)
         wake = parsed.get("wake")
         if wake is not None:
@@ -900,9 +924,16 @@ class OtaManager:
             if occ:
                 self.stats["motion_events"] += 1
                 self.occupied_since = now
+                self.last_motion = now
             else:
                 self.occupied_since = None
             self.occupied = occ
+        # свежее срабатывание PIR: счётчик из своего блока изменился (v1.14.2)
+        mc = parsed.get("motion_count")
+        if mc is not None:
+            if self.motion_count is not None and mc != self.motion_count:
+                self.last_motion = now
+            self.motion_count = mc
         # история батареи: не чаще раза в 30 мин; рост > 5 % — зарядили, история заново
         pct = parsed.get("battery")
         if pct is not None:
@@ -942,7 +973,13 @@ class OtaManager:
     def pir_stuck(self) -> bool:
         if not self.occupied or self.occupied_since is None:
             return False
-        return (dt_util.utcnow() - self.occupied_since).total_seconds() >= self.stuck_threshold_min * 60
+        # v1.14.2: прошивка шлёт свежие срабатывания (свой блок) — залипание = «занято» и свежих
+        # срабатываний нет дольше порога (человек шевелится — не проблема). Старая прошивка —
+        # как раньше: «занято» непрерывно дольше порога.
+        ref = self.occupied_since
+        if self.motion_count is not None and self.last_motion is not None and self.last_motion > ref:
+            ref = self.last_motion
+        return (dt_util.utcnow() - ref).total_seconds() >= self.stuck_threshold_min * 60
 
     async def async_set_stuck_threshold(self, minutes: int) -> None:
         self.stuck_threshold_min = int(minutes)

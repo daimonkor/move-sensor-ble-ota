@@ -33,6 +33,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         OtaStatusSensor(mgr), OtaProgressSensor(mgr), SettingsStatusSensor(mgr), FirmwareVersionSensor(mgr),
         BrownoutCountSensor(mgr), CrashCountSensor(mgr), LastResetReasonSensor(mgr), LastSeenSensor(mgr),
         BatteryDaysLeftSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
+        LastMotionSensor(mgr),
     ])
 
 
@@ -211,6 +212,26 @@ class LastSeenSensor(OtaEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         ci = (self.mgr.applied or {}).get("climate_interval")
         return {**self.mgr.last_seen_info, "expected_interval_min": ci}
+
+
+class LastMotionSensor(OtaEntity, SensorEntity):
+    """Последнее свежее срабатывание PIR (v1.14.2). Пока «занято», датчик шлёт пакет на новое
+    движение не чаще раза в 2 мин — по этому времени видно, что человек шевелится, а не PIR залип.
+    Старая прошивка (без своего блока): время последнего перехода в «занято»."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:motion-sensor"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "last_motion", "Last motion")
+
+    @property
+    def native_value(self):
+        return self.mgr.last_motion
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"motion_count": self.mgr.motion_count, "fresh_motion_supported": self.mgr.motion_count is not None}
 
 
 class BatteryDaysLeftSensor(OtaEntity, SensorEntity):

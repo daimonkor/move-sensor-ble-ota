@@ -52,6 +52,24 @@ static RTC_DATA_ATTR int64_t off_repeat_ms = 0;
 static constexpr int64_t OFF_REPEAT_MS = 60000;
 static inline void keep_start(int keep_s) { off_deadline_ms = now_ms() + (int64_t) keep_s * 1000; }
 
+// ---- Свежие срабатывания PIR (2026-11-16, v1.14.2). Пока «занято», датчик раньше ничего не
+// слал на повторное движение — в HA нельзя было отличить «человек шевелится» от «PIR залип».
+// Теперь: свежее срабатывание = PIR снова поднялся после того, как был в LOW (новый фронт).
+// Удержание HIGH (залип / страховочный таймер) свежим НЕ считается. На каждое свежее —
+// motion_count++ (едет в своём блоке рекламы); пока «занято», пакет на свежее срабатывание
+// уходит не чаще MOTION_REFRESH_MS. Интеграция: «Last motion» и PIR stuck по свежести.
+static RTC_DATA_ATTR uint8_t motion_count = 0;      // счётчик свежих срабатываний (по кругу)
+static RTC_DATA_ATTR bool pir_low_seen = false;     // PIR был в LOW после последнего засчитанного фронта
+static RTC_DATA_ATTR int64_t motion_tx_ms = 0;      // когда последний раз ушёл пакет с «занято»
+static constexpr int64_t MOTION_REFRESH_MS = 120000;
+// засчитать срабатывание; true — оно свежее (был LOW с прошлого раза)
+static inline bool motion_fresh_take() {
+  if (!pir_low_seen) return false;
+  pir_low_seen = false;
+  motion_count++;
+  return true;
+}
+
 // ---- Быстрый тест (2026-11-14, BLE-команда 0x13): без движения просыпаться раз в 30 с.
 // До какого момента (часы RTC, переживают сон); после — само выключается.
 static RTC_DATA_ATTR int64_t test_until_ms = 0;

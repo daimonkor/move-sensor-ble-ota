@@ -11,6 +11,7 @@
 #endif
 
 #include <array>
+#include <cstring>
 
 // Platform-specific includes
 #ifdef USE_ESP32
@@ -100,6 +101,19 @@ class BTHome : public Component {
   void set_device_name(const std::string &name);
   void set_manufacturer_id(uint16_t id) { this->manufacturer_id_ = id; this->has_manufacturer_id_ = true; }
   void set_trigger_based(bool trigger_based) { this->trigger_based_ = trigger_based; }
+  // local patch (2026-11-16, v1.14.2): свой блок Manufacturer Specific Data (0xFF) в рекламе,
+  // ПОСЛЕ данных BTHome. BTHome его не разбирает (новых сущностей нет), читает только интеграция
+  // move_sensor_ble_ota. Данные копируются; изменились — реклама пересобирается.
+  void set_custom_data(uint16_t company_id, const uint8_t *data, size_t len) {
+    if (len > sizeof(this->custom_data_)) len = sizeof(this->custom_data_);
+    if (this->custom_company_ == company_id && this->custom_len_ == len &&
+        memcmp(this->custom_data_, data, len) == 0)
+      return;
+    this->custom_company_ = company_id;
+    memcpy(this->custom_data_, data, len);
+    this->custom_len_ = len;
+    this->data_changed_ = true;
+  }
 
   void set_encryption_key(const std::array<uint8_t, 16> &key);
   // local patch (BLE OTA): перезапуск рекламы с теми же данными (подключаемая/нет решает BleOta)
@@ -170,6 +184,11 @@ class BTHome : public Component {
   uint8_t adv_data_[MAX_BLE_ADVERTISEMENT_SIZE];
   size_t adv_data_len_{0};
   bool data_changed_{true};
+
+  // local patch (2026-11-16): свой блок Manufacturer Specific Data (см. set_custom_data)
+  uint16_t custom_company_{0xFFFF};
+  uint8_t custom_data_[8]{};
+  size_t custom_len_{0};
 
   // Measurement rotation (for splitting across multiple packets)
   size_t current_sensor_index_{0};

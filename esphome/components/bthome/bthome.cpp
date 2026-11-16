@@ -556,6 +556,23 @@ void BTHome::build_advertisement_data_() {
 
   // Note: Device name is in scan response, not advertisement (to save space for sensor data)
 
+  // local patch (2026-11-16): свой блок Manufacturer Specific Data после BTHome (set_custom_data).
+  // Не влезает — не кладём (данные BTHome важнее), пишем в лог.
+  if (this->custom_len_ > 0) {
+    const size_t ad_len = 4 + this->custom_len_;  // длина + тип + company id (2) + данные
+    if (pos + ad_len <= MAX_BLE_ADVERTISEMENT_SIZE) {
+      this->adv_data_[pos++] = 3 + this->custom_len_;  // Length (тип + company + данные)
+      this->adv_data_[pos++] = 0xFF;                   // Type: Manufacturer Specific Data
+      this->adv_data_[pos++] = this->custom_company_ & 0xFF;
+      this->adv_data_[pos++] = (this->custom_company_ >> 8) & 0xFF;
+      memcpy(this->adv_data_ + pos, this->custom_data_, this->custom_len_);
+      pos += this->custom_len_;
+    } else {
+      ESP_LOGW(TAG, "custom data does not fit (%zu + %zu > %zu) - skipped", pos, ad_len,
+               (size_t) MAX_BLE_ADVERTISEMENT_SIZE);
+    }
+  }
+
   this->adv_data_len_ = pos;
 
   // Increment packet_id for next data change (wraps at 255)

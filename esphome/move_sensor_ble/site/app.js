@@ -12,7 +12,7 @@
 
   // ── ключи сущностей ──
   var K = {
-    occ: "binary_sensor/Occupancy", batLow: "binary_sensor/Battery low", svc: "binary_sensor/Service mode",
+    occ: "binary_sensor/Occupancy", svc: "binary_sensor/Service mode",
     temp: "sensor/Temperature", hum: "sensor/Humidity", bat: "sensor/Battery", volt: "sensor/Voltage",
     d0: "sensor/D0 raw voltage", wakes: "sensor/Wake count",
     wPct: "sensor/WiFi Signal", wDbm: "sensor/WiFi RSSI", bPct: "sensor/BLE Signal", bDbm: "sensor/BLE RSSI",
@@ -292,7 +292,7 @@
   }
 
   function renderBattery() {
-    var p = num(K.bat), v = num(K.volt), low = bool(K.batLow) === true, card = $("ms-batcard");
+    var p = num(K.bat), v = num(K.volt), low = p !== null && p <= 10, card = $("ms-batcard");
     txt("ms-bat", fmt(p, 0));
     txt("ms-volt", fmt(v, 2));
     $("ms-batfill").style.width = p === null ? "0" : clamp(p, 0, 100) + "%";
