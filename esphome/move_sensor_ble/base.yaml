@@ -345,6 +345,10 @@ bthome:
       temp_offset: temp_offset
       hum_offset: hum_offset
   trigger_based: true        # HA не помечает спящее устройство как unavailable
+  # 2026-11-16 (v1.15.5): пакет в эфир ТОЛЬКО по send_state (id(bth).send_now). Раньше каждое
+  # тихое пробуждение (фронт PIR, отправлять нечего) и каждое изменение значения уходили в эфир
+  # с новым packet id: ~6800 пакетов в сутки вместо ~400 реальных отправок, лишняя батарея и строки в базе HA.
+  send_on_change: false
   # Быстрая реклама: пакет каждые 20-30 мс, пока плата не спит. Приёмник слушает
   # эфир короткими окнами, редкие пакеты (раз в 1 с) в окно почти не попадают.
   min_interval: 20ms
@@ -358,7 +362,7 @@ bthome:
     - type: battery
       id: battery_pct
     - type: voltage
-      id: vbat
+      id: vbat_tx              # 2026-11-16: сглаженное (среднее 10 замеров, шаг 0.03 В), не сырое vbat
     - type: temperature
       id: env_temp
     - type: humidity
@@ -416,6 +420,8 @@ sensor:
               }
               if (ms::bat_sag > 0) v += ms::bat_sag;
             }
+            // 2026-11-16: в пакет BTHome — сглаженное напряжение (ms::vbat_filter)
+            id(vbat_tx).publish_state(ms::vbat_filter(v));
             // 2026-11-15: шум делителя/АЦП ±45 мВ давал ±10-15 % на плоском участке LiPo.
             // Сглаживание медленнее (0.15 вместо 0.3); сразу принимаем только скачок ВВЕРХ > 0.1 В
             // (зарядка, другой аккумулятор) — вниз напряжение так резко не падает, это шум.
@@ -468,6 +474,15 @@ sensor:
 
   # напряжение покоя (сглаженное, с поправкой на просадку под Wi-Fi) — по нему считается Battery.
   # Только API/сайт (сервисный режим), в BTHome не уходит.
+  # 2026-11-16: напряжение для пакета BTHome — среднее 10 замеров, новое только при изменении >= 0.03 В
+  - platform: template
+    id: vbat_tx
+    internal: true
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 2
+    update_interval: never
+
   - platform: template
     id: vbat_rest
     name: "Battery rest voltage"
@@ -948,6 +963,7 @@ interval:
                 id(climate_read).execute();
                 id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
                 id(custom_data_update).execute();
+                id(bth).send_now(80);   // 2026-11-16: в сервисном режиме — пакет раз в 5 с
 
 # ------------------------------------------------------------------ логика
 script:
@@ -1171,6 +1187,8 @@ script:
           id(tx_pending) = true;
           if (led) id(tx_motion) = true;   // led = реальное событие (занято / освободилось)
           if (led) id(blink).execute(state ? 1 : 2);
+          // 2026-11-16: собрать пакет через 80 мс — SHT41 (~10 мс) и остальные значения уже в нём
+          id(bth).send_now(80);
 
   # Уход в сон (в сервисном режиме ничего не делает)
   - id: go_sleep

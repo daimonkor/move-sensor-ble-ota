@@ -908,8 +908,13 @@ class OtaManager:
             now = dt_util.now()
             if self._build_hash and self.last_build and path == self.last_build.get("file"):
                 self.flashed_hash = self._build_hash
-            self.last_flash = {"at": now.isoformat(), "channel": None, "seconds": 0, "speed_kbs": None,
-                               "bytes": len(image.data), "result": "already_on_sensor"}
+            prev = self.last_flash if (self.last_flash or {}).get("result") == "flashed" else None
+            if prev is not None:
+                # v1.15.5: запись о настоящей прошивке остаётся, проверка — отдельным полем
+                self.last_flash = {**prev, "same_build_checked_at": now.isoformat()}
+            else:
+                self.last_flash = {"at": now.isoformat(), "channel": None, "seconds": 0, "speed_kbs": None,
+                                   "bytes": len(image.data), "result": "already_on_sensor"}
             self.error = None
             self._set(ST_SUCCESS, progress=100, started=now, finished=now)
             self._save()
@@ -1072,6 +1077,9 @@ class OtaManager:
             parts.append(f"{sec:.0f} s" if sec < 120 else f"{sec / 60:.1f} min")
         if lf.get("speed_kbs"):
             parts.append(f"{lf['speed_kbs']:.0f} kB/s")
+        chk = dt_util.parse_datetime(lf.get("same_build_checked_at") or "")
+        if chk:
+            parts.append(f"same build {dt_util.as_local(chk).strftime('%H:%M')} — not reflashed")
         return " · ".join(parts)
 
     @property
@@ -1757,7 +1765,8 @@ class OtaManager:
         secs = round(time.monotonic() - self._flash_t0, 1) if self._flash_t0 is not None else None
         self.last_flash = {"at": now.isoformat(), "channel": channel, "seconds": secs,
                            "speed_kbs": self.speed_kbs, "bytes": size, "result": "flashed"}
-        self._set(ST_SUCCESS, progress=100, finished=now)
+        # v1.15.5: ошибки промежуточных попыток (не успели подключиться) — не итог прошивки
+        self._set(ST_SUCCESS, progress=100, finished=now, error=None)
         self._save()
         _LOGGER.info("%s: OTA done over %s, device reboots", self.name, channel)
 

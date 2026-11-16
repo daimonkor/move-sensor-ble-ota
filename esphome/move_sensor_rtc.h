@@ -138,6 +138,29 @@ static RTC_DATA_ATTR float bat_vf = 0;      // сглаженное напряж
 static RTC_DATA_ATTR int8_t bat_pct = -1;   // последний отправленный %, -1 = нет истории
 static RTC_DATA_ATTR bool bat_low = false;  // флаг "батарея разряжена" (с гистерезисом)
 static RTC_DATA_ATTR float bat_factor_used = 0;  // Voltage factor, с которым посчитан bat_vf (2026-11-15)
+
+// ---- Напряжение в пакет BTHome (2026-11-16, v1.15.5): среднее за 10 замеров (замер — раз за
+// пробуждение, до радио), новое значение — только при изменении >= 0.03 В. Шум АЦП/делителя
+// ±0.02 В больше не порождает новые значения в HA. Процент батареи считается по сырому замеру.
+static constexpr uint8_t VBAT_AVG_N = 10;
+static constexpr float VBAT_STEP = 0.03f;
+static RTC_DATA_ATTR float vbat_ring[VBAT_AVG_N] = {0};
+static RTC_DATA_ATTR uint8_t vbat_ring_n = 0;
+static RTC_DATA_ATTR uint8_t vbat_ring_i = 0;
+static RTC_DATA_ATTR float vbat_sent = 0;   // последнее значение для пакета, 0 = нет
+static inline float vbat_filter(float v) {
+  if (std::isnan(v) || v <= 0.5f) return vbat_sent > 0 ? vbat_sent : v;
+  // скачок > 0.15 В (зарядка, другой аккумулятор) — историю начать заново
+  if (vbat_sent > 0 && fabsf(v - vbat_sent) > 0.15f) { vbat_ring_n = 0; vbat_ring_i = 0; }
+  vbat_ring[vbat_ring_i] = v;
+  vbat_ring_i = (uint8_t) ((vbat_ring_i + 1) % VBAT_AVG_N);
+  if (vbat_ring_n < VBAT_AVG_N) vbat_ring_n++;
+  float sum = 0;
+  for (uint8_t i = 0; i < vbat_ring_n; i++) sum += vbat_ring[i];
+  const float avg = sum / vbat_ring_n;
+  if (vbat_sent <= 0 || fabsf(avg - vbat_sent) >= VBAT_STEP) vbat_sent = roundf(avg * 100.0f) / 100.0f;
+  return vbat_sent;
+}
 static uint8_t bat_phase = 0;   // 0 — до замера на старте, 1 — замер без радио, 2 — радио работает
 static float bat_v_boot = 0;    // замер без радио в этом пробуждении
 static float bat_sag = -1;      // просадка под Wi-Fi, В; -1 = ещё не измерена

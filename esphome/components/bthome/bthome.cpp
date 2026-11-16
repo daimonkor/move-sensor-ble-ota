@@ -219,7 +219,7 @@ void BTHome::setup() {
   for (size_t i = 0; i < this->measurements_.size(); i++) {
     auto &measurement = this->measurements_[i];
     measurement.sensor->add_on_state_callback([this, i](float) {
-      if (this->measurements_[i].advertise_immediately) {
+      if (this->measurements_[i].advertise_immediately && !this->manual_) {
         this->trigger_immediate_advertising_(i, false);
       } else {
         this->data_changed_ = true;
@@ -235,7 +235,7 @@ void BTHome::setup() {
   for (size_t i = 0; i < this->binary_measurements_.size(); i++) {
     auto &measurement = this->binary_measurements_[i];
     measurement.sensor->add_on_state_callback([this, i](bool) {
-      if (this->binary_measurements_[i].advertise_immediately) {
+      if (this->binary_measurements_[i].advertise_immediately && !this->manual_) {
         this->trigger_immediate_advertising_(i, true);
       } else {
         this->data_changed_ = true;
@@ -263,8 +263,22 @@ void BTHome::setup() {
 #endif
 }
 
+void BTHome::send_now(uint32_t delay_ms) {
+  auto go = [this]() {
+    this->send_requested_ = true;
+    this->data_changed_ = true;
+    this->enable_loop();
+  };
+  if (delay_ms == 0) go();
+  else this->set_timeout("bth_send", delay_ms, go);
+}
+
 void BTHome::loop() {
   uint32_t now = esp_timer_get_time() / 1000;  // Convert microseconds to milliseconds
+
+  // local patch (2026-11-16): ручной режим — ничего не шлём, пока прошивка не попросила (send_now)
+  if (this->manual_ && !this->send_requested_)
+    return;
 
 #if defined(USE_ESP32) && defined(USE_BTHOME_NIMBLE)
   // local patch: (re)start advertising from the main loop once NimBLE has synced
@@ -282,6 +296,8 @@ void BTHome::loop() {
     if (this->advertising_) {
       ESP_LOGI(TAG, "BLE advertising started (%u bytes)", (unsigned) this->adv_data_len_);
       this->data_changed_ = false;
+      this->send_requested_ = false;  // local patch
+      this->sent_once_ = true;        // local patch
       if (this->retransmit_count_ > 0) {
         this->retransmit_remaining_ = this->retransmit_count_;
         this->last_retransmit_time_ = now;
@@ -341,6 +357,8 @@ void BTHome::loop() {
   // Handle regular data changes
   if (this->data_changed_ && this->advertising_) {
     this->data_changed_ = false;
+    this->send_requested_ = false;  // local patch
+    this->sent_once_ = true;        // local patch
     this->stop_advertising_();
     this->build_advertisement_data_();
     this->start_advertising_();
@@ -366,6 +384,10 @@ void BTHome::set_encryption_key(const std::array<uint8_t, 16> &key) {
 void BTHome::restart_advertising() {
 #if defined(USE_ESP32) && defined(USE_BTHOME_NIMBLE)
   if (!this->nimble_synced_)
+    return;
+  // local patch (2026-11-16): ручной режим — до первого send_now() в этом пробуждении рекламы нет
+  // (тихое пробуждение уходит в сон без эфира)
+  if (this->manual_ && !this->sent_once_)
     return;
   // стек мог сам остановить рекламу (подключение) — ошибку stop игнорируем
   ble_gap_adv_stop();

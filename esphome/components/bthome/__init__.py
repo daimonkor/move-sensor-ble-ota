@@ -65,6 +65,7 @@ CONF_MIN_INTERVAL = "min_interval"
 CONF_MAX_INTERVAL = "max_interval"
 CONF_ADVERTISE_IMMEDIATELY = "advertise_immediately"
 CONF_TRIGGER_BASED = "trigger_based"
+CONF_SEND_ON_CHANGE = "send_on_change"
 CONF_RETRANSMIT_COUNT = "retransmit_count"
 CONF_RETRANSMIT_INTERVAL = "retransmit_interval"
 
@@ -243,6 +244,8 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(BTHome),
             cv.Optional(CONF_TRIGGER_BASED, default=False): cv.boolean,
+            # local patch (2026-11-16): false — пакет только по send_now() из прошивки
+            cv.Optional(CONF_SEND_ON_CHANGE, default=True): cv.boolean,
             cv.Optional(CONF_BLE_STACK, default=BLE_STACK_BLUEDROID): cv.one_of(
                 BLE_STACK_BLUEDROID, BLE_STACK_NIMBLE, lower=True
             ),
@@ -326,6 +329,8 @@ async def to_code(config):
 
     if config[CONF_TRIGGER_BASED]:
         cg.add(var.set_trigger_based(True))
+    if not config[CONF_SEND_ON_CHANGE]:
+        cg.add(var.set_manual(True))
 
     if CONF_ENCRYPTION_KEY in config:
         key = config[CONF_ENCRYPTION_KEY]

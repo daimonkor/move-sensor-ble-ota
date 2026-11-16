@@ -101,6 +101,12 @@ class BTHome : public Component {
   void set_device_name(const std::string &name);
   void set_manufacturer_id(uint16_t id) { this->manufacturer_id_ = id; this->has_manufacturer_id_ = true; }
   void set_trigger_based(bool trigger_based) { this->trigger_based_ = trigger_based; }
+  // local patch (2026-11-16): ручной режим (send_on_change: false). Изменение значения сенсора
+  // пакет НЕ порождает; реклама стартует/пересобирается только по send_now(). Без этого каждое
+  // «тихое» пробуждение (фронт PIR, отправлять нечего) уходило в эфир с новым packet id.
+  void set_manual(bool manual) { this->manual_ = manual; }
+  // собрать и разослать пакет через delay_ms (значения, которые придут за это время, — в пакете)
+  void send_now(uint32_t delay_ms = 0);
   // local patch (2026-11-16, v1.14.2): свой блок Manufacturer Specific Data (0xFF) в рекламе,
   // ПОСЛЕ данных BTHome. BTHome его не разбирает (новых сущностей нет), читает только интеграция
   // move_sensor_ble_ota. Данные копируются; изменились — реклама пересобирается.
@@ -184,6 +190,9 @@ class BTHome : public Component {
   uint8_t adv_data_[MAX_BLE_ADVERTISEMENT_SIZE];
   size_t adv_data_len_{0};
   bool data_changed_{true};
+  bool manual_{false};          // local patch: пакет только по send_now()
+  bool send_requested_{false};  // local patch: send_now() попросил пакет
+  bool sent_once_{false};       // local patch: в этом пробуждении пакет уже был (реклама есть)
 
   // local patch (2026-11-16): свой блок Manufacturer Specific Data (см. set_custom_data)
   uint16_t custom_company_{0xFFFF};
