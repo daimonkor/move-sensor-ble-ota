@@ -35,8 +35,26 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .const import (CONF_ADDRESS, CONF_FIRMWARE_DIR, CONF_KEEP_IMAGES, CONF_KEY, DEFAULT_FIRMWARE_DIR,
-                    DEFAULT_KEEP_IMAGES, DEFAULT_NAME, DOMAIN, device_id)
+from . import secrets_store
+from .const import (CONF_ADDRESS, CONF_API_KEY, CONF_FIRMWARE_DIR, CONF_KEEP_IMAGES, CONF_KEY, CONF_OTA_PASSWORD,
+                    DEFAULT_FIRMWARE_DIR, DEFAULT_KEEP_IMAGES, DEFAULT_NAME, DOMAIN, device_id)
+
+
+def _secret_fields() -> dict:
+    """v1.17.0: пароль OTA и ключ API — пусто = оставить текущие / сгенерировать (значения не показываем)."""
+    pw = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+    return {vol.Optional(CONF_OTA_PASSWORD, default=""): pw, vol.Optional(CONF_API_KEY, default=""): pw}
+
+
+async def _save_secrets(hass, user_input: dict, errors: dict) -> bool:
+    """Ввод -> secrets.yaml; пусто — текущее или новое случайное. False — ключ API неверного формата."""
+    api = (user_input.get(CONF_API_KEY) or "").strip()
+    if api and not secrets_store.valid_api_key(api):
+        errors[CONF_API_KEY] = "bad_api_key"
+        return False
+    for name, val in ((secrets_store.OTA_PASSWORD, user_input.get(CONF_OTA_PASSWORD)), (secrets_store.API_KEY, api)):
+        await hass.async_add_executor_job(secrets_store.ensure, name, val)
+    return True
 
 BTHOME_UUID = "0000fcd2-0000-1000-8000-00805f9b34fb"
 CONF_FIRMWARE = "firmware"
@@ -59,6 +77,8 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
             address = _norm_mac(user_input[CONF_ADDRESS])
             if len(address) != 17:
                 errors[CONF_ADDRESS] = "bad_address"
+            elif not await _save_secrets(self.hass, user_input, errors):
+                pass
             else:
                 await self.async_set_unique_id(address)
                 self._abort_if_unique_id_configured()
@@ -102,6 +122,7 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_NAME, default=DEFAULT_NAME): TextSelector(),
                 vol.Optional(CONF_KEY, default=""): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                 vol.Optional(CONF_FIRMWARE_DIR, default=DEFAULT_FIRMWARE_DIR): TextSelector(),
+                **_secret_fields(),
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
@@ -202,7 +223,8 @@ class MoveSensorBleOtaOptions(OptionsFlow):
 
     # ---------- параметры ----------
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        if user_input is not None:
+        errors: dict[str, str] = {}
+        if user_input is not None and await _save_secrets(self.hass, user_input, errors):
             return self.async_create_entry(
                 data={
                     CONF_KEY: (user_input.get(CONF_KEY) or "").strip(),
@@ -219,6 +241,7 @@ class MoveSensorBleOtaOptions(OptionsFlow):
                 vol.Optional(CONF_FIRMWARE_DIR, default=cur.get(CONF_FIRMWARE_DIR, DEFAULT_FIRMWARE_DIR)): TextSelector(),
                 vol.Optional(CONF_KEEP_IMAGES, default=int(cur.get(CONF_KEEP_IMAGES, DEFAULT_KEEP_IMAGES))):
                     NumberSelector(NumberSelectorConfig(min=1, max=10, step=1, mode=NumberSelectorMode.BOX)),
+                **_secret_fields(),
             }
         )
-        return self.async_show_form(step_id="settings", data_schema=schema)
+        return self.async_show_form(step_id="settings", data_schema=schema, errors=errors)

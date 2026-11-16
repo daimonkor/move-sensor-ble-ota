@@ -323,6 +323,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
         <li><b>OTA key</b> — leave empty: <code>move_sensor_ble_ota_key</code> is taken from <code>/config/esphome/secrets.yaml</code>.
             If your ESPHome configs live elsewhere, enter the same key as in the firmware.</li>
         <li><b>Firmware folder</b> — <code>/config/esphome/ota</code> by default.</li>
+        <li><b>OTA password (Wi-Fi)</b> and <b>API encryption key</b> (sensor firmware 1.4.0+) — stored in <code>/config/esphome/secrets.yaml</code> (<code>move_sensor_ota_password</code>, <code>move_sensor_api_key</code>), ESPHome uses them when building. Typed in — saved; empty — the current one stays, or the integration generates a random one and saves it if there is none. The integration puts the API key into the sensor’s ESPHome device itself — nothing to confirm after flashing. To view or change: ESPHome Builder → Secrets.</li>
         <li><b>Keep images</b> — 3 by default (1–10): after every build and upload older <code>.bin</code> files in the firmware folder are deleted, so they do not pile up and bloat HA backups. The image being flashed or waiting for a window is never deleted. Change it in Configure → «Options»; how many are stored now — the «Stored images» row on the panel.</li>
       </ol>
     </div>

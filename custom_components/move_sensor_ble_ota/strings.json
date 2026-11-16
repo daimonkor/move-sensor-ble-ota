@@ -8,12 +8,19 @@
           "address": "Sensor Bluetooth address",
           "name": "Name",
           "key": "OTA key",
-          "firmware_dir": "Firmware folder (.bin)"
+          "firmware_dir": "Firmware folder (.bin)",
+          "ota_password": "OTA password (Wi-Fi)",
+          "api_key": "API encryption key (ESPHome)"
+        },
+        "data_description": {
+          "ota_password": "For flashing over Wi-Fi in service mode (sensor firmware 1.4.0+). Stored in /config/esphome/secrets.yaml (move_sensor_ota_password). Empty — keep the current one, or generate a random one and save it if there is none. To view or change: ESPHome Builder → Secrets.",
+          "api_key": "32 bytes, base64. Encrypts the sensor–HA link in service mode; the integration puts it into the sensor's ESPHome device itself — no confirmation after flashing. Stored in secrets.yaml (move_sensor_api_key). Empty — keep the current one, or generate and save one if there is none."
         }
       }
     },
     "error": {
-      "bad_address": "Invalid Bluetooth address"
+      "bad_address": "Invalid Bluetooth address",
+      "bad_api_key": "The API key is 32 bytes in base64 (44 characters ending with «=»). Leave it empty and the integration generates one."
     },
     "abort": {
       "already_configured": "This sensor is already configured"
@@ -39,12 +46,16 @@
       },
       "settings": {
         "data": {
-          "key": "OTA key (empty = from secrets.yaml)",
+          "key": "BLE OTA key (empty = from secrets.yaml)",
           "firmware_dir": "Firmware folder (.bin)",
-          "keep_images": "Keep last firmware images (.bin), 1–10"
+          "keep_images": "Keep last firmware images (.bin), 1–10",
+          "ota_password": "OTA password (Wi-Fi)",
+          "api_key": "API encryption key (ESPHome)"
         },
         "data_description": {
-          "keep_images": "Older .bin files in the firmware folder are deleted after every build and upload. The image being flashed or waiting for a window is never deleted."
+          "keep_images": "Older .bin files in the firmware folder are deleted after every build and upload. The image being flashed or waiting for a window is never deleted.",
+          "ota_password": "For flashing over Wi-Fi in service mode (sensor firmware 1.4.0+). Stored in /config/esphome/secrets.yaml (move_sensor_ota_password). Empty — keep the current one, or generate a random one and save it if there is none. To view or change: ESPHome Builder → Secrets.",
+          "api_key": "32 bytes, base64. Encrypts the sensor–HA link in service mode; the integration puts it into the sensor's ESPHome device itself — no confirmation after flashing. Stored in secrets.yaml (move_sensor_api_key). Empty — keep the current one, or generate and save one if there is none."
         }
       },
       "view": {
@@ -57,7 +68,8 @@
       }
     },
     "error": {
-      "bad_firmware": "Firmware rejected: {error}"
+      "bad_firmware": "Firmware rejected: {error}",
+      "bad_api_key": "The API key is 32 bytes in base64 (44 characters ending with «=»). Leave it empty and the integration generates one."
     },
     "abort": {
       "firmware_uploaded": "Uploaded {file}: project {project}, version {version}, {size} KB{factory}. Flashing started: {started}. Progress: «Firmware» on the device page.",

@@ -322,6 +322,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
         <li><b>Ключ OTA</b> — оставить пустым: возьмётся <code>move_sensor_ble_ota_key</code> из <code>/config/esphome/secrets.yaml</code>.
             Если конфиги ESPHome лежат в другом месте — вписать тот же ключ, что в прошивке.</li>
         <li><b>Папка прошивок</b> — по умолчанию <code>/config/esphome/ota</code>.</li>
+        <li><b>Пароль OTA по Wi-Fi</b> и <b>Ключ шифрования API</b> (прошивка датчика 1.4.0+) — хранятся в <code>/config/esphome/secrets.yaml</code> (<code>move_sensor_ota_password</code>, <code>move_sensor_api_key</code>), ESPHome берёт их при сборке. Ввёл — сохранится; пусто — останется текущий, а если его нет, интеграция сгенерирует случайный и сохранит. Ключ API интеграция сама вписывает в ESPHome-устройство датчика — после прошивки подтверждать ничего не нужно. Посмотреть или поменять: ESPHome Builder → Secrets.</li>
         <li><b>Хранить образов</b> — по умолчанию 3 (1–10): после каждой сборки и загрузки старые <code>.bin</code> в папке прошивок удаляются, чтобы они не копились и не раздували бэкапы HA. Образ, который шьётся или ждёт окна, не удаляется. Меняется в Настроить → «Параметры»; сколько хранится сейчас — строка «Stored images» на панели.</li>
       </ol>
     </div>

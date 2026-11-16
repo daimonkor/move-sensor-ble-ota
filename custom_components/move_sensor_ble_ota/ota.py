@@ -1158,6 +1158,19 @@ class OtaManager:
         if await self._refresh_changes(cfg) or changed:
             self._notify()
 
+    # ================= v1.17.0: ключ API для ESPHome-устройства датчика =================
+    async def async_sync_api_key(self) -> None:
+        if self.wifi is None:
+            return
+        from . import secrets_store  # noqa: PLC0415
+
+        sv = fw_semver(self.firmware_version)
+        encrypted = bool(sv) and tuple(int(x) for x in sv.split(".")) >= (1, 4, 0)
+        try:
+            await secrets_store.async_sync_api_key(self.hass, self.wifi.entry_id, self.wifi.mac, encrypted)
+        except Exception as err:  # noqa: BLE001 — не мешать остальной работе
+            _LOGGER.debug("%s: API key sync failed: %s", self.name, err)
+
     # ================= v1.16: release notes прошивки =================
     async def _snapshot_build(self, cfg: str, tree_hash: str | None) -> None:
         def job() -> None:
@@ -1698,6 +1711,7 @@ class OtaManager:
             self.wifi.check_link()
         if self._ticks % 5 == 0:   # раз в 5 мин: не изменился ли YAML датчика
             self.hass.async_create_task(self.async_refresh_config_hash())
+        self.hass.async_create_task(self.async_sync_api_key())   # v1.17.0: ключ API -> ESPHome-устройство
         self._ticks += 1
         before = self.stats.get("date")
         self._roll_day()
