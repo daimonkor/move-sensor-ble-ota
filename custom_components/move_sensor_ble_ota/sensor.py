@@ -30,10 +30,15 @@ from .entity import OtaEntity
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     mgr = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
-        OtaStatusSensor(mgr), OtaProgressSensor(mgr), SettingsStatusSensor(mgr), FirmwareVersionSensor(mgr),
+        SettingsStatusSensor(mgr),   # v1.15: OTA status / progress / Firmware version -> сущность «Firmware»
         BrownoutCountSensor(mgr), CrashCountSensor(mgr), LastResetReasonSensor(mgr), LastSeenSensor(mgr),
         BatteryDaysLeftSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
         LastMotionSensor(mgr),
+        DataSensor(mgr, "temperature", "Temperature", SensorDeviceClass.TEMPERATURE, "°C", 1),
+        DataSensor(mgr, "humidity", "Humidity", SensorDeviceClass.HUMIDITY, PERCENTAGE, 1),
+        DataSensor(mgr, "battery", "Battery", SensorDeviceClass.BATTERY, PERCENTAGE, 0),
+        DataSensor(mgr, "voltage", "Voltage", SensorDeviceClass.VOLTAGE, "V", 2, EntityCategory.DIAGNOSTIC),
+        LinkSensor(mgr), SignalSensor(mgr), SignalPercentSensor(mgr), TxPowerSensor(mgr), OtaKeySensor(mgr),
     ])
 
 
@@ -90,10 +95,11 @@ class OtaProgressSensor(OtaEntity, SensorEntity):
 
 
 class SettingsStatusSensor(OtaEntity, SensorEntity):
-    """Настройки: idle (ничего не ждёт) / pending (ждут пробуждения) / applied (только что, 5 мин) / unknown / error."""
+    """Настройки (v1.15, только устойчивые состояния): in_sync / waiting / not_read / error.
+    Что произошло (записано по Wi-Fi/BLE, принято с датчика, возвращено) — сущность-событие «Settings change»."""
 
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = [SST_IDLE, SST_PENDING, SST_APPLIED, SST_UNKNOWN, SST_ERROR]
+    _attr_options = [SST_IDLE, SST_PENDING, SST_UNKNOWN, SST_ERROR]
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:cog-sync"
 
@@ -140,6 +146,7 @@ def _diag_attrs(mgr) -> dict:
 
 class BrownoutCountSensor(OtaEntity, SensorEntity):
     """Сколько раз датчик перезагрузился по просадке питания (конец разряда / просадка под радио)."""
+    _attr_entity_registry_enabled_default = False   # v1.15: техническая, выключена по умолчанию
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -159,6 +166,7 @@ class BrownoutCountSensor(OtaEntity, SensorEntity):
 
 class CrashCountSensor(OtaEntity, SensorEntity):
     """Сбои прошивки: panic + watchdog."""
+    _attr_entity_registry_enabled_default = False   # v1.15: техническая, выключена по умолчанию
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -214,6 +222,131 @@ class LastSeenSensor(OtaEntity, SensorEntity):
         return {**self.mgr.last_seen_info, "expected_interval_min": ci}
 
 
+class DataSensor(OtaEntity, SensorEntity):
+    """v1.15: данные датчика из любого канала (BLE или Wi-Fi) — самое свежее значение."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, mgr, key: str, name: str, device_class, unit, precision: int,
+                 category: EntityCategory | None = None) -> None:
+        super().__init__(mgr, key, name)
+        self.key = key
+        self._attr_device_class = device_class
+        self._attr_native_unit_of_measurement = unit
+        self._attr_suggested_display_precision = precision
+        self._attr_entity_category = category
+
+    @property
+    def native_value(self):
+        return self.mgr.data_value(self.key)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return self.mgr.data_info(self.key)
+
+
+class LinkSensor(OtaEntity, SensorEntity):
+    """v1.15: по какому каналу сейчас связь: wifi (ESPHome API) или ble."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["ble", "wifi"]
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:transit-connection-variant"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "link", "Link")
+
+    @property
+    def native_value(self):
+        return self.mgr.link
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        w = self.mgr.wifi
+        return {"esphome_device": bool(w and w.device_id), "wifi_mac": w.mac if w else None}
+
+
+class SignalSensor(OtaEntity, SensorEntity):
+    """v1.15: уровень сигнала текущего канала (RSSI Wi-Fi или BLE у прокси), дБм."""
+
+    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+    _attr_native_unit_of_measurement = "dBm"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "signal", "Signal")
+
+    @property
+    def native_value(self):
+        return self.mgr.signal
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"channel": self.mgr.link, "ble_rssi": self.mgr.ble_rssi,
+                "ble_proxy": (self.mgr.last_seen_info or {}).get("source")}
+
+
+class SignalPercentSensor(OtaEntity, SensorEntity):
+    """v1.15: сигнал текущего канала в %: −90 дБм = 0 %, −30 дБм = 100 % (как WiFi Signal / BLE Signal в прошивке)."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:signal"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "signal_level", "Signal level")
+
+    @property
+    def native_value(self):
+        return self.mgr.signal_percent
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"channel": self.mgr.link, "dbm": self.mgr.signal}
+
+
+class TxPowerSensor(OtaEntity, SensorEntity):
+    """v1.15: мощность BLE-рекламы датчика, дБм — из YAML прошивки (bthome: tx_power), только чтение."""
+
+    _attr_native_unit_of_measurement = "dBm"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:antenna"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "tx_power", "BLE TX power")
+
+    @property
+    def native_value(self):
+        return self.mgr.tx_power_dbm
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"source": "firmware YAML (move_sensor_ble/base.yaml, bthome: tx_power)"}
+
+
+class OtaKeySensor(OtaEntity, SensorEntity):
+    """v1.15: ключ OTA — принят ли датчиком (accepted / rejected / missing / unknown). Поменять — «Настроить»."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["accepted", "rejected", "missing", "unknown"]
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:key-variant"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "ota_key", "OTA key")
+
+    @property
+    def native_value(self):
+        return self.mgr.key_state
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"last_accepted": self.mgr.key_ok_at.isoformat() if self.mgr.key_ok_at else None,
+                "blocked_since": (self.mgr.auth_block or {}).get("since")}
+
+
 class LastMotionSensor(OtaEntity, SensorEntity):
     """Последнее свежее срабатывание PIR (v1.14.2). Пока «занято», датчик шлёт пакет на новое
     движение не чаще раза в 2 мин — по этому времени видно, что человек шевелится, а не PIR залип.
@@ -258,6 +391,7 @@ class BatteryDaysLeftSensor(OtaEntity, SensorEntity):
 
 class MotionEventsTodaySensor(OtaEntity, SensorEntity):
     """Сколько раз за сегодня было «занято» (переходы в ON)."""
+    _attr_entity_registry_enabled_default = False   # v1.15: техническая, выключена по умолчанию
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:motion-sensor"
@@ -276,6 +410,7 @@ class MotionEventsTodaySensor(OtaEntity, SensorEntity):
 
 
 class WakesTodaySensor(OtaEntity, SensorEntity):
+    _attr_entity_registry_enabled_default = False   # v1.15: техническая, выключена по умолчанию
     _attr_entity_category = EntityCategory.DIAGNOSTIC  # сервисное — в «Диагностику»
     """Пробуждения за сегодня: всего (по Wake count), с отправкой пакета и тихие (без радио)."""
 

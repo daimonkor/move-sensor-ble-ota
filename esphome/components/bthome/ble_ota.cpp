@@ -659,6 +659,10 @@ void BleOta::handle_command_() {
         this->settings_apply_(c + 2, c[1], len - 2);
       }
       size_t n = this->settings_pack_(r + 2);
+      // v1.15: 18-й байт — номер правки ПОСЛЕ этой записи (одна запись = одна правка);
+      // старая интеграция читает только первые 17 байт (unpack_from)
+      r[2 + n] = this->rev_commit();
+      n++;
       this->reply_(r, 2 + n);
       break;
     }

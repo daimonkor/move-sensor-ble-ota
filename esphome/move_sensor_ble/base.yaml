@@ -133,8 +133,30 @@ esphome:
               ESP_LOGW("ms", "fast test mode: %s, tx_window %u ms", minutes ? "ON" : "OFF",
                        (unsigned) ms::tx_window_ms(${tx_window_ms}));
             });
+            // номер правки настроек (v1.15): из своей preference в NVS; 0 = свежий NVS
+            {
+              static ESPPreferenceObject rev_pref = global_preferences->make_preference<uint8_t>(ms::SETTINGS_REV_KEY);
+              uint8_t r = 0;
+              if (rev_pref.load(&r)) ms::settings_rev = r;
+              id(bth_ota).set_rev_hook([]() -> uint8_t {
+                if (ms::rev_pending) {
+                  ms::rev_pending = false;
+                  ms::settings_rev = ms::rev_next(ms::settings_rev);
+                  rev_pref.save(&ms::settings_rev);
+                  global_preferences->sync();   // сразу во флеш: правка не теряется при пропадании питания
+                  ESP_LOGI("ms", "settings revision -> %u", (unsigned) ms::settings_rev);
+                  id(settings_rev_sensor).publish_state(ms::settings_rev);
+                  id(custom_data_update).execute();
+                }
+                return ms::settings_rev;
+              });
+            }
     - priority: -100
       then:
+        # v1.15: настройки восстановлены из флеша — дальнейшие изменения считаются правками
+        - lambda: |-
+            ms::boot_done = true;
+            id(settings_rev_sensor).publish_state(ms::settings_rev);
         # точка доступа: SSID/пароль берём из wifi: -> ap:
         - lambda: |-
             ms_ap::setup([](std::string &ssid, std::string &pass) {
@@ -419,6 +441,7 @@ sensor:
     source_id: vbat
     name: "D0 raw voltage"
     icon: mdi:sine-wave
+    entity_category: diagnostic   # v1.15: отладка калибровки, не данные
     unit_of_measurement: "V"
     device_class: voltage
     accuracy_decimals: 3
@@ -461,6 +484,15 @@ sensor:
     icon: mdi:battery-high
     unit_of_measurement: "%"
     device_class: battery
+    accuracy_decimals: 0
+    update_interval: never
+
+  # v1.15: номер правки настроек (см. move_sensor_rtc.h) — для интеграции по Wi-Fi
+  - platform: template
+    id: settings_rev_sensor
+    name: "Settings revision"
+    icon: mdi:counter
+    entity_category: diagnostic
     accuracy_decimals: 0
     update_interval: never
 
@@ -655,6 +687,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(vbat_factor).state)) ms::rev_pending = true;"
     on_value:
       - lambda: "id(vbat).update();"
 
@@ -671,6 +706,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(detect_delay).state)) ms::rev_pending = true;"
 
   - platform: template
     id: keep_time
@@ -685,6 +723,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(keep_time).state)) ms::rev_pending = true;"
 
   # Как часто просыпаться по таймеру и слать температуру/влажность, когда движения нет.
   # 0 = не просыпаться (данные уходят только вместе с событиями движения).
@@ -702,6 +743,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(climate_interval).state)) ms::rev_pending = true;"
 
   # Окна рекламы после пакета (2026-11-14), мс: сколько не спим, чтобы прокси услышал пакет
   # и интеграция успела подключиться (OTA/настройки). Пакет «движение/пусто» — Motion window,
@@ -721,6 +765,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(motion_window).state)) ms::rev_pending = true;"
   # Поправки SHT41 (2026-11-14): прибавляются к измерению, бывают и плюс, и минус. Меняются из HA
   # (move_sensor_ble_ota) по BLE или здесь в сервисном режиме; сохраняются во флеш.
   - platform: template
@@ -736,6 +783,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(temp_offset).state)) ms::rev_pending = true;"
   - platform: template
     id: hum_offset
     name: "Humidity offset"
@@ -749,6 +799,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(hum_offset).state)) ms::rev_pending = true;"
   - platform: template
     id: climate_window
     name: "Climate window"
@@ -762,6 +815,9 @@ number:
     optimistic: true
     restore_value: true
     mode: box
+    # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(climate_window).state)) ms::rev_pending = true;"
 
 output:
   - platform: gpio
@@ -776,8 +832,11 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - lambda: "if (ms::boot_done) ms::rev_pending = true;"   # v1.15: правка -> номер правки +1
     on_turn_off:
       - output.turn_off: dbg_led
+      - lambda: "if (ms::boot_done) ms::rev_pending = true;"
 
 text_sensor:
   # Версии — как в остальных проектах (esphome-bluetooth-proxy.yaml): видно, какая прошивка
@@ -852,6 +911,10 @@ text_sensor:
 
 # в сервисном режиме шлём свежий пакет каждые 5 с -> в HA обновляется RSSI
 interval:
+  # v1.15: правка настройки (сайт / ESPHome API) -> номер правки +1, сразу во флеш
+  - interval: 200ms
+    then:
+      - lambda: "if (ms::rev_pending) id(bth_ota).rev_commit();"
   # сервисный переключатель: следим за уровнем на D2
   - interval: 200ms
     then:
@@ -884,8 +947,7 @@ interval:
                 id(vbat).update();
                 id(climate_read).execute();
                 id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
-                { const uint8_t cd[4] = {(uint8_t) (ms::wake_count & 0xFF), (uint8_t) ((ms::wake_count >> 8) & 0xFF), 0, ms::motion_count};
-                  id(bth).set_custom_data(0xFFFF, cd, sizeof(cd)); }
+                id(custom_data_update).execute();
 
 # ------------------------------------------------------------------ логика
 script:
@@ -1077,6 +1139,14 @@ script:
     then:
       - component.update: sht
 
+  # Свой блок рекламы (2026-11-16): wake uint16 LE, settings_rev, motion_count (после BTHome, 0xFFFF)
+  - id: custom_data_update
+    then:
+      - lambda: |-
+          const uint8_t cd[4] = {(uint8_t) (ms::wake_count & 0xFF), (uint8_t) ((ms::wake_count >> 8) & 0xFF),
+                                 ms::settings_rev, ms::motion_count};
+          id(bth).set_custom_data(0xFFFF, cd, sizeof(cd));
+
   # Публикация состояния: один BTHome-пакет со всем сразу
   - id: send_state
     parameters:
@@ -1092,9 +1162,7 @@ script:
           id(climate_read).execute();
           ms::climate_last_ms = ms::now_ms();   // климат уходит в этом пакете
           id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
-          // свой блок рекламы (2026-11-16): wake uint16 LE, settings_rev (0 = нет до 1.15), motion_count
-          { const uint8_t cd[4] = {(uint8_t) (ms::wake_count & 0xFF), (uint8_t) ((ms::wake_count >> 8) & 0xFF), 0, ms::motion_count};
-            id(bth).set_custom_data(0xFFFF, cd, sizeof(cd)); }
+          id(custom_data_update).execute();   // свой блок рекламы: wake, settings_rev, motion_count
           if (state) ms::motion_tx_ms = ms::now_ms();
           // повтор «свободно» (2026-11-15): любой пакет со «свободно» его выполняет. Флаг ставит
           // ветка keep time ПОСЛЕ этого вызова — сама её отправка его не сбрасывает.

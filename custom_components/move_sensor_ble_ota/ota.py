@@ -138,6 +138,10 @@ def bthome_parse(data: bytes) -> dict:
             out["occupancy"] = bool(data[i + 1])
         elif oid == 0x0C:
             out["voltage"] = int.from_bytes(data[i + 1:i + 3], "little") / 1000
+        elif oid == 0x02:
+            out["temperature"] = int.from_bytes(data[i + 1:i + 3], "little", signed=True) / 100
+        elif oid == 0x03:
+            out["humidity"] = int.from_bytes(data[i + 1:i + 3], "little") / 100
         i += 1 + n
     return out
 
@@ -155,8 +159,59 @@ def custom_parse(manufacturer_data: dict) -> dict:
     return {"wake": int.from_bytes(data[0:2], "little"), "settings_rev": data[2], "motion_count": data[3]}
 
 
+# v1.15: данные датчика, которые показывает основное устройство (из любого канала)
+DATA_KEYS = ("occupancy", "temperature", "humidity", "battery", "voltage")
+WIFI_ECHO_S = 5.0   # сколько ждём эхо своей записи по Wi-Fi
+
+
+# v1.15: «YAML изменён» — хеш всего дерева, из которого собирается прошивка датчика
+_CFG_EXT = (".yaml", ".yml", ".h", ".hpp", ".c", ".cpp", ".py", ".js", ".css", ".html")
+
+
+def config_tree_hash(esphome_dir: str, device_yaml: str) -> str:
+    """Хеш YAML датчика + move_sensor_ble/ + components/bthome/ + move_sensor_rtc.h + secrets.yaml
+    (блокирующая). Копии (.bak*), кэши, этикетки и папка прошивок не входят."""
+    h = hashlib.sha256()
+    files = [os.path.join(esphome_dir, device_yaml), os.path.join(esphome_dir, "move_sensor_rtc.h"),
+             os.path.join(esphome_dir, "secrets.yaml")]
+    for sub in ("move_sensor_ble", os.path.join("components", "bthome")):
+        root = os.path.join(esphome_dir, sub)
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = sorted(d for d in dirnames if d not in ("__pycache__", "labels") and not d.startswith("."))
+            for fn in sorted(filenames):
+                if ".bak" in fn or ".old_" in fn or fn.startswith("."):
+                    continue
+                if fn.lower().endswith(_CFG_EXT):
+                    files.append(os.path.join(dirpath, fn))
+    for path in files:
+        try:
+            with open(path, "rb") as f:
+                h.update(os.path.relpath(path, esphome_dir).encode())
+                h.update(f.read())
+        except OSError:
+            continue
+    return h.hexdigest()[:12]
+
+
+def read_tx_power(esphome_dir: str) -> int | None:
+    """Мощность BLE-рекламы из YAML прошивки (bthome: tx_power, дБм). Блокирующая."""
+    import re  # noqa: PLC0415
+
+    try:
+        with open(os.path.join(esphome_dir, "move_sensor_ble", "base.yaml"), encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+    m = re.search(r"^bthome:\n(?:[ \t].*\n|\n)*?[ \t]+tx_power:\s*(-?\d+)", text, re.M)
+    return int(m.group(1)) if m else None
+
+
 class OtaError(Exception):
     """Ошибка, после которой повторять в следующее окно бессмысленно."""
+
+
+class OTAKeyMismatch(OtaError):
+    """Ключ OTA в образе не равен ключу интеграции."""
 
 
 class RetryLater(Exception):
@@ -345,6 +400,25 @@ class OtaManager:
         # настройки могут вернуться к значениям из YAML — тогда HA отправит их заново.
         self.target: dict = {}
         self._resync = False      # перечитать и вернуть target после перезагрузки датчика
+        # v1.15: номер правки настроек на датчике (растёт на каждую правку с любой стороны; 0 = свежий NVS)
+        self.rev_seen: int | None = None   # последний виденный номер
+        self.rev_own: int | None = None    # номер после последней записи из ЭТОГО HA
+        self.rev_capable = False           # прошивка отдаёт номер правки (18-й байт ответа BLE)
+        self._adopt = False                # прочитать настройки и ПРИНЯТЬ их (правка не из HA)
+        # v1.15: данные датчика независимо от канала: ключ -> {"v": значение, "ts": iso, "src": "ble"|"wifi"}
+        self.data: dict = {}
+        self.ble_rssi: int | None = None
+        self.wifi = None                   # WifiChannel (wifi.py), если есть ESPHome-устройство
+        self._wifi_echo: dict = {}         # ключ -> (значение, monotonic срок) — своя запись по Wi-Fi
+        self._wifi_own_until = 0.0         # до этого момента рост номера правки — от своей записи по Wi-Fi
+        self._restore_keys: set = set()    # ключи, возвращаемые после сброса (событие restored уже было)
+        self._wifi_ota_after = 0.0         # после обрыва Wi-Fi OTA не пробовать Wi-Fi до этого момента
+        self._shutdown_job: dict | None = None   # задание прошивки на момент выгрузки (сохраняется)
+        self.key_ok_at: datetime | None = None   # когда датчик последний раз принял ключ OTA
+        self.tx_power_dbm: int | None = None     # мощность BLE-рекламы из YAML прошивки (bthome: tx_power)
+        self._build_cancelled = False      # «Отмена» во время сборки — собранное не шить
+        self.last_channel: str | None = None   # канал последней прошивки (BLE / Wi-Fi)
+        self._wifi_lock = asyncio.Lock()   # запись настроек по Wi-Fi и сеанс BLE не идут одновременно
         # v1.14.1: {"reason": "auth"|"no_key", "key_fp": ..., "since": iso} — подключения на паузе
         self.auth_block: dict | None = None
         self._auth_check_at = 0.0
@@ -401,6 +475,11 @@ class OtaManager:
         self._unsub_adv = None
         self.window_state: str = "idle"  # idle / waiting / connected — для атрибутов
         self.last_build: dict | None = None  # итог последней сборки (build_and_flash)
+        # v1.15: сущность «Firmware»: хеш дерева YAML сейчас и того, что стоит на датчике
+        self.config_hash: str | None = None
+        self.flashed_hash: str | None = None
+        self._build_hash: str | None = None
+        self._ticks = 0
 
     # ================= загрузка / сохранение =================
     async def async_load(self) -> None:
@@ -411,6 +490,14 @@ class OtaManager:
         self.firmware_seen = dt_util.parse_datetime(ts_fw) if ts_fw else None
         self.applied = data.get("applied", {})
         self.target = data.get("target") or dict(self.applied)   # миграция со старых версий
+        self.flashed_hash = data.get("flashed_hash")
+        ts_k = data.get("key_ok_at")
+        self.key_ok_at = dt_util.parse_datetime(ts_k) if ts_k else None
+        rv = data.get("rev") or {}
+        self.rev_seen = rv.get("seen")
+        self.rev_own = rv.get("own")
+        self.rev_capable = bool(rv.get("capable"))
+        self.data = data.get("data") or {}
         self.auth_block = data.get("auth_block")
         if self.auth_block is not None:   # сообщение в «Ремонте» не переживает перезапуск HA
             self._raise_auth_issue(self.auth_block.get("reason", "auth"))
@@ -455,6 +542,16 @@ class OtaManager:
             bluetooth.BluetoothCallbackMatcher(address=self.address, connectable=False),
             bluetooth.BluetoothScanningMode.PASSIVE,
         )
+        # v1.15: канал Wi-Fi — ESPHome-устройство того же датчика
+        from .wifi import WifiChannel  # noqa: PLC0415
+
+        self.wifi = WifiChannel(self.hass, self.address, self._on_wifi_state, self._on_wifi_link)
+        self.wifi.start()
+        if self.wifi.live:
+            self._on_wifi_link(True)
+        self.hass.async_create_task(self.async_refresh_config_hash())
+        if data.get("job"):
+            self.hass.async_create_task(self._resume_job(data["job"]))
         self._ensure_worker()
 
     def _save(self) -> None:
@@ -463,6 +560,12 @@ class OtaManager:
                 "desired": self.desired,
                 "applied": self.applied,
                 "target": self.target,
+                "rev": {"seen": self.rev_seen, "own": self.rev_own, "capable": self.rev_capable},
+                "flashed_hash": self.flashed_hash,
+                "key_ok_at": self.key_ok_at.isoformat() if self.key_ok_at else None,
+                # v1.15: задание прошивки переживает перезапуск HA (файл + срок ожидания окна)
+                "job": self._job_snapshot(),
+                "data": self.data,
                 "auth_block": self.auth_block,
                 "synced": self.settings_synced.isoformat() if self.settings_synced else None,
                 "firmware_version": self.firmware_version,
@@ -509,10 +612,7 @@ class OtaManager:
             return SST_PENDING
         if not self.applied:
             return SST_UNKNOWN
-        if self.settings_applied_at is not None:
-            from datetime import timedelta  # noqa: PLC0415
-            if dt_util.now() - self.settings_applied_at < timedelta(minutes=SETTINGS_APPLIED_SHOW_MIN):
-                return SST_APPLIED
+        # v1.15: только устойчивые состояния; что произошло — событие «Settings change» (event)
         return SST_IDLE
 
     def settings_attributes(self) -> dict:
@@ -524,10 +624,14 @@ class OtaManager:
             "error": self.settings_error,
             "note": self.settings_note,
             "window": self.window_state,
+            "channel": self.link,
+            "settings_revision": self.rev_seen,
         }
 
     async def async_set_setting(self, key: str, value) -> None:
-        self._auth_unblock("setting changed")
+        if not (self.wifi_live and self.wifi.has(key)):
+            # v1.15: только BLE-правка снимает паузу из-за ключа; по Wi-Fi ключ не нужен (п.10 плана)
+            self._auth_unblock("setting changed")
         if key not in SETTINGS:
             raise OtaError(f"неизвестная настройка {key}")
         if key in WINDOW_KEYS and self.auto_window:
@@ -535,7 +639,10 @@ class OtaManager:
             self.auto_window = False
             _LOGGER.info("%s: %s задано вручную — авто-окно выключено", self.name, key)
         self._queue_setting(key, value)
-        self._ensure_worker()
+        if self.wifi_live and self.wifi.has(key):
+            await self._wifi_flush()
+        else:
+            self._ensure_worker()
 
     def _queue_setting(self, key: str, value) -> None:
         if same_value(key, value, self.applied.get(key)):
@@ -683,7 +790,9 @@ class OtaManager:
             raise OtaError("сборка или прошивка уже идёт")
         await self.async_auth_gate("build and flash")
         cfg = await self.hass.async_add_executor_job(self.resolve_config, configuration)
-        self.last_build = {"configuration": cfg, "started": dt_util.now().isoformat()}
+        self._build_hash = await self.hass.async_add_executor_job(config_tree_hash, ESPHOME_DIR, cfg)
+        self.last_build = {"configuration": cfg, "started": dt_util.now().isoformat(), "config_hash": self._build_hash}
+        self._build_cancelled = False
         self._set(ST_BUILDING, progress=0, error=None, finished=None, file=None, new_version=None)
 
         def on_progress(p: int) -> None:
@@ -697,6 +806,18 @@ class OtaManager:
             self.last_build["error"] = str(err)
             self._set(ST_ERROR, error=f"сборка: {err}", finished=dt_util.now())
             raise OtaError(f"сборка: {err}") from err
+        # v1.15: ключ OTA сборки = ключ интеграции? Ключ лежит в образе открытым текстом. Не совпал —
+        # датчик после прошивки не пустит интеграцию (настройки и следующие прошивки по BLE)
+        try:
+            key = await self._key()
+        except OtaError:
+            key = None
+        if key and key.encode() not in data:
+            msg = ("ключ OTA в собранной прошивке не совпадает с ключом интеграции "
+                   "(поле «Ключ OTA» или move_sensor_ble_ota_key в secrets.yaml) — прошивка не запущена")
+            self.last_build["error"] = msg
+            self._set(ST_ERROR, error=msg, finished=dt_util.now())
+            raise OtaError(msg)
         name = f"{os.path.splitext(os.path.basename(cfg))[0]}-{dt_util.now().strftime('%Y%m%d-%H%M%S')}.ota.bin"
         path = os.path.join(self.firmware_dir, name)
 
@@ -709,6 +830,10 @@ class OtaManager:
         await self.hass.async_add_executor_job(_write)
         self.last_build.update({"file": path, "size": len(data), "built": dt_util.now().isoformat()})
         _LOGGER.info("%s: built %s (%d bytes)", self.name, path, len(data))
+        if self._build_cancelled:
+            self._build_cancelled = False
+            _LOGGER.info("%s: build finished after cancel — not flashing", self.name)
+            return path
         if start:
             self.status = ST_IDLE  # async_start сам выставит waiting
             await self.async_start(path, timeout_min)
@@ -729,6 +854,12 @@ class OtaManager:
                 raise OtaError(f"в {self.firmware_dir} нет .bin файлов")
         image = await self.hass.async_add_executor_job(load_firmware, path)
         key = await self._key()
+        # v1.15: ключ OTA образа = ключ интеграции (ключ лежит в образе открытым текстом). Иначе после
+        # прошивки (особенно по Wi-Fi, где ключ не нужен) интеграция потеряет доступ к датчику по BLE
+        if key and key.encode() not in image.data:
+            raise OTAKeyMismatch(
+                "ключ OTA в этом .bin не совпадает с ключом интеграции (поле «Ключ OTA» или "
+                "move_sensor_ble_ota_key в secrets.yaml) — прошивка не запущена")
         self.file = path
         self.new_version = image.version
         self.error = None
@@ -747,7 +878,13 @@ class OtaManager:
         self._ensure_worker()
 
     async def async_cancel(self) -> None:
-        """Отменить прошивку (настройки продолжат ждать окно)."""
+        """Отменить прошивку (настройки продолжат ждать окно). v1.15: и на этапе сборки."""
+        self._shutdown_job = None
+        if self._ota is None and self.status == ST_BUILDING:
+            self._build_cancelled = True
+            self._set(ST_CANCELLED, finished=dt_util.now())
+            _LOGGER.info("%s: build cancelled — the image will not be flashed", self.name)
+            return
         if self._ota is None:
             return
         self._ota = None
@@ -761,6 +898,8 @@ class OtaManager:
         self._ensure_worker()
 
     async def async_shutdown(self) -> None:
+        self._shutdown_job = self._job_snapshot()   # v1.15: продолжить после перезапуска HA
+        self._save()
         self._ota = None
         if self._unsub_reset is not None:
             self._unsub_reset()
@@ -774,6 +913,8 @@ class OtaManager:
         if self._unsub_stuck is not None:
             self._unsub_stuck()
             self._unsub_stuck = None
+        if self.wifi is not None:
+            self.wifi.stop()
 
     # ================= внутреннее =================
     def _notify(self) -> None:
@@ -802,6 +943,8 @@ class OtaManager:
             self._notify()
 
     def _settings_work(self) -> bool:
+        if self.wifi_live:
+            return False   # v1.15: по Wi-Fi настройки пишутся/читаются сразу, без BLE-подключения
         return (bool(self.pending()) or self._need_read) and self.settings_error is None
 
     def _has_work(self) -> bool:
@@ -812,6 +955,246 @@ class OtaManager:
                 or self.wifi_reset.get("state") == "pending"
                 or self.identify.get("state") == "pending"
                 or self.test_mode.get("state") == "pending")
+
+    # ================= v1.15: сущность «Firmware» =================
+    async def async_refresh_config_hash(self) -> None:
+        try:
+            cfg = await self.hass.async_add_executor_job(self.resolve_config, None)
+            h = await self.hass.async_add_executor_job(config_tree_hash, ESPHOME_DIR, cfg)
+        except Exception:  # noqa: BLE001
+            return
+        tx = await self.hass.async_add_executor_job(read_tx_power, ESPHOME_DIR)
+        if tx != self.tx_power_dbm:
+            self.tx_power_dbm = tx
+            self._notify()
+        if self.flashed_hash is None:
+            self.flashed_hash = h   # первый запуск: считаем, что на датчике текущий YAML
+            self._save()
+        if h != self.config_hash:
+            self.config_hash = h
+            self._notify()
+
+    @property
+    def key_state(self) -> str:
+        """Ключ OTA: accepted (датчик принял) / rejected (не принял) / missing (нет ключа) / unknown."""
+        if self.auth_block is not None:
+            return "missing" if self.auth_block.get("reason") == "no_key" else "rejected"
+        return "accepted" if self.key_ok_at is not None else "unknown"
+
+    @property
+    def firmware_in_progress(self) -> bool:
+        return self.status in (ST_BUILDING, ST_WAITING, ST_CONNECTING, ST_FLASHING)
+
+    @property
+    def latest_firmware(self) -> str | None:
+        inst = self.firmware_version
+        if inst is None:
+            return None
+        if self.config_hash and self.flashed_hash and self.config_hash != self.flashed_hash:
+            return f"{inst} + YAML {self.config_hash[:6]}"
+        return inst
+
+    # ================= v1.15: каналы, данные, номер правки =================
+    @property
+    def wifi_live(self) -> bool:
+        return self.wifi is not None and self.wifi.live
+
+    @callback
+    def _data_update(self, key: str, value, src: str, now: datetime | None = None) -> None:
+        if value is None:
+            return
+        now = now or dt_util.utcnow()
+        self.data[key] = {"v": value, "ts": now.isoformat(), "src": src}
+
+    def data_value(self, key: str):
+        d = self.data.get(key)
+        return None if d is None else d.get("v")
+
+    def data_info(self, key: str) -> dict:
+        d = self.data.get(key) or {}
+        return {"source": d.get("src"), "updated": d.get("ts")}
+
+    @property
+    def link(self) -> str | None:
+        """Канал связи: wifi — ESPHome API подключён; ble — иначе (если датчик вообще слышен)."""
+        if self.wifi_live:
+            return "wifi"
+        return "ble" if self.last_seen is not None else None
+
+    @property
+    def signal(self) -> int | None:
+        if self.link == "wifi":
+            v = self.wifi.current("wifi_rssi")
+            return None if v is None else int(v)
+        return self.ble_rssi
+
+    @property
+    def signal_percent(self) -> int | None:
+        """Тот же сигнал в %, как в прошивке и остальных проектах: −90 дБм = 0 %, −30 дБм = 100 %."""
+        s = self.signal
+        if s is None:
+            return None
+        return int(round(max(0.0, min(100.0, (s + 90) * 100.0 / 60.0))))
+
+    @callback
+    def _settings_event(self, kind: str, changes: dict, channel: str) -> None:
+        """v1.15: событие «Settings change» — что изменилось, откуда, номер правки."""
+        changes = {k: v for k, v in changes.items() if not same_value(k, v[0], v[1])}
+        if kind in ("saved_wifi", "saved_ble"):
+            # возврат своих значений уже отмечен событием restored — не дублировать
+            changes = {k: v for k, v in changes.items() if k not in self._restore_keys}
+            for k in list(changes):
+                self._restore_keys.discard(k)
+        if not changes:
+            return
+        from homeassistant.helpers.dispatcher import async_dispatcher_send  # noqa: PLC0415
+        from .const import SIGNAL_SETTINGS_EVENT  # noqa: PLC0415
+
+        data = {"changes": {k: {"from": v[0], "to": v[1]} for k, v in changes.items()},
+                "summary": ", ".join(f"{k}: {v[0]} → {v[1]}" for k, v in changes.items()),
+                "channel": channel, "settings_revision": self.rev_seen}
+        _LOGGER.info("%s: settings %s (%s): %s", self.name, kind, channel, data["summary"])
+        async_dispatcher_send(self.hass, SIGNAL_SETTINGS_EVENT.format(self.entry.entry_id), kind, data)
+
+    @callback
+    def _on_rev(self, rev: int, via: str) -> None:
+        """Номер правки с датчика изменился? Чужая правка — принять; 0 (стёрт флеш) — вернуть свои."""
+        self.rev_capable = True
+        if rev == self.rev_seen:
+            return
+        prev, self.rev_seen = self.rev_seen, rev
+        if prev is None:
+            pass   # первый раз видим номер — запоминаем
+        elif rev == 0:
+            _LOGGER.warning("%s: settings revision %s -> 0 (flash erased): restoring HA values", self.name, prev)
+            self._resync = True
+            self._need_read = True
+        elif rev == self.rev_own or time.monotonic() < self._wifi_own_until:
+            self.rev_own = rev   # своя запись (BLE-ответ или эхо по Wi-Fi)
+        else:
+            _LOGGER.info("%s: settings changed on the sensor (revision %s -> %s, via %s): adopting",
+                         self.name, prev, rev, via)
+            self._adopt = True
+            self._need_read = True
+        if self.wifi_live:
+            self.hass.async_create_task(self._wifi_sync())
+        else:
+            self._ensure_worker()
+        self._save()
+        self._notify()
+
+    def _after_adopt(self, old_target: dict, channel: str = "ble") -> None:
+        """Приняли значения с датчика: окна, поменянные не из HA, выключают авто-окно (иначе откатит)."""
+        if self._adopt and old_target:
+            self._settings_event("changed_on_sensor",
+                                 {k: (old_target.get(k), v) for k, v in self.target.items()
+                                  if k in old_target and old_target.get(k) is not None}, channel)
+        if self._adopt:
+            for k in WINDOW_KEYS:
+                if (self.auto_window and k in self.target and old_target.get(k) is not None
+                        and not same_value(k, self.target[k], old_target[k])):
+                    self.auto_window = False
+                    _LOGGER.info("%s: %s changed on the sensor — auto window off", self.name, k)
+        self._adopt = False
+
+    @callback
+    def _on_wifi_link(self, live: bool) -> None:
+        _LOGGER.info("%s: Wi-Fi channel %s", self.name, "up" if live else "down")
+        if live:
+            self.hass.async_create_task(self._wifi_sync())
+            if self._ota is not None:
+                self._adv_event.set()   # прошивка ждёт окно BLE — Wi-Fi появился, шить сразу
+        else:
+            self._ensure_worker()   # то, что не успели по Wi-Fi, уйдёт по BLE
+        self._notify()
+
+    @callback
+    def _on_wifi_state(self, key: str, value, first: bool) -> None:
+        now = dt_util.utcnow()
+        if key in DATA_KEYS:
+            self._data_update(key, value, "wifi", now)
+            if key == "occupancy":
+                self._account({"occupancy": bool(value)}, now)
+        elif key == "settings_rev":
+            if value is not None:
+                self._on_rev(int(value), "wifi")
+        elif key in SETTINGS_MASK and value is not None:
+            self.applied[key] = value
+            echo = self._wifi_echo.get(key)
+            if echo is not None and same_value(key, value, echo[0]):
+                self._wifi_echo.pop(key, None)
+                self._settings_event("saved_wifi", {key: (self.target.get(key), value)}, "wifi")
+                self.target[key] = value
+                if same_value(key, self.desired.get(key), value):
+                    self.desired.pop(key, None)
+                self.settings_applied_at = dt_util.now()
+                self.settings_synced = self.settings_applied_at
+            self._save()
+        self._notify()
+
+    async def _wifi_sync(self) -> None:
+        """Wi-Fi на связи: прочитать настройки, принять/вернуть по номеру правки, отправить заданное."""
+        if not self.wifi_live:
+            return
+        async with self._wifi_lock:
+            actual = {}
+            for k in SETTINGS_MASK:
+                if self.wifi.has(k):
+                    v = self.wifi.current(k)
+                    if v is not None:
+                        actual[k] = v
+            if not actual:
+                return
+            rev = self.wifi.current("settings_rev")
+            if rev is not None:
+                self.rev_capable = True
+                rev = int(rev)
+                if rev != self.rev_seen and rev not in (0, self.rev_own) and self.rev_seen is not None:
+                    self._adopt = True
+                self.rev_seen = rev
+            old_target = dict(self.target)
+            self.applied.update(actual)
+            restore = bool(self.target) and (rev == 0 or (self._resync and rev is None))
+            if restore:
+                # стёрт флеш (номер 0) или старая прошивка после перезагрузки — вернуть значения HA
+                drift = {}
+                for k, v in self.target.items():
+                    if k in actual and not same_value(k, v, actual[k]):
+                        self.desired[k] = v
+                        drift[k] = (actual[k], v)
+                self._settings_event("restored", drift, "wifi")
+                self._restore_keys |= set(drift)
+                self._adopt = False
+            elif self._adopt or self._resync or not self.target:
+                # правка на датчике (сайт / ESPHome) или первое чтение — датчик источник правды
+                self._adopt = True
+                self.target.update({k: v for k, v in actual.items() if v is not None})
+                self._after_adopt(old_target, "wifi")
+            self._resync = False
+            self._need_read = False
+            for k in [k for k, v in self.desired.items() if same_value(k, v, actual.get(k))]:
+                self.desired.pop(k, None)
+            self.settings_synced = dt_util.now()
+        await self._wifi_flush()
+        self._save()
+        self._notify()
+
+    async def _wifi_flush(self) -> None:
+        """Отправить заданное по Wi-Fi (сразу, без окна BLE). Не вышло — останется для BLE."""
+        if not self.wifi_live:
+            return
+        async with self._wifi_lock:
+            for k, v in list(self.pending().items()):
+                if not self.wifi.has(k):
+                    continue
+                self._wifi_echo[k] = (v, time.monotonic() + WIFI_ECHO_S)
+                self._wifi_own_until = time.monotonic() + WIFI_ECHO_S
+                try:
+                    await self.wifi.async_write(k, v)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("%s: Wi-Fi write %s failed: %s", self.name, k, err)
+                    self._wifi_echo.pop(k, None)
+        self._notify()
 
     # ================= диагностика сбросов =================
     @property
@@ -834,6 +1217,10 @@ class OtaManager:
             # Wake count остаётся из BTHome (0x3D)
             parsed.update(custom_parse(service_info.manufacturer_data))
             self._mark_seen(service_info, parsed)
+            rev = parsed.get("settings_rev")
+            # прошивка до 1.15 шлёт 0 всегда — номер учитываем, только если прошивка его умеет
+            if rev is not None and (rev != 0 or self.rev_capable):
+                self._on_rev(int(rev), "ble")
         wake = parsed.get("wake")
         if wake is not None:
             prev, self._last_wake = self._last_wake, wake
@@ -869,7 +1256,11 @@ class OtaManager:
             return
         self._last_pid = pid
         self._account(parsed, now)
+        for k in DATA_KEYS:
+            if parsed.get(k) is not None:
+                self._data_update(k, parsed[k], "ble", now)
         if service_info.rssi is not None and service_info.rssi > -127:
+            self.ble_rssi = int(service_info.rssi)
             self.rssi_hist = (self.rssi_hist + [int(service_info.rssi)])[-AUTO_WINDOW_SAMPLES * 2:]
             self._auto_window()
         self.last_seen = now
@@ -988,6 +1379,11 @@ class OtaManager:
 
     @callback
     def _tick(self, _now=None) -> None:
+        if self.wifi is not None:
+            self.wifi.check_link()
+        if self._ticks % 5 == 0:   # раз в 5 мин: не изменился ли YAML датчика
+            self.hass.async_create_task(self.async_refresh_config_hash())
+        self._ticks += 1
         before = self.stats.get("date")
         self._roll_day()
         if self.test_mode.get("state") == "active" and not self.test_mode_on:
@@ -1063,6 +1459,9 @@ class OtaManager:
         )
 
     def _auth_ok(self) -> None:
+        if self.key_ok_at is None or (dt_util.utcnow() - self.key_ok_at).total_seconds() > 3600:
+            self.key_ok_at = dt_util.utcnow()
+            self._save()
         if self.auth_block is not None:
             _LOGGER.info("%s: OTA key accepted - BLE connections resumed", self.name)
             self.auth_block = None
@@ -1173,11 +1572,19 @@ class OtaManager:
                         self._ota = None
                         self._set(ST_ERROR, error="датчик не проснулся за отведённое время", finished=dt_util.now())
                         continue
+                    # v1.15: канал выбирается в момент прошивки: Wi-Fi на связи — сразу по Wi-Fi
+                    if self.wifi_live and time.monotonic() >= self._wifi_ota_after:
+                        if await self._wifi_flash():
+                            continue
+                    if self.wifi_live:
+                        timeout = min(timeout, 30.0)   # Wi-Fi есть, но пауза после обрыва — проверить ещё раз
                 self._adv_event.clear()
                 try:
                     await asyncio.wait_for(self._adv_event.wait(), timeout=timeout)
                 except asyncio.TimeoutError:
                     continue
+                if self._ota is not None and self.wifi_live and time.monotonic() >= self._wifi_ota_after:
+                    continue   # разбудил Wi-Fi — прошивка по Wi-Fi в начале цикла
                 if self._ota is not None:
                     self.attempts += 1
                 try:
@@ -1200,6 +1607,78 @@ class OtaManager:
             self._stop_adv_watch()
             self.window_state = "idle"
             self._notify()
+
+    def _job_snapshot(self) -> dict | None:
+        if self._ota is None or not self.file:
+            return self._shutdown_job   # выгрузка/остановка HA: задание сохранено до очистки
+
+        left = max(0.0, self._ota.deadline - time.monotonic())
+        return {"file": self.file, "deadline": (dt_util.utcnow().timestamp() + left), "build_hash": self._build_hash}
+
+    async def _resume_job(self, job: dict) -> None:
+        """После перезапуска HA продолжить ожидание/прошивку тем же файлом (с начала)."""
+        left_min = (float(job.get("deadline") or 0) - dt_util.utcnow().timestamp()) / 60
+        path = job.get("file")
+        if not path or left_min <= 1 or not await self.hass.async_add_executor_job(os.path.isfile, path):
+            self._set(ST_CANCELLED, error="прошивка отменена перезапуском Home Assistant", finished=dt_util.now())
+            return
+        try:
+            self._build_hash = job.get("build_hash")
+            await self.async_start(path, int(left_min))
+            _LOGGER.info("%s: firmware job resumed after HA restart (%s)", self.name, os.path.basename(path))
+        except OtaError as err:
+            self._set(ST_ERROR, error=f"после перезапуска HA: {err}", finished=dt_util.now())
+
+    def _flash_success(self, channel: str) -> None:
+        self._ota = None
+        # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
+        self._need_read = True
+        self._resync = True   # v1.14.0: новая прошивка могла сбросить настройки
+        self._rebooted_after_flash = False
+        if self._build_hash and self.file and self.last_build and self.file == self.last_build.get("file"):
+            self.flashed_hash = self._build_hash   # v1.15: на датчике — эта сборка
+        self.last_channel = channel
+        self._set(ST_SUCCESS, progress=100, finished=dt_util.now())
+        self._save()
+        _LOGGER.info("%s: OTA done over %s, device reboots", self.name, channel)
+
+    async def _wifi_flash(self) -> bool:
+        """v1.15: датчик на связи по Wi-Fi (сервисный режим) — прошить штатным OTA ESPHome сразу.
+        True — задание закончено (успех или окончательная ошибка); False — связь оборвалась, ждём окно BLE."""
+        from .espota import EspOtaCommitted, EspOtaError, EspOtaNetworkError, upload  # noqa: PLC0415
+
+        host = self.wifi.host if self.wifi is not None else None
+        if not host or self._ota is None:
+            return False
+        image = self._ota.image
+        self.attempts += 1
+        self._set(ST_FLASHING, progress=0, error=None)
+        _LOGGER.info("%s: flashing over Wi-Fi (%s, %d bytes)", self.name, host, len(image.data))
+        loop = self.hass.loop
+
+        def prog(p: int) -> None:
+            def _upd() -> None:
+                if self.status == ST_FLASHING and p != self.progress:
+                    self.progress = p
+                    self._notify()
+            loop.call_soon_threadsafe(_upd)
+
+        try:
+            self.speed_kbs = round(await self.hass.async_add_executor_job(upload, host, image.data, prog), 1)
+        except EspOtaCommitted as err:
+            _LOGGER.warning("%s: Wi-Fi OTA: image sent, final answer lost (%s) - assuming success", self.name, err)
+        except EspOtaNetworkError as err:
+            # выключили WiFi посреди прошивки / адрес недоступен — дальше по BLE, в ближайшее окно
+            _LOGGER.warning("%s: Wi-Fi OTA interrupted: %s - continuing over BLE", self.name, err)
+            self._wifi_ota_after = time.monotonic() + 120
+            self._set(ST_WAITING, progress=0, error=f"Wi-Fi: {err} — ждём окно BLE")
+            return False
+        except EspOtaError as err:
+            self._ota = None
+            self._set(ST_ERROR, error=f"Wi-Fi OTA: {err}", finished=dt_util.now())
+            return True
+        self._flash_success("Wi-Fi")
+        return True
 
     async def _session(self) -> None:
         """Одно подключение в окно: авторизация -> настройки -> прошивка."""
@@ -1297,8 +1776,9 @@ class OtaManager:
 
             # ---- настройки (в каждом подключении, если есть что: прошлая ошибка не мешает —
             # датчик могли перепрошить)
-            if self.pending() or self._need_read:
-                await self._sync_settings(command)
+            if (self.pending() or self._need_read) and not self.wifi_live:
+                async with self._wifi_lock:
+                    await self._sync_settings(command)
 
             # ---- прошивка
             if self._ota is not None:
@@ -1310,13 +1790,7 @@ class OtaManager:
                     self._set(ST_ERROR, error=str(err), finished=dt_util.now())
                     return
                 flash_done = True
-                self._ota = None
-                # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
-                self._need_read = True
-                self._resync = True   # v1.14.0: новая прошивка могла сбросить настройки
-                self._rebooted_after_flash = False
-                self._set(ST_SUCCESS, progress=100, finished=dt_util.now())
-                _LOGGER.info("%s: OTA done, device reboots", self.name)
+                self._flash_success("BLE")
         except (BleakError, asyncio.TimeoutError, EOFError) as err:
             raise RetryLater(f"связь оборвалась ({type(err).__name__}: {err})") from err
         finally:
@@ -1473,8 +1947,21 @@ class OtaManager:
             self._notify()
             return
         actual = unpack_settings(rsp[2:])
+        # v1.15: 18-й байт — номер правки на датчике после этой команды
+        rev = rsp[2 + 17] if len(rsp) >= 2 + 18 else None
+        if rev is not None:
+            self.rev_capable = True
+            if pend:
+                self.rev_own = rev          # эту правку сделал этот HA
+            self.rev_seen = rev
+        old_target = dict(self.target)
         self.applied = actual
         self._need_read = False
+        if not pend and self._resync and rev:
+            # v1.15: датчик перезагрузился/перепрошит, но номер правки не 0 — настройки во флеше его
+            # собственные (возможно, поменяли на сайте): ПРИНИМАЕМ их, а не возвращаем свои
+            self._resync = False
+            self._adopt = True
         if not pend:
             if self._resync and self.target:
                 # v1.14.0: после перезагрузки датчика вернуть заданные из HA значения
@@ -1484,6 +1971,8 @@ class OtaManager:
                 if drift:
                     _LOGGER.warning("%s: settings reset on the sensor after reboot, restoring: %s",
                                     self.name, {k: (actual.get(k), v) for k, v in drift.items()})
+                    self._settings_event("restored", {k: (actual.get(k), v) for k, v in drift.items()}, "ble")
+                    self._restore_keys |= set(drift)
                     for k, v in drift.items():
                         self.desired[k] = v
                     await self._sync_settings(command)   # тот же сеанс: SET
@@ -1493,10 +1982,18 @@ class OtaManager:
                 # (например, настройку поменяли на сайте датчика по Wi-Fi)
                 self._resync = False
                 self.target.update({k: v for k, v in actual.items() if k in SETTINGS_MASK and v is not None})
+                self._after_adopt(old_target)
         else:
+            self._settings_event("saved_ble", {k: (old_target.get(k), actual.get(k)) for k in pend
+                                               if actual.get(k) is not None}, "ble")
             for k in pend:
                 if actual.get(k) is not None:
                     self.target[k] = actual.get(k)   # что датчик реально принял
+            if self._adopt:
+                # правку на датчике сделали не из HA — остальные ключи принимаем как есть
+                self.target.update({k: v for k, v in actual.items()
+                                    if k in SETTINGS_MASK and k not in pend and v is not None})
+                self._after_adopt(old_target)
         notes = []
         for k, want in list(pend.items()):
             got = actual.get(k)

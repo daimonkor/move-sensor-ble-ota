@@ -48,12 +48,13 @@ from .const import (
     SERVICE_RESET_WIFI,
     SERVICE_FAST_TEST,
 )
-from .hidden import async_rollback_unhide
+from .hidden import DuplicateHider, async_unhide_on_remove
 from .ota import OtaError, OtaManager, load_firmware
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.NUMBER, Platform.SWITCH]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.NUMBER, Platform.SWITCH,
+             Platform.UPDATE, Platform.EVENT]
 
 FLASH_SCHEMA = vol.Schema(
     {
@@ -134,8 +135,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _setup_bthome_names(hass, entry, mgr.address)
     _remove_radio_device(hass, mgr.address)
-    # v1.14.2: защита отката — показать то, что скрыла более новая версия (1.15+)
-    await async_rollback_unhide(hass, entry)
+    # v1.15: убрать заменённые сущности (Flash / Build & flash / Cancel / OTA status / OTA progress /
+    # Firmware version) — явно, чтобы не висели «больше не предоставляется»; откат на 1.14 вернёт их
+    # с теми же ID (реестр хранит удалённые, пока запись интеграции жива)
+    _remove_replaced_entities(hass, mgr.address)
+    # v1.15: скрыть копии в ESPHome- и BTHome-устройстве датчика (как Switch as X / Группа)
+    mgr.hider = DuplicateHider(hass, entry, mgr)
+    await mgr.hider.async_start()
+    entry.async_on_unload(mgr.hider.stop)
+    from .panel import async_update_panel  # noqa: PLC0415
+
+    await async_update_panel(hass)
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True
 
@@ -193,6 +203,26 @@ def _setup_bthome_names(hass: HomeAssistant, entry: ConfigEntry, address: str) -
     entry.async_on_unload(hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _on_registry))
 
 
+_REPLACED_KEYS = ("ota_flash", "ota_build_flash", "ota_cancel", "ota_status", "ota_progress", "firmware_version")
+
+
+def _remove_replaced_entities(hass: HomeAssistant, address: str) -> None:
+    from homeassistant.helpers import entity_registry as er  # noqa: PLC0415
+
+    reg = er.async_get(hass)
+    for platform in ("button", "sensor"):
+        for key in _REPLACED_KEYS:
+            eid = reg.async_get_entity_id(platform, DOMAIN, f"{address}_{key}")
+            if eid:
+                reg.async_remove(eid)
+                _LOGGER.info("removed %s (replaced by the Firmware update entity)", eid)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Удаление интеграции: показать скрытое НАМИ, вернуть голосовых помощников (как Switch as X)."""
+    await async_unhide_on_remove(hass, entry)
+
+
 async def _reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
@@ -203,6 +233,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         mgr = _managers(hass).pop(entry.entry_id, None)
         if mgr:
             await mgr.async_shutdown()
+        from .panel import async_update_panel  # noqa: PLC0415
+
+        await async_update_panel(hass)   # v1.15: убрать датчик с панели (или панель, если датчиков нет)
         if not _managers(hass):
             hass.services.async_remove(DOMAIN, SERVICE_FLASH)
             hass.services.async_remove(DOMAIN, SERVICE_CANCEL)

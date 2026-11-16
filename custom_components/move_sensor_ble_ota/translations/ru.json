@@ -25,6 +25,7 @@
         "title": "Move Sensor BLE OTA",
         "menu_options": {
           "upload": "Загрузить прошивку (.bin)",
+          "view": "Вид (скрытые копии, панель)",
           "settings": "Параметры (ключ, папка прошивок)"
         }
       },
@@ -41,14 +42,23 @@
           "key": "Ключ OTA (пусто = из secrets.yaml)",
           "firmware_dir": "Папка с прошивками (.bin)"
         }
+      },
+      "view": {
+        "title": "Вид",
+        "description": "Копии данных и настроек датчика в ESPHome- и BTHome-устройстве скрыты — устройство Move Sensor BLE показывает их из любого канала. Скрытые сущности продолжают работать (история, автоматизации).",
+        "data": {
+          "show_hidden": "Показать скрытые копии ESPHome / BTHome",
+          "show_panel": "Показывать панель Move Sensor BLE в меню"
+        }
       }
     },
     "error": {
       "bad_firmware": "Прошивка не принята: {error}"
     },
     "abort": {
-      "firmware_uploaded": "Загружено {file}: проект {project}, версия {version}, {size} КБ{factory}. Прошивка запущена: {started}. Ход — «OTA status» / «OTA progress» на странице устройства.",
-      "not_loaded": "Интеграция не загружена — перезапусти Home Assistant."
+      "firmware_uploaded": "Загружено {file}: проект {project}, версия {version}, {size} КБ{factory}. Прошивка запущена: {started}. Ход — «Firmware» на странице устройства.",
+      "not_loaded": "Интеграция не загружена — перезапусти Home Assistant.",
+      "view_saved": "Сохранено."
     }
   },
   "services": {
@@ -143,24 +153,14 @@
   },
   "entity": {
     "sensor": {
-      "ota_status": {
-        "name": "Firmware update status"
-      },
-      "ota_progress": {
-        "name": "Firmware update progress"
-      },
       "settings_status": {
         "name": "Settings status",
         "state": {
-          "idle": "Nothing pending",
-          "pending": "Waiting for sensor wake-up",
-          "applied": "Just applied",
-          "unknown": "Not read yet",
+          "in_sync": "In sync",
+          "waiting": "Waiting for wake-up",
+          "not_read": "Not read yet",
           "error": "Error"
         }
-      },
-      "firmware_version": {
-        "name": "Firmware version"
       },
       "brownout_count": {
         "name": "Brownout resets"
@@ -188,11 +188,51 @@
       },
       "device_id": {
         "name": "Device ID"
+      },
+      "temperature": {
+        "name": "Temperature"
+      },
+      "humidity": {
+        "name": "Humidity"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "voltage": {
+        "name": "Voltage"
+      },
+      "signal": {
+        "name": "Signal"
+      },
+      "link": {
+        "name": "Link",
+        "state": {
+          "ble": "BLE",
+          "wifi": "Wi-Fi"
+        }
+      },
+      "signal_level": {
+        "name": "Signal level"
+      },
+      "tx_power": {
+        "name": "BLE TX power"
+      },
+      "ota_key": {
+        "name": "OTA key",
+        "state": {
+          "accepted": "Accepted",
+          "rejected": "Rejected by the sensor",
+          "missing": "No key",
+          "unknown": "Not checked yet"
+        }
       }
     },
     "binary_sensor": {
       "pir_stuck": {
         "name": "PIR stuck"
+      },
+      "occupancy": {
+        "name": "Occupancy"
       }
     },
     "number": {
@@ -233,15 +273,6 @@
       }
     },
     "button": {
-      "ota_flash": {
-        "name": "Flash firmware file"
-      },
-      "ota_build_flash": {
-        "name": "Build & flash firmware"
-      },
-      "ota_cancel": {
-        "name": "Cancel firmware update"
-      },
       "settings_read": {
         "name": "Read settings"
       },
@@ -250,6 +281,26 @@
       },
       "identify": {
         "name": "Identify"
+      }
+    },
+    "update": {
+      "firmware": {
+        "name": "Firmware"
+      }
+    },
+    "event": {
+      "settings_change": {
+        "name": "Settings change",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "saved_wifi": "Saved on sensor (Wi-Fi)",
+              "saved_ble": "Saved on sensor (BLE)",
+              "changed_on_sensor": "Changed on sensor — taken",
+              "restored": "Sensor reset — HA values restored"
+            }
+          }
+        }
       }
     }
   },

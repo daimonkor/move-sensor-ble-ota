@@ -14,7 +14,26 @@ from .entity import OtaEntity
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    async_add_entities([PirStuckSensor(hass.data[DOMAIN][entry.entry_id])])
+    mgr = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities([PirStuckSensor(mgr), OccupancySensor(mgr)])
+
+
+class OccupancySensor(OtaEntity, BinarySensorEntity):
+    """v1.15: занятость с датчика — из любого канала (BLE или Wi-Fi), самое свежее значение."""
+
+    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "occupancy", "Occupancy")
+
+    @property
+    def is_on(self) -> bool | None:
+        v = self.mgr.data_value("occupancy")
+        return None if v is None else bool(v)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return self.mgr.data_info("occupancy")
 
 
 class PirStuckSensor(OtaEntity, BinarySensorEntity):

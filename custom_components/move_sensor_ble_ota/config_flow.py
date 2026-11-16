@@ -110,7 +110,27 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
 
 class MoveSensorBleOtaOptions(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["upload", "settings"])
+        return self.async_show_menu(step_id="init", menu_options=["upload", "view", "settings"])
+
+    # ---------- v1.15: вид (скрытые копии, панель) — без перезагрузки интеграции ----------
+    async def async_step_view(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from .panel import async_panel_shown, async_set_panel_shown  # noqa: PLC0415
+
+        mgr = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if mgr is None or getattr(mgr, "hider", None) is None:
+            return self.async_abort(reason="not_loaded")
+        if user_input is not None:
+            await mgr.hider.async_set_show(bool(user_input.get("show_hidden")))
+            await async_set_panel_shown(self.hass, bool(user_input.get("show_panel")))
+            # abort, а не create_entry: смена опций перезагрузила бы интеграцию (и оборвала прошивку)
+            return self.async_abort(reason="view_saved")
+        schema = vol.Schema(
+            {
+                vol.Optional("show_hidden", default=mgr.hider.show): BooleanSelector(),
+                vol.Optional("show_panel", default=await async_panel_shown(self.hass)): BooleanSelector(),
+            }
+        )
+        return self.async_show_form(step_id="view", data_schema=schema)
 
     # ---------- загрузка прошивки ----------
     async def async_step_upload(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

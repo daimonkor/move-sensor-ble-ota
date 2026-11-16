@@ -63,6 +63,22 @@ static RTC_DATA_ATTR bool pir_low_seen = false;     // PIR был в LOW пос�
 static RTC_DATA_ATTR int64_t motion_tx_ms = 0;      // когда последний раз ушёл пакет с «занято»
 static constexpr int64_t MOTION_REFRESH_MS = 120000;
 // засчитать срабатывание; true — оно свежее (был LOW с прошлого раза)
+// ---- Номер правки настроек (v1.15, 2026-11-16). Растёт на каждую РЕАЛЬНУЮ правку настройки с любой
+// стороны (сайт датчика, ESPHome API, BLE от HA): одна запись = +1 (несколько полей в одной BLE-записи —
+// тоже +1). После 255 идёт 1; 0 — только у свежего NVS (после стирания флеша). Хранится в NVS
+// (своя preference, sync сразу), едет в своём блоке рекламы, в ESPHome-сущности и 18-м байтом ответа
+// BLE-настроек. Интеграция по нему отличает чужую правку (принять) от сброса (вернуть свои значения).
+static uint8_t settings_rev = 0;
+static bool rev_pending = false;   // была правка — зафиксировать (+1) в rev_commit
+static bool boot_done = false;     // настройки восстановлены из флеша; дальше изменения — правки
+static constexpr uint32_t SETTINGS_REV_KEY = 0x5E77A3B1u;
+static inline uint8_t rev_next(uint8_t r) { return r >= 255 ? 1 : (uint8_t) (r + 1); }
+// число изменилось (сравнение с запасом на float)
+static inline bool setting_changed(float a, float b) {
+  if (std::isnan(a) || std::isnan(b)) return !(std::isnan(a) && std::isnan(b));
+  return std::fabs(a - b) > 1e-4f * (1.0f + std::fabs(b));
+}
+
 static inline bool motion_fresh_take() {
   if (!pir_low_seen) return false;
   pir_low_seen = false;

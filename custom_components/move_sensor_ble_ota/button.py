@@ -16,8 +16,9 @@ from .ota import OtaError
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     mgr = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([FlashButton(mgr), BuildFlashButton(mgr), CancelButton(mgr), ReadSettingsButton(mgr),
-                        ResetWifiButton(mgr), IdentifyButton(mgr)])
+    # v1.15: Flash / Build & flash / Cancel заменены сущностью обновления «Firmware» (update.py);
+    # службы flash / build_and_flash / cancel остаются
+    async_add_entities([ReadSettingsButton(mgr), ResetWifiButton(mgr), IdentifyButton(mgr)])
 
 
 class FlashButton(OtaEntity, ButtonEntity):

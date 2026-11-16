@@ -92,6 +92,10 @@ class BleOta : public Component {
   void set_wifi_reset_callback(std::function<void()> cb) { this->wifi_reset_cb_ = std::move(cb); }
   void set_test_mode_callback(std::function<void(uint8_t, uint16_t)> cb) { this->test_mode_cb_ = std::move(cb); }
   void set_identify_callback(std::function<void(uint8_t)> cb) { this->identify_cb_ = std::move(cb); }
+  // номер правки настроек (v1.15, 2026-11-16): хук фиксирует отложенную правку (+1) и отдаёт текущий
+  // номер; уходит 18-м байтом в ответе GET/SET настроек. Логика (NVS, сущность, реклама) — в YAML.
+  void set_rev_hook(std::function<uint8_t()> cb) { this->rev_hook_ = std::move(cb); }
+  uint8_t rev_commit() { return this->rev_hook_ ? this->rev_hook_() : 0; }
 
 #ifdef BLE_OTA_SETTINGS
   // настройки, которые HA может менять через окно BLE
@@ -162,6 +166,7 @@ class BleOta : public Component {
   std::string key_;
   std::string build_version_;
   std::function<void()> wifi_reset_cb_;
+  std::function<uint8_t()> rev_hook_;
   std::function<void(uint8_t, uint16_t)> test_mode_cb_;
   std::function<void(uint8_t)> identify_cb_;
   int min_battery_{30};

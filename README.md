@@ -36,14 +36,15 @@ the **Bluetooth** integration and an **ESPHome Bluetooth proxy** near the sensor
 8. **Check**: wave — *Occupancy* turns on and the LED flashes once; after *Keep time* it clears with two flashes.
    *Settings status* becomes *applied* after the first wake-up.
 
-From now on: firmware — **Build & flash firmware (BLE)** on the device page, no USB; settings — in Home Assistant.
+From now on: firmware — the **Firmware** update entity (*Install*) on the device page, no USB; settings — in Home Assistant
+(v1.15: one *Move Sensor BLE* device with data from BLE or Wi-Fi, ESPHome/BTHome copies hidden, sidebar panel).
 Wi-Fi is needed only in **service mode** (switch on D2, the LED flashes 3 times slowly): the sensor's site is at `http://100.64.4.1/` on its access
 point. If the sensor rejects the OTA key, Home Assistant shows it in **Settings → Repairs**.
 
 ### Features
 
 - **BLE OTA**: flash a new firmware over Bluetooth during the sensor's short wake window (button, service or REST).
-- **Build & flash in one click**: the integration compiles the sensor's `move-sensor-ble-<device id>.yaml` in the ESPHome Builder add-on
+- **Build & flash in one click** (the *Firmware* update entity since v1.15): the integration compiles the sensor's `move-sensor-ble-<device id>.yaml` in the ESPHome Builder add-on
   and flashes the result over BLE — no file downloads.
 - **Settings over BLE**: detect delay, keep time, climate report interval, voltage factor, LED.
   Changes are queued and applied at the next wake-up; the sensor confirms them.
@@ -123,7 +124,8 @@ Issues and pull requests are disabled — this is a personal project published a
 8. **Проверка**: помахать — *Occupancy* включается, LED мигает 1 раз; через *Keep time* — «свободно» и 2 вспышки.
    *Settings status* после первого пробуждения — *applied*.
 
-Дальше: прошивка — кнопка **Build & flash firmware (BLE)** на странице устройства, без USB; настройки — в Home Assistant.
+Дальше: прошивка — сущность обновления **Firmware** («Установить») на странице устройства, без USB; настройки — в Home Assistant
+(v1.15: одно устройство *Move Sensor BLE* с данными из BLE или Wi-Fi, копии ESPHome/BTHome скрыты, панель в меню).
 Wi-Fi нужен только в **сервисном режиме** (переключатель на D2, LED — 3 медленные вспышки): сайт датчика — `http://100.64.4.1/` на его точке
 доступа. Если датчик не принял ключ OTA, Home Assistant покажет это в **Настройки → Ремонт**.
 

@@ -41,6 +41,12 @@ svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .toc a{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--fg);background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:999px;font-size:13.5px;box-shadow:var(--shadow)}
 .toc a svg{width:16px;height:16px;color:var(--blue)}
 .toc a:hover{border-color:var(--blue)}
+/* вкладки (v1.15): разделы показываются по одному; без JS — длинная страница, как раньше */
+.js-tabs .toc{position:sticky;top:0;z-index:5;padding:10px 0;margin:0 0 18px;background:var(--bg)}
+.js-tabs .toc a.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.js-tabs .toc a.active svg{color:#fff}
+.js-tabs main>section{display:none}
+.js-tabs main>section.active{display:block}
 
 /* sections */
 section{margin:34px 0}
@@ -298,10 +304,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 <section id="flash">
   <h2><span class="ic bg-violet"><svg class="i"><use href="#i-upload"/></svg></span>Как прошивать</h2>
   <div class="note"><svg class="i"><use href="#i-info"/></svg>
-    <div><b>Проще всего — одной кнопкой «Build &amp; flash firmware (BLE)».</b> Интеграция сама соберёт YAML
+    <div><b>Проще всего — сущность обновления «Firmware» → «Установить» (v1.15; раньше кнопка Build &amp; flash).</b> Новая версия появляется, когда YAML датчика изменён после последней прошивки. Интеграция сама соберёт YAML
     этого датчика <code>move-sensor-ble-&lt;device id&gt;.yaml</code> (напр. <code>move-sensor-ble-148f98.yaml</code>,
     с 1.13.1; общая прошивка — <code>move_sensor_ble/base.yaml</code>) в аддоне ESPHome Builder (через Supervisor, как сам HA), положит
-    <code>.ota.bin</code> в папку прошивок и прошьёт датчик по BLE в ближайшее окно. То же —
+    <code>.ota.bin</code> в папку прошивок и прошьёт датчик: в сервисном режиме — сразу по Wi-Fi, иначе по BLE в ближайшее окно (оборвался Wi-Fi — продолжит по BLE). То же —
     сервис <code>move_sensor_ble_ota.build_and_flash</code> или <code>POST /api/move_sensor_ble_ota/build</code>.
     Снаружи HA — скрипт <code>/config/esphome/tools/ble_ota_flash.py</code>.</div></div>
   <div class="grid g2">
@@ -315,7 +321,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       </ol>
     </div>
     <div class="card">
-      <b>Статусы «OTA status»</b>
+      <b>Ход прошивки (сущность «Firmware», атрибуты <code>/status</code>)</b>
       <div class="chips">
         <span class="chip c-gray">idle</span><span class="arrow">→</span>
         <span class="chip c-teal">building %</span><span class="arrow">→</span>
@@ -325,7 +331,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
         <span class="chip c-green">success</span>
       </div>
       <div class="chips"><span class="chip c-red">error</span><span class="chip c-violet">cancelled</span></div>
-      <small style="color:var(--muted)"><code>building</code> — только у «Build &amp; flash». После <code>success</code> — сразу <code>idle</code> и 0 %, как только датчик ответил новой версией (запасной таймер 2 мин). Обрыв связи → <code>waiting</code>, повтор в следующее окно.</small>
+      <small style="color:var(--muted)"><code>building</code> — только при сборке («Установить», <code>build_and_flash</code>). После сборки ключ OTA в образе сверяется с ключом интеграции — не совпал → ошибка, прошивка не начинается. Отмена — служба <code>move_sensor_ble_ota.cancel</code> или кнопка на панели. После <code>success</code> — сразу <code>idle</code> и 0 %, как только датчик ответил новой версией (запасной таймер 2 мин). Обрыв связи → <code>waiting</code>, повтор в следующее окно.</small>
     </div>
   </div>
   <div class="note warn"><svg class="i"><use href="#i-alert"/></svg>
@@ -349,11 +355,11 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
   </table>
   <div class="chips" style="margin-top:14px">
     <b style="margin-right:4px">Settings status:</b>
-    <span class="chip c-gray">Nothing pending</span><span style="color:var(--muted);font-size:13px">ничего не ждёт</span>
+    <span class="chip c-gray">In sync</span><span style="color:var(--muted);font-size:13px">всё на датчике как в HA</span>
+    <span class="chip c-amber">Waiting for wake-up</span><span style="color:var(--muted);font-size:13px">в атрибуте pending — что именно</span>
     <span class="chip c-gray">Not read yet</span>
-    <span class="chip c-amber">Waiting for sensor wake-up</span><span style="color:var(--muted);font-size:13px">в атрибуте pending — что именно</span>
-    <span class="chip c-green">Just applied</span><span style="color:var(--muted);font-size:13px">датчик подтвердил; через 5 мин → «Nothing pending»</span>
     <span class="chip c-red">Error</span>
+    <span style="color:var(--muted);font-size:13px">Что произошло — событие <b>Settings change</b>: saved_wifi / saved_ble / changed_on_sensor / restored (было → стало, в журнале и истории)</span>
   </div>
 </section>
 
@@ -390,22 +396,22 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 <!-- СУЩНОСТИ -->
 <section id="entities">
   <h2><span class="ic bg-teal"><svg class="i"><use href="#i-layers"/></svg></span>Сущности</h2>
-  <p class="lead">Появляются на странице того же устройства, что и BTHome-датчик.</p>
+  <p class="lead">v1.15: одно устройство <b>Move Sensor BLE</b> — данные и настройки датчика независимо от канала (BLE или Wi-Fi). Копии в ESPHome- и BTHome-устройстве скрыты (не выключены). Панель <b>Move Sensor BLE</b> в боковом меню.</p>
+
+  <h3>Данные датчика (v1.15)</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Occupancy / Temperature / Humidity / Battery / Voltage<span class="kind t-blue">sensor</span></b><small>Из любого канала: BLE (реклама BTHome) или Wi-Fi (ESPHome-устройство датчика) — побеждает самое свежее. В атрибутах — источник и время</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Link / Signal / Signal level<span class="kind t-sky">sensor</span></b><small>Канал связи: <code>wifi</code> — ESPHome API подключён (WiFi на датчике включён), иначе <code>ble</code>. Signal — RSSI этого канала, дБм; Signal level — то же в % (−90 дБм = 0 %, −30 дБм = 100 %)</small></div></div>
+    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-layers"/></svg></span>
+      <div><b>Скрытые копии<span class="kind t-slate">auto</span></b><small>Те же сущности в ESPHome- и BTHome-устройстве скрыты (метка <i>Move Sensor BLE</i>), продолжают работать. В ESPHome-устройстве на виду только Wi-Fi и сервисный режим. <i>Настроить → Вид</i>: показать скрытые / снова скрыть, панель в меню. Удаление интеграции возвращает скрытое</small></div></div>
+  </div>
 
   <h3>Прошивка</h3>
   <div class="grid g3">
-    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-terminal"/></svg></span>
-      <div><b>Build &amp; flash firmware (BLE)<span class="kind t-teal">button</span></b><small>Собрать YAML в аддоне ESPHome и сразу прошить по BLE</small></div></div>
-    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-upload"/></svg></span>
-      <div><b>Flash firmware (BLE)<span class="kind t-blue">button</span></b><small>Прошить самым свежим .bin из папки прошивок</small></div></div>
-    <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-x"/></svg></span>
-      <div><b>Cancel OTA<span class="kind t-red">button</span></b><small>Отменить ожидание или прошивку</small></div></div>
-    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
-      <div><b>OTA status<span class="kind t-sky">sensor</span></b><small>Этапы сборки и прошивки; после подтверждения новой версии — сразу <code>idle</code>. В атрибутах — <code>last_result</code>, <code>last_build</code>, версии, скорость, ошибка</small></div></div>
-    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-progress"/></svg></span>
-      <div><b>OTA progress<span class="kind t-violet">sensor</span></b><small>Процент залитого образа</small></div></div>
-    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-tag"/></svg></span>
-      <div><b>Firmware version (BLE)<span class="kind t-slate">sensor</span></b><small>Версия сборки на датчике (как «Build Version»), читается при каждом подключении</small></div></div>
+    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-upload"/></svg></span>
+      <div><b>Firmware<span class="kind t-violet">update</span></b><small>Вместо Flash / Build &amp; flash / Cancel / OTA status / OTA progress / Firmware version. Установлена — сборка на датчике; новая — YAML изменён. «Установить» — сборка, проверка ключа OTA, прошивка по Wi-Fi сразу (сервисный режим) или по BLE в ближайшее пробуждение; оборвался Wi-Fi — продолжит по BLE; переживает перезапуск HA. Прошивка «Установить» в самом ESPHome Builder ключ не проверяет</small></div></div>
   </div>
 
   <h3>Сервис</h3>
@@ -426,10 +432,12 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>Сколько раз за сутки было «занято»; вчера — в атрибутах</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>
       <div><b>Wakes since midnight<span class="kind t-violet">sensor</span></b><small>Пробуждения за сутки: всего, с пакетом и тихие (без радио)</small></div></div>
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-hourglass"/></svg></span>
+      <div><b>Last motion<span class="kind t-blue">sensor</span></b><small>Последнее свежее срабатывание PIR (новый подъём после LOW). Пока «занято», датчик шлёт его не чаще раза в 2 мин</small></div></div>
     <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
-      <div><b>PIR stuck<span class="kind t-red">binary</span></b><small>«Занято» дольше порога <b>PIR stuck after</b> (30 мин): обрыв провода PIR, тепло/солнце в линзе, просадка питания. Проверка раз в минуту</small></div></div>
+      <div><b>PIR stuck<span class="kind t-red">binary</span></b><small>«Занято», и свежих срабатываний нет дольше порога <i>PIR stuck after</i> (человек шевелится рядом — не проблема; у прошивки до 2026-11-16 — просто «занято» дольше порога): обрыв провода PIR, тепло/солнце в линзе, просадка питания</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-tag"/></svg></span>
-      <div><b>Имена BTHome<span class="kind t-slate">auto</span></b><small>«Count» → Wake count, бинарная «Батарея» → Battery low. Только имя (entity_id прежний) и только если не переименовано вручную</small></div></div>
+      <div><b>Имена BTHome<span class="kind t-slate">auto</span></b><small>«Count» → Wake count (с v1.14.2 застыл: Wake count едет в своём блоке рекламы), бинарная «Батарея» → Battery low (с v1.14.2 не передаётся). Только имя (entity_id прежний) и только если не переименовано вручную</small></div></div>
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
       <div><b>Brownout count<span class="kind t-amber">sensor</span></b><small>Перезагрузки по просадке питания — конец разряда или просадка под радио</small></div></div>
     <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
@@ -457,9 +465,9 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
     <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-thermo"/></svg></span>
       <div><b>Temperature / Humidity offset (BLE)<span class="kind t-teal">number</span></b><small>Плюс или минус к SHT41: −10…+10 °C, −20…+20 %. Поправка температуры пересчитывает влажность по точке росы, потом прибавляется поправка влажности. Нужна прошивка с поправками</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-cog"/></svg></span>
-      <div><b>Settings status<span class="kind t-green">sensor</span></b><small>Применились ли настройки на датчике</small></div></div>
+      <div><b>Settings status<span class="kind t-green">sensor</span></b><small>In sync / Waiting for wake-up / Not read yet / Error. Что произошло — событие <i>Settings change</i>: записано по Wi-Fi или BLE, принято с датчика, возвращено после сброса</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-refresh"/></svg></span>
-      <div><b>Read settings (BLE)<span class="kind t-violet">button</span></b><small>Прочитать фактические значения с датчика в ближайшее окно; прочитанное становится эталоном (нажать после правки на сайте датчика). С v1.14.0 после перезагрузки датчика HA сам возвращает свои настройки, если датчик откатился к значениям прошивки</small></div></div>
+      <div><b>Read settings (BLE)<span class="kind t-violet">button</span></b><small>Прочитать фактические значения с датчика в ближайшее окно. С v1.15 правки на сайте датчика и в ESPHome принимаются сами — по номеру правки (растёт на каждую правку; 0 — стёрт флеш → HA возвращает свои значения)</small></div></div>
   </div>
 </section>
 
@@ -566,6 +574,38 @@ document.querySelectorAll('a.ha-nav').forEach(function(a){
     }catch(err){}
   });
 });
+</script>
+<script>
+/* Вкладки / tabs (v1.15): один раздел за раз; ссылки #раздел и якоря внутри разделов открывают нужную вкладку;
+   последняя вкладка запоминается. */
+(function(){
+  var K='move_sensor_ble_ota_docs_tab';
+  var secs=[].slice.call(document.querySelectorAll('main>section'));
+  var links=[].slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if(!secs.length||!links.length)return;
+  document.documentElement.classList.add('js-tabs');
+  function secOf(id){
+    var el=id&&document.getElementById(id);
+    while(el&&el.parentElement&&!(el.tagName==='SECTION'&&el.parentElement.tagName==='MAIN'))el=el.parentElement;
+    return (el&&el.tagName==='SECTION')?el:null;
+  }
+  function show(id,scroll){
+    var s=secOf(id)||secs[0];
+    secs.forEach(function(x){x.classList.toggle('active',x===s)});
+    links.forEach(function(a){a.classList.toggle('active',a.getAttribute('href')==='#'+s.id)});
+    try{localStorage.setItem(K,s.id)}catch(e){}
+    if(scroll){var t=document.getElementById(id);if(t&&t!==s)t.scrollIntoView();else window.scrollTo(0,document.querySelector('.toc').offsetTop);}
+  }
+  links.forEach(function(a){a.addEventListener('click',function(e){
+    e.preventDefault();var id=a.getAttribute('href').slice(1);
+    try{history.replaceState(null,'','#'+id)}catch(err){}
+    show(id,true);
+  })});
+  window.addEventListener('hashchange',function(){show(location.hash.slice(1),true)});
+  var start=location.hash.slice(1);
+  if(!start){try{start=localStorage.getItem(K)||''}catch(e){}}
+  show(start,!!location.hash);
+})();
 </script>
 </body>
 </html>

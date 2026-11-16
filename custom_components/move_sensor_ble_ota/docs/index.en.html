@@ -41,6 +41,12 @@ svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .toc a{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--fg);background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:999px;font-size:13.5px;box-shadow:var(--shadow)}
 .toc a svg{width:16px;height:16px;color:var(--blue)}
 .toc a:hover{border-color:var(--blue)}
+/* вкладки (v1.15): разделы показываются по одному; без JS — длинная страница, как раньше */
+.js-tabs .toc{position:sticky;top:0;z-index:5;padding:10px 0;margin:0 0 18px;background:var(--bg)}
+.js-tabs .toc a.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.js-tabs .toc a.active svg{color:#fff}
+.js-tabs main>section{display:none}
+.js-tabs main>section.active{display:block}
 
 /* sections */
 section{margin:34px 0}
@@ -299,10 +305,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 <section id="flash">
   <h2><span class="ic bg-violet"><svg class="i"><use href="#i-upload"/></svg></span>Flashing</h2>
   <div class="note"><svg class="i"><use href="#i-info"/></svg>
-    <div><b>Easiest — the single "Build &amp; flash firmware (BLE)" button.</b> The integration compiles this
+    <div><b>Easiest — the "Firmware" update entity → Install (v1.15; formerly the Build &amp; flash button).</b> A new version appears when the sensor YAML changed after the last flash. The integration compiles this
     sensor's YAML <code>move-sensor-ble-&lt;device id&gt;.yaml</code> (e.g. <code>move-sensor-ble-148f98.yaml</code>,
     since 1.13.1; shared firmware — <code>move_sensor_ble/base.yaml</code>) in the ESPHome Builder add-on (through the Supervisor, like HA itself), saves the
-    <code>.ota.bin</code> to the firmware folder and flashes the sensor over BLE at the next window. Same via
+    <code>.ota.bin</code> to the firmware folder and flashes the sensor: in service mode at once over Wi-Fi, otherwise over BLE at the next window (if Wi-Fi drops it continues over BLE). Same via
     the <code>move_sensor_ble_ota.build_and_flash</code> service or <code>POST /api/move_sensor_ble_ota/build</code>.
     Outside HA — the <code>/config/esphome/tools/ble_ota_flash.py</code> script.</div></div>
   <div class="grid g2">
@@ -316,7 +322,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       </ol>
     </div>
     <div class="card">
-      <b>"OTA status" states</b>
+      <b>Flash progress (the "Firmware" entity, <code>/status</code> attributes)</b>
       <div class="chips">
         <span class="chip c-gray">idle</span><span class="arrow">→</span>
         <span class="chip c-teal">building %</span><span class="arrow">→</span>
@@ -326,7 +332,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
         <span class="chip c-green">success</span>
       </div>
       <div class="chips"><span class="chip c-red">error</span><span class="chip c-violet">cancelled</span></div>
-      <small style="color:var(--muted)"><code>building</code> — only for "Build &amp; flash". After <code>success</code> it returns to <code>idle</code> and 0 % as soon as the sensor reports the new version (fallback timer 2 min). Connection lost → <code>waiting</code>, retry at the next window.</small>
+      <small style="color:var(--muted)"><code>building</code> — only while building (Install, <code>build_and_flash</code>). After the build the OTA key inside the image is compared with the integration key — mismatch → error, no flashing. Cancel: service <code>move_sensor_ble_ota.cancel</code> or the panel button. After <code>success</code> it returns to <code>idle</code> and 0 % as soon as the sensor reports the new version (fallback timer 2 min). Connection lost → <code>waiting</code>, retry at the next window.</small>
     </div>
   </div>
   <div class="note warn"><svg class="i"><use href="#i-alert"/></svg>
@@ -350,11 +356,11 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
   </table>
   <div class="chips" style="margin-top:14px">
     <b style="margin-right:4px">Settings status:</b>
-    <span class="chip c-gray">Nothing pending</span><span style="color:var(--muted);font-size:13px">sensor matches HA</span>
+    <span class="chip c-gray">In sync</span><span style="color:var(--muted);font-size:13px">the sensor matches HA</span>
+    <span class="chip c-amber">Waiting for wake-up</span><span style="color:var(--muted);font-size:13px">the pending attribute says what</span>
     <span class="chip c-gray">Not read yet</span>
-    <span class="chip c-amber">Waiting for sensor wake-up</span><span style="color:var(--muted);font-size:13px">the pending attribute lists what</span>
-    <span class="chip c-green">Just applied</span><span style="color:var(--muted);font-size:13px">confirmed; after 5 min → «Nothing pending»</span>
     <span class="chip c-red">Error</span>
+    <span style="color:var(--muted);font-size:13px">What happened — the <b>Settings change</b> event: saved_wifi / saved_ble / changed_on_sensor / restored (from → to, in the logbook and history)</span>
   </div>
 </section>
 
@@ -391,22 +397,22 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
 <!-- ENTITIES -->
 <section id="entities">
   <h2><span class="ic bg-teal"><svg class="i"><use href="#i-layers"/></svg></span>Entities</h2>
-  <p class="lead">They appear on the same device page as the BTHome sensor.</p>
+  <p class="lead">v1.15: one <b>Move Sensor BLE</b> device — sensor data and settings regardless of the channel (BLE or Wi-Fi). Copies on the ESPHome and BTHome devices are hidden (not disabled). <b>Move Sensor BLE</b> panel in the sidebar.</p>
+
+  <h3>Sensor data (v1.15)</h3>
+  <div class="grid g3">
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
+      <div><b>Occupancy / Temperature / Humidity / Battery / Voltage<span class="kind t-blue">sensor</span></b><small>From either channel: BLE (BTHome advert) or Wi-Fi (the sensor ESPHome device) — the newest value wins. Source and time in the attributes</small></div></div>
+    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
+      <div><b>Link / Signal / Signal level<span class="kind t-sky">sensor</span></b><small>Channel: <code>wifi</code> — ESPHome API connected (WiFi switch on), otherwise <code>ble</code>. Signal — RSSI of that channel, dBm; Signal level — the same in % (−90 dBm = 0 %, −30 dBm = 100 %)</small></div></div>
+    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-layers"/></svg></span>
+      <div><b>Hidden copies<span class="kind t-slate">auto</span></b><small>The same entities on the ESPHome and BTHome devices are hidden (label <i>Move Sensor BLE</i>) and keep working. On the ESPHome device only Wi-Fi / service-mode entities stay visible. <i>Configure → Display</i>: show hidden / hide again, sidebar panel. Removing the integration shows back what it hid</small></div></div>
+  </div>
 
   <h3>Firmware</h3>
   <div class="grid g3">
-    <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-terminal"/></svg></span>
-      <div><b>Build &amp; flash firmware (BLE)<span class="kind t-teal">button</span></b><small>Compile the YAML in the ESPHome add-on and flash it over BLE right away</small></div></div>
-    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-upload"/></svg></span>
-      <div><b>Flash firmware (BLE)<span class="kind t-blue">button</span></b><small>Flash the newest .bin from the firmware folder</small></div></div>
-    <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-x"/></svg></span>
-      <div><b>Cancel OTA<span class="kind t-red">button</span></b><small>Cancel waiting or flashing</small></div></div>
-    <div class="card ent"><span class="ico t-sky"><svg class="i"><use href="#i-bt"/></svg></span>
-      <div><b>OTA status<span class="kind t-sky">sensor</span></b><small>Build and flash stages; returns to <code>idle</code> once the new version is confirmed. Attributes: <code>last_result</code>, <code>last_build</code>, versions, speed, error</small></div></div>
-    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-progress"/></svg></span>
-      <div><b>OTA progress<span class="kind t-violet">sensor</span></b><small>Percent of the image uploaded</small></div></div>
-    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-tag"/></svg></span>
-      <div><b>Firmware version (BLE)<span class="kind t-slate">sensor</span></b><small>Build version on the sensor (same as "Build Version"), read on every connection</small></div></div>
+    <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-upload"/></svg></span>
+      <div><b>Firmware<span class="kind t-violet">update</span></b><small>Replaces Flash / Build &amp; flash / Cancel / OTA status / OTA progress / Firmware version. Installed — the build on the sensor; latest — the YAML changed. Install — build, OTA key check, flash over Wi-Fi at once (service mode) or over BLE at the next wake-up; if Wi-Fi drops it continues over BLE; survives an HA restart. Install in ESPHome Builder itself does not check the key</small></div></div>
   </div>
 
   <h3>Service</h3>
@@ -427,10 +433,12 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
       <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>How many times it was "occupied" today; yesterday in attributes</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>
       <div><b>Wakes since midnight<span class="kind t-violet">sensor</span></b><small>Wake-ups today: total, with a packet and silent (no radio)</small></div></div>
+    <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-hourglass"/></svg></span>
+      <div><b>Last motion<span class="kind t-blue">sensor</span></b><small>Last fresh PIR trigger (a new rise after LOW). While occupied the sensor sends it at most every 2 min</small></div></div>
     <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
-      <div><b>PIR stuck<span class="kind t-red">binary</span></b><small>"Occupied" longer than <b>PIR stuck after</b> (30 min): broken PIR wire, heat/sun in the lens, supply sag. Checked every minute</small></div></div>
+      <div><b>PIR stuck<span class="kind t-red">binary</span></b><small>"Occupied" and no fresh trigger for longer than <i>PIR stuck after</i> (someone moving nearby is not a problem; firmware before 2026-11-16 — just occupied longer than the threshold): broken PIR wire, heat/sun in the lens, supply sagute</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-tag"/></svg></span>
-      <div><b>BTHome names<span class="kind t-slate">auto</span></b><small>"Count" → Wake count, binary "Battery" → Battery low. Name only (entity_id unchanged) and only if you haven't renamed it</small></div></div>
+      <div><b>BTHome names<span class="kind t-slate">auto</span></b><small>"Count" → Wake count (frozen since v1.14.2: Wake count moved to the own advert block), binary "Battery" → Battery low (no longer sent since v1.14.2). Name only (entity_id unchanged) and only if you haven't renamed it</small></div></div>
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
       <div><b>Brownout count<span class="kind t-amber">sensor</span></b><small>Reboots caused by supply sag — end of discharge or a dip under radio load</small></div></div>
     <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
@@ -458,9 +466,9 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:v
     <div class="card ent"><span class="ico t-teal"><svg class="i"><use href="#i-thermo"/></svg></span>
       <div><b>Temperature / Humidity offset (BLE)<span class="kind t-teal">number</span></b><small>Plus or minus to the SHT41: −10…+10 °C, −20…+20 %. The temperature offset recalculates humidity via the dew point, then the humidity offset is added. Needs firmware with offsets</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-cog"/></svg></span>
-      <div><b>Settings status<span class="kind t-green">sensor</span></b><small>Whether the settings were applied on the sensor</small></div></div>
+      <div><b>Settings status<span class="kind t-green">sensor</span></b><small>In sync / Waiting for wake-up / Not read yet / Error. What happened — the <i>Settings change</i> event: saved over Wi-Fi or BLE, taken from the sensor, restored after a reset</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-refresh"/></svg></span>
-      <div><b>Read settings (BLE)<span class="kind t-violet">button</span></b><small>Read the actual values from the sensor at the next window; they become the reference (press after changing settings on the sensor's site). Since v1.14.0, after a sensor reboot HA restores its own settings if the sensor fell back to firmware defaults</small></div></div>
+      <div><b>Read settings (BLE)<span class="kind t-violet">button</span></b><small>Read the actual values from the sensor at the next window. Since v1.15 edits made on the sensor page or in ESPHome are adopted automatically by the settings revision (grows on every edit; 0 — flash erased → HA restores its values)</small></div></div>
   </div>
 </section>
 
@@ -567,6 +575,38 @@ document.querySelectorAll('a.ha-nav').forEach(function(a){
     }catch(err){}
   });
 });
+</script>
+<script>
+/* Вкладки / tabs (v1.15): один раздел за раз; ссылки #раздел и якоря внутри разделов открывают нужную вкладку;
+   последняя вкладка запоминается. */
+(function(){
+  var K='move_sensor_ble_ota_docs_tab';
+  var secs=[].slice.call(document.querySelectorAll('main>section'));
+  var links=[].slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if(!secs.length||!links.length)return;
+  document.documentElement.classList.add('js-tabs');
+  function secOf(id){
+    var el=id&&document.getElementById(id);
+    while(el&&el.parentElement&&!(el.tagName==='SECTION'&&el.parentElement.tagName==='MAIN'))el=el.parentElement;
+    return (el&&el.tagName==='SECTION')?el:null;
+  }
+  function show(id,scroll){
+    var s=secOf(id)||secs[0];
+    secs.forEach(function(x){x.classList.toggle('active',x===s)});
+    links.forEach(function(a){a.classList.toggle('active',a.getAttribute('href')==='#'+s.id)});
+    try{localStorage.setItem(K,s.id)}catch(e){}
+    if(scroll){var t=document.getElementById(id);if(t&&t!==s)t.scrollIntoView();else window.scrollTo(0,document.querySelector('.toc').offsetTop);}
+  }
+  links.forEach(function(a){a.addEventListener('click',function(e){
+    e.preventDefault();var id=a.getAttribute('href').slice(1);
+    try{history.replaceState(null,'','#'+id)}catch(err){}
+    show(id,true);
+  })});
+  window.addEventListener('hashchange',function(){show(location.hash.slice(1),true)});
+  var start=location.hash.slice(1);
+  if(!start){try{start=localStorage.getItem(K)||''}catch(e){}}
+  show(start,!!location.hash);
+})();
 </script>
 </body>
 </html>

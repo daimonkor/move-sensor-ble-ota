@@ -70,6 +70,8 @@ ST_ERROR = "error"
 ST_CANCELLED = "cancelled"
 
 SIGNAL_UPDATE = f"{DOMAIN}_update_{{}}"
+SIGNAL_SETTINGS_EVENT = f"{DOMAIN}_settings_event_{{}}"   # v1.15: событие «Settings change»
+SETTINGS_EVENT_TYPES = ["saved_wifi", "saved_ble", "changed_on_sensor", "restored"]
 
 SERVICE_FLASH = "flash"
 SERVICE_BUILD_FLASH = "build_and_flash"
@@ -114,10 +116,10 @@ AUTO_WINDOW_HYST_DB = 3         # к лучшему уровню — тольк�
 AUTO_WINDOW_SAMPLES = 10        # медиана по последним N пакетам (минимум 5)
 AUTO_WINDOW_BOOST_H = 24        # пропущен климат-пакет -> уровень +1 на сутки
 # статус настроек (сенсор «Settings status»)
-SST_UNKNOWN = "unknown"      # ещё ни разу не читали с датчика
-SST_PENDING = "pending"      # есть изменения, ждут окна
+SST_UNKNOWN = "not_read"      # ещё ни разу не читали с датчика
+SST_PENDING = "waiting"      # есть изменения, ждут окна
 SST_APPLIED = "applied"      # датчик подтвердил (держится SETTINGS_APPLIED_SHOW_MIN, потом -> idle)
-SST_IDLE = "idle"            # ничего не ждёт: всё на датчике совпадает с HA
+SST_IDLE = "in_sync"            # ничего не ждёт: всё на датчике совпадает с HA
 SETTINGS_APPLIED_SHOW_MIN = 5
 SST_ERROR = "error"
 SERVICE_READ_SETTINGS = "read_settings"
