@@ -19,10 +19,20 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-PANEL_URL = "move-sensor-ble"
+# своё имя: «move-sensor-ble» может быть у дашборда пользователя (Lovelace) — его не трогаем
+PANEL_URL = "move-sensor-ble-panel"
 PANEL_COMPONENT = "move-sensor-ble-panel"
 STATIC_URL = f"/{DOMAIN}_static"
 _STATIC_DONE = f"{DOMAIN}_panel_static"
+
+
+def _remove_own(hass: HomeAssistant) -> None:
+    """Убрать только свою панель (custom), чужую с тем же адресом не трогать."""
+    panels = hass.data.get(getattr(frontend, "DATA_PANELS", "frontend_panels"), {})
+    panel = panels.get(PANEL_URL)
+    if panel is not None and getattr(panel, "component_name", None) == "custom":
+        frontend.async_remove_panel(hass, PANEL_URL, warn_if_unknown=False)
+
 
 # (платформа, ключ) — в порядке показа
 SECTIONS = [
@@ -112,7 +122,7 @@ def _config(hass: HomeAssistant) -> dict:
 
 async def async_update_panel(hass: HomeAssistant) -> None:
     """Зарегистрировать/обновить/убрать панель (по галочке и наличию датчиков)."""
-    frontend.async_remove_panel(hass, PANEL_URL, warn_if_unknown=False)
+    _remove_own(hass)
     if not hass.data.get(DOMAIN) or not await async_panel_shown(hass):
         return
     if not hass.data.get(_STATIC_DONE):
@@ -123,13 +133,16 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         hass.data[_STATIC_DONE] = True
     from homeassistant.components import panel_custom  # noqa: PLC0415
 
+    if PANEL_URL in hass.data.get(getattr(frontend, "DATA_PANELS", "frontend_panels"), {}):
+        _LOGGER.warning("Panel /%s is taken by another panel — Move Sensor BLE panel not added", PANEL_URL)
+        return
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=PANEL_URL,
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.15.0",
+        module_url=f"{STATIC_URL}/panel.js?v=1.15.1",
         config=_config(hass),
         require_admin=False,
     )
@@ -137,4 +150,4 @@ async def async_update_panel(hass: HomeAssistant) -> None:
 
 def async_remove_panel_if_last(hass: HomeAssistant) -> None:
     if not hass.data.get(DOMAIN):
-        frontend.async_remove_panel(hass, PANEL_URL, warn_if_unknown=False)
+        _remove_own(hass)
