@@ -29,18 +29,20 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
     _attr_supported_features = (UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
                                 | UpdateEntityFeature.RELEASE_NOTES)
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_title = "Move Sensor BLE"
+    _attr_title = "Move Sensor BLE firmware"   # v1.15.4: в «Обновлениях» видно, что это прошивка датчика
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "firmware", "Firmware")
 
     @property
     def installed_version(self) -> str | None:
-        return self.mgr.firmware_version
+        return self.mgr.build_label(self.mgr.firmware_version)   # «build 16.11 13:48»
 
     @property
     def latest_version(self) -> str | None:
-        return self.mgr.latest_firmware
+        if self.mgr.firmware_version is None:
+            return None
+        return self.mgr.new_build_label or self.installed_version
 
     def version_is_newer(self, latest_version: str, installed_version: str) -> bool:
         # версии — метки сборок, не semver: другая = новее
@@ -81,7 +83,7 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             "Оборвался Wi-Fi — продолжит по BLE. Перезапуск HA задание не отменяет. "
             "Если эта сборка уже на датчике (тот же хеш образа) — прошивки не будет.",
             "",
-            f"- На датчике: `{m.firmware_version}`",
+            f"- На датчике: {m.build_label(m.firmware_version)} (`{m.firmware_version}`)",
             f"- YAML сейчас: `{m.config_hash}`, прошит: `{m.flashed_hash}`",
         ]
         if m.last_flash_summary:

@@ -513,6 +513,7 @@ class OtaManager:
         self.last_build: dict | None = None  # итог последней сборки (build_and_flash)
         # v1.15: сущность «Firmware»: хеш дерева YAML сейчас и того, что стоит на датчике
         self.config_hash: str | None = None
+        self.config_mtime: float | None = None   # v1.15.4: когда последний раз правили файлы прошивки
         self.flashed_hash: str | None = None
         self._build_hash: str | None = None
         self._ticks = 0
@@ -1031,9 +1032,29 @@ class OtaManager:
                 self.flashed_hash = "older" if mtime > built + 120 else h
                 self._save()
                 self._notify()
-        if h != self.config_hash:
+        mtime = await self.hass.async_add_executor_job(config_tree_mtime, ESPHOME_DIR, cfg)
+        if h != self.config_hash or mtime != self.config_mtime:
             self.config_hash = h
+            self.config_mtime = mtime
             self._notify()
+
+    @staticmethod
+    def build_label(version: str | None) -> str | None:
+        """v1.15.4: «build 16.11 13:48» из vYYYY.MM.DD.HHMMSS-<sha> (для людей; хеш — в примечаниях)."""
+        t = build_time(version)
+        if t is None:
+            return version
+        return "build " + dt_util.as_local(dt_util.utc_from_timestamp(t)).strftime("%d.%m %H:%M")
+
+    @property
+    def new_build_label(self) -> str | None:
+        """v1.15.4: «new build · YAML changed 16.11 14:15» — есть правки, которых нет на датчике."""
+        if not (self.config_hash and self.flashed_hash and self.config_hash != self.flashed_hash):
+            return None
+        if self.config_mtime:
+            when = dt_util.as_local(dt_util.utc_from_timestamp(self.config_mtime)).strftime("%d.%m %H:%M")
+            return f"new build · YAML changed {when}"
+        return "new build · YAML changed"
 
     @property
     def last_flash_summary(self) -> str | None:
