@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.4.2"
+  fw_version: "1.4.3"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -59,8 +59,6 @@ substitutions:
   # Считается и через сон (RTC). То же делает команда сброса по BLE из HA (script factory_reset_net).
   # 2026-11-15: было 5 включений за 20 с — по просьбе Димы 3 за 10 с
   wifi_reset_toggles: "3"
-  # 1.4.0: через сколько минут сервисный режим (Wi-Fi) выключается сам, если переключатель забыли; 0 — никогда
-  service_timeout_min: "0"
   wifi_reset_window_ms: "10000"
   # сеть из прошивки — для сброса (лямбда не умеет !secret напрямую)
   fw_wifi_ssid: !secret wifi_ssid
@@ -954,20 +952,7 @@ interval:
   - interval: 200ms
     then:
       - lambda: "if (ms::rev_pending) id(bth_ota).rev_commit();"
-  # 1.4.0: забытый сервисный переключатель — через service_timeout_min мин Wi-Fi выключается,
-  # 1.4.1: по умолчанию 0 = таймаута нет, сервисный режим держится, пока включён переключатель;
-  # датчик работает как обычно; снова в сервисный режим — выключить и включить переключатель
-  - interval: 10s
-    then:
-      - lambda: |-
-          if (!id(service_mode) || !id(service_by_switch)) return;
-          const uint32_t limit = ${service_timeout_min}UL * 60000UL;
-          if (limit == 0 || millis() - ms::svc_since < limit) return;
-          ESP_LOGW("ms", "service mode timeout (%u min): Wi-Fi off until the switch is turned off",
-                   (unsigned) ${service_timeout_min});
-          ms::svc_timed_out = true;
-          id(service_by_switch) = false;
-          id(service_exit).execute();
+  # 1.4.3: таймаута сервисного режима нет (убран; с 1.4.1 был выключен) — Wi-Fi держится, пока включён переключатель
   # сервисный переключатель: следим за уровнем на D2
   - interval: 200ms
     then:
@@ -978,8 +963,7 @@ interval:
           // дважды в счётчике заводского сброса. Ждём первого состояния.
           if (!id(service_btn).has_state()) return;
           const bool sw = id(service_btn).state;
-          if (!sw) ms::svc_timed_out = false;   // 1.4.0: выключили — следующее включение снова сервисный режим
-          if (sw && !id(service_by_switch) && !ms::svc_timed_out) {
+          if (sw && !id(service_by_switch)) {
             id(service_by_switch) = true;
             id(service_enter).execute();
           } else if (!sw && id(service_by_switch)) {
@@ -1060,15 +1044,9 @@ script:
           // холодном старте (после потери питания). Уровень читаем прямо с пина: фильтр
           // binary_sensor к этому моменту ещё не отработал. Выключен -> Wi-Fi не поднимаем.
           const bool sw_on = gpio_get_level((gpio_num_t) ${service_gpio}) != 0;
-          // 1.4.0: сервисный режим закончился по таймауту — не входим, пока переключатель не выключат
-          // проснулись от ВЫКЛЮЧЕНИЯ переключателя (ждали LOW после таймаута) — это не вход в сервисный режим
-          const bool waited_off = ms::svc_timed_out;
-          if (!sw_on) ms::svc_timed_out = false;
-          if (((by_service && !waited_off) || sw_on) && !ms::svc_timed_out) {
+          if (by_service || sw_on) {
             id(service_by_switch) = true;
             id(service_enter).execute();
-          } else if (sw_on) {
-            ESP_LOGI("ms", "service switch still ON after timeout - normal mode until it is turned off");
           }
       - script.execute: motion_eval
 
@@ -1273,8 +1251,7 @@ script:
             # PIR больше не ждём (2026-11-14): при HIGH на D1 спим с пробуждением по LOW.
             - wait_until:
                 condition:
-                  # 1.4.0: после таймаута сервисного режима переключатель может быть включён — не ждём
-                  lambda: "return !id(service_btn).state || ms::svc_timed_out;"
+                  lambda: "return !id(service_btn).state;"
                 timeout: 30s
             # BLE OTA/настройки — защёлка ПРЯМО перед сном (2026-11-14): реклама становится
             # неподключаемой, ждём 300 мс, не успел ли клиент подключиться; подключён — не спим,
@@ -1302,11 +1279,8 @@ script:
                   lambda: "return id(identify_left) <= 0;"
                 timeout: 65s
             - lambda: |-
-                // сервисный переключатель (D2) будит по HIGH; 1.4.0: после таймаута сервисного режима он ещё
-                // включён (HIGH) — будить по LOW (выключили), иначе пробуждение сразу и по кругу
-                const bool svc_wait_off = ms::svc_timed_out && gpio_get_level((gpio_num_t) ${service_gpio}) != 0;
-                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${service_gpio},
-                    svc_wait_off ? ESP_GPIO_WAKEUP_GPIO_LOW : ESP_GPIO_WAKEUP_GPIO_HIGH);
+                // сервисный переключатель (D2) будит по HIGH
+                esp_deep_sleep_enable_gpio_wakeup(1ULL << ${service_gpio}, ESP_GPIO_WAKEUP_GPIO_HIGH);
                 // PIR (D1): ОДИН замер уровня -> и уровень пробуждения, и флаг pir_held.
                 // HIGH -> будить по LOW (отпускание), LOW -> будить по HIGH (новое движение).
                 // Подтяжку на время сна IDF ставит сам по уровню (LOW-wake -> pull-up), SR602
@@ -1406,7 +1380,6 @@ script:
     then:
       - lambda: |-
           id(service_mode) = true;
-          ms::svc_since = millis();   // 1.4.0: отсчёт таймаута сервисного режима
           // счётчик включений переключателя для сброса Wi-Fi (RTC, переживает сон)
           const int64_t now = ms::now_ms();
           if (ms::svc_on_count == 0 || now - ms::svc_first_ms > ${wifi_reset_window_ms}) {

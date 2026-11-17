@@ -108,11 +108,6 @@ static constexpr float BAT_RESUME_V = 3.65f;   // ~7 %: подзарядили (
 static constexpr uint32_t BAT_LOW_CLIMATE_MULT = 4;
 static constexpr uint32_t BAT_CRIT_CHECK_MS = 6UL * 3600 * 1000;
 
-// ---- Таймаут сервисного режима (1.4.0). Забытый включённым переключатель держал Wi-Fi (~80-100 мА),
-// пока не сядет батарея. Через service_timeout_min (base.yaml) мин после входа Wi-Fi выключается, датчик
-// работает как обычно и до выключения переключателя в сервисный режим не входит (будит его LOW на D2).
-static RTC_DATA_ATTR bool svc_timed_out = false;
-static uint32_t svc_since = 0;   // millis() входа в сервисный режим
 
 
 // ---- Отчёт о климате не реже Climate report interval (2026-11-14).
