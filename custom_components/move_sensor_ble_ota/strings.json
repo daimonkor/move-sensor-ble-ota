@@ -155,6 +155,20 @@
           "description": "Test only: how long the sensor advertises after a packet, ms (0 = firmware value)."
         }
       }
+    },
+    "rollback": {
+      "name": "Roll back firmware",
+      "description": "Flash the latest firmware backup (made by Install with the Backup option) — over Wi-Fi in service mode, otherwise over BLE at the next wake.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "How long to wait for the wake window, minutes."
+        }
+      }
     }
   },
   "entity": {

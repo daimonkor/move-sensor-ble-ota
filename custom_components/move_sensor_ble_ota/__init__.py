@@ -47,6 +47,7 @@ from .const import (
     SERVICE_READ_SETTINGS,
     SERVICE_RESET_WIFI,
     SERVICE_FAST_TEST,
+    SERVICE_ROLLBACK,
 )
 from .hidden import DuplicateHider, async_unhide_on_remove
 from .ota import OtaError, OtaManager, load_firmware
@@ -296,6 +297,24 @@ def _register_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, SERVICE_BUILD_FLASH, build_and_flash, schema=BUILD_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    # v1.18: откат на последнюю резервную копию прошивки (её делает «Установить» с галочкой «Резервная копия»)
+    async def rollback(call: ServiceCall) -> ServiceResponse:
+        mgr = _pick(hass, call.data.get(ATTR_ENTRY_ID))
+        try:
+            b = await mgr.async_rollback(call.data[ATTR_TIMEOUT])
+        except OtaError as err:
+            raise HomeAssistantError(str(err)) from err
+        return {"status": mgr.status, "backup": b.get("name"), "firmware_version": b.get("firmware_version"),
+                "fw_version": b.get("fw_version")}
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_ROLLBACK, rollback,
+        schema=vol.Schema({vol.Optional(ATTR_ENTRY_ID): cv.string,
+                           vol.Optional(ATTR_TIMEOUT, default=DEFAULT_TIMEOUT_MIN):
+                               vol.All(vol.Coerce(int), vol.Range(min=1, max=1440))}),
         supports_response=SupportsResponse.OPTIONAL,
     )
 

@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.17.1</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.18.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -518,6 +518,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span><div><b>Порог батареи</b><small>ниже 30 % OTA отклоняется</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-undo"/></svg></span><div><b>Откат</b><small>не прошла <code>safe_mode</code> 15 с — загрузчик вернёт старую</small></div></div>
   </div>
+  <div class="note"><svg class="i"><use href="#i-undo"/></svg><div><b>Резервная копия и откат (v1.18).</b> В окне обновления «Firmware» есть ссылка <b>«Список изменений»</b> (CHANGELOG прошивки на GitHub) и галочка <b>«Резервная копия»</b>: перед сборкой прошивка, что сейчас на датчике, и копия её YAML сохраняются в <code>&lt;папка прошивок&gt;/backup/</code> (последние 3, уборка <code>.bin</code> их не трогает). Если образа текущей прошивки в папке нет (прошит из ESPHome Builder или удалён уборкой) — «Установить» с галочкой остановится с ошибкой. Откат — сервис <code>move_sensor_ble_ota.rollback</code>: тем же путём (Wi-Fi в сервисном режиме, иначе BLE), после него «Firmware» снова предложит текущий YAML. Атрибут <code>backup</code> — какая копия последняя.</div></div>
 </section>
 
 <!-- API -->
@@ -529,6 +530,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <tr><td><div class="cell"><svg class="i" style="color:var(--violet)"><use href="#i-upload"/></svg>Загрузить и прошить</div></td><td><code>POST /api/move_sensor_ble_ota/upload?filename=&lt;имя&gt;.bin&amp;start=1</code> — тело: файл, токен администратора</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-bt"/></svg>Прошить</div></td><td>сервис <code>move_sensor_ble_ota.flash</code> (<code>file</code>, <code>timeout</code>, <code>config_entry_id</code>)</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--red)"><use href="#i-x"/></svg>Отменить</div></td><td>сервис <code>move_sensor_ble_ota.cancel</code></td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--green)"><use href="#i-undo"/></svg>Откатить прошивку</div></td><td>сервис <code>move_sensor_ble_ota.rollback</code> (<code>timeout</code>, <code>config_entry_id</code>) — прошить последнюю резервную копию</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--violet)"><use href="#i-refresh"/></svg>Прочитать настройки</div></td><td>сервис <code>move_sensor_ble_ota.read_settings</code></td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-cog"/></svg>Изменить настройку</div></td><td><code>number.set_value</code> / <code>switch.turn_on|off</code> на «… (BLE)»</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--green)"><use href="#i-info"/></svg>Состояние</div></td><td><code>GET /api/move_sensor_ble_ota/status</code></td></tr>

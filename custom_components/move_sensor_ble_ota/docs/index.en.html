@@ -186,7 +186,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.17.1</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.18.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -519,6 +519,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span><div><b>Battery threshold</b><small>OTA is refused below 30 %</small></div></div>
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-undo"/></svg></span><div><b>Rollback</b><small>no <code>safe_mode</code> pass within 15 s — the bootloader returns the old one</small></div></div>
   </div>
+  <div class="note"><svg class="i"><use href="#i-undo"/></svg><div><b>Backup and rollback (v1.18).</b> The «Firmware» update dialog has a <b>Release notes / changelog</b> link (firmware CHANGELOG on GitHub) and a <b>Backup</b> toggle: before the build, the firmware currently on the sensor and a copy of its YAML are saved to <code>&lt;firmware folder&gt;/backup/</code> (last 3; <code>.bin</code> cleanup leaves them alone). If the current firmware image is not in the folder (flashed from ESPHome Builder or removed by cleanup), Install with the toggle stops with an error. Rollback — service <code>move_sensor_ble_ota.rollback</code>: same path (Wi-Fi in service mode, otherwise BLE); afterwards «Firmware» offers the current YAML again. Attribute <code>backup</code> shows the latest copy.</div></div>
 </section>
 
 <!-- API -->
@@ -530,6 +531,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <tr><td><div class="cell"><svg class="i" style="color:var(--violet)"><use href="#i-upload"/></svg>Upload and flash</div></td><td><code>POST /api/move_sensor_ble_ota/upload?filename=&lt;name&gt;.bin&amp;start=1</code> — body: the file, admin token</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--blue)"><use href="#i-bt"/></svg>Flash</div></td><td>service <code>move_sensor_ble_ota.flash</code> (<code>file</code>, <code>timeout</code>, <code>config_entry_id</code>)</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--red)"><use href="#i-x"/></svg>Cancel</div></td><td>service <code>move_sensor_ble_ota.cancel</code></td></tr>
+    <tr><td><div class="cell"><svg class="i" style="color:var(--green)"><use href="#i-undo"/></svg>Roll back firmware</div></td><td>service <code>move_sensor_ble_ota.rollback</code> (<code>timeout</code>, <code>config_entry_id</code>) — flash the latest backup</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--violet)"><use href="#i-refresh"/></svg>Read settings</div></td><td>service <code>move_sensor_ble_ota.read_settings</code></td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-cog"/></svg>Change a setting</div></td><td><code>number.set_value</code> / <code>switch.turn_on|off</code> on "… (BLE)"</td></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--green)"><use href="#i-info"/></svg>Status</div></td><td><code>GET /api/move_sensor_ble_ota/status</code></td></tr>

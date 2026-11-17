@@ -88,3 +88,18 @@ fast_test:
           max: 10000
           step: 100
           unit_of_measurement: ms
+rollback:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+    timeout:
+      required: false
+      default: 180
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min

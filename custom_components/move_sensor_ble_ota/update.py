@@ -23,6 +23,8 @@ from .const import DOMAIN, ST_FLASHING
 from .entity import OtaEntity
 from .ota import OtaError
 
+CHANGELOG_URL = "https://github.com/daimonkor/move-sensor-ble-ota/blob/main/esphome/move_sensor_ble/CHANGELOG.md"
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     async_add_entities([FirmwareUpdate(hass.data[DOMAIN][entry.entry_id])])
@@ -30,7 +32,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 class FirmwareUpdate(OtaEntity, UpdateEntity):
     _attr_supported_features = (UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
-                                | UpdateEntityFeature.RELEASE_NOTES)
+                                | UpdateEntityFeature.RELEASE_NOTES | UpdateEntityFeature.BACKUP)
+    # v1.18: ссылка «Список изменений» в окне обновления — CHANGELOG прошивки на GitHub
+    _attr_release_url = CHANGELOG_URL
     _attr_entity_category = EntityCategory.CONFIG
     _attr_title = "Move Sensor BLE firmware"   # v1.15.4: в «Обновлениях» видно, что это прошивка датчика
 
@@ -89,8 +93,11 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
         lf = self.mgr.last_flash or {}
         imgs = self.mgr.fw_images
         stored = (f"{imgs[0]} · {imgs[1] / 1048576:.1f} MB (keep {self.mgr.keep_images})" if imgs else None)
+        b = self.mgr.backups[0] if self.mgr.backups else None
         return {"last_flash": self.mgr.last_flash_summary, "last_flash_channel": lf.get("channel"),
-                "last_flash_result": lf.get("result"), "stored_images": stored}
+                "last_flash_result": lf.get("result"), "stored_images": stored,
+                "backup": (f"{b.get('fw_version') or '?'} · {b.get('firmware_version')}" if b else None),
+                "backups": len(self.mgr.backups)}
 
     async def async_release_notes(self) -> str | None:
         m = self.mgr
@@ -121,7 +128,14 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             lines.append(f"- Последняя прошивка: {m.last_result}")
         if m.error:
             lines.append(f"- Ошибка: {m.error}")
-        lines += ["", "Отмена — служба `move_sensor_ble_ota.cancel` или кнопка на панели Move Sensor BLE."]
+        lines += ["", "Отмена — служба `move_sensor_ble_ota.cancel` или кнопка на панели Move Sensor BLE.", "",
+                  "### Резервная копия и откат",
+                  "Галочка «Резервная копия» перед «Установить» сохраняет прошивку, что сейчас на датчике, и копию её "
+                  "YAML в `<папка прошивок>/backup/` (последние 3). Откат — служба `move_sensor_ble_ota.rollback`: "
+                  "прошьёт последнюю копию тем же путём (Wi-Fi или BLE), после чего «Firmware» снова предложит текущий YAML."]
+        if m.backups:
+            b = m.backups[0]
+            lines.append(f"- Последняя копия: {b.get('fw_version') or '?'} (`{b.get('firmware_version')}`)")
         return "\n".join(lines)
 
     async def async_install(self, version: str | None, backup: bool, **kwargs) -> None:
@@ -131,6 +145,11 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             await self.mgr.async_auth_gate("build and flash")
         except OtaError as err:
             raise HomeAssistantError(str(err)) from err
+        if backup:   # v1.18: прошивка, что сейчас на датчике, — в backup/ для отката
+            try:
+                await self.mgr.async_backup_current()
+            except OtaError as err:
+                raise HomeAssistantError(f"резервная копия: {err}") from err
 
         # сборка (0,5–5 мин) — в рамках «Установить»: ошибка сборки или чужой ключ OTA всплывают
         # сразу (как просил Дима: попап при прошивке); дальше прошивка ждёт окно BLE в фоне

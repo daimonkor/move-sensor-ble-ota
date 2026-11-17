@@ -10,8 +10,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import os
+import shutil
 import struct
 import time
 import zlib
@@ -370,6 +372,91 @@ def firmware_stats(directory: str) -> tuple[int, int]:
     return n, size
 
 
+BACKUP_SUBDIR = "backup"   # v1.18: <папка прошивок>/backup/<время>/ — образ + meta.json + копия YAML
+BACKUP_KEEP = 3
+BACKUP_IMAGE = "firmware.ota.bin"
+
+
+def image_sha_of(path: str) -> str | None:
+    """elf_sha образа (хвост версии на датчике) или None. Блокирующая."""
+    try:
+        return load_firmware(path).elf_sha
+    except Exception:  # noqa: BLE001 — битый/чужой .bin просто пропускаем
+        return None
+
+
+def list_backups(backup_dir: str) -> list[dict]:
+    """Резервные копии прошивки, свежие первыми: meta.json + путь. Блокирующая."""
+    out = []
+    try:
+        names = os.listdir(backup_dir)
+    except FileNotFoundError:
+        return []
+    for n in names:
+        d = os.path.join(backup_dir, n)
+        img = os.path.join(d, BACKUP_IMAGE)
+        if not os.path.isfile(img):
+            continue
+        try:
+            with open(os.path.join(d, "meta.json"), encoding="utf-8") as f:
+                meta = json.load(f)
+        except (OSError, ValueError):
+            meta = {}
+        out.append({**meta, "dir": d, "image": img, "name": n})
+    out.sort(key=lambda m: m.get("created") or 0, reverse=True)
+    return out
+
+
+def make_backup(firmware_dir: str, backup_dir: str, sha: str, meta: dict, snap_src: str | None) -> dict | None:
+    """Сохранить образ с этим elf_sha (тот, что сейчас на датчике) в backup/<время>/.
+    Уже есть такая копия — вернуть её. Образа нет в папке прошивок — None. Блокирующая."""
+    for b in list_backups(backup_dir):
+        if b.get("sha") == sha:
+            return b
+    src = None
+    try:
+        cands = sorted((os.path.join(firmware_dir, n) for n in os.listdir(firmware_dir)
+                        if n.lower().endswith(".bin") and os.path.isfile(os.path.join(firmware_dir, n))),
+                       key=os.path.getmtime, reverse=True)
+    except FileNotFoundError:
+        cands = []
+    for c in cands:
+        if image_sha_of(c) == sha:
+            src = c
+            break
+    if src is None:
+        return None
+    name = time.strftime("%Y%m%d-%H%M%S") + "-" + sha
+    dest = os.path.join(backup_dir, name)
+    tmp = dest + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp, exist_ok=True)
+    shutil.copy2(src, os.path.join(tmp, BACKUP_IMAGE))
+    if snap_src and os.path.isdir(snap_src):
+        shutil.copytree(snap_src, os.path.join(tmp, "snapshot"))
+    meta = {**meta, "sha": sha, "source": os.path.basename(src), "created": time.time()}
+    with open(os.path.join(tmp, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, dest)
+    for old in list_backups(backup_dir)[BACKUP_KEEP:]:
+        shutil.rmtree(old["dir"], ignore_errors=True)
+    return {**meta, "dir": dest, "image": os.path.join(dest, BACKUP_IMAGE), "name": name}
+
+
+def restore_snapshot(backup: dict, snap_root: str) -> None:
+    """После отката: копия YAML из резервной копии -> прошитая (flashed). Блокирующая."""
+    src = os.path.join(backup["dir"], "snapshot")
+    dst = os.path.join(snap_root, "flashed")
+    if not os.path.isdir(src):
+        shutil.rmtree(dst, ignore_errors=True)
+        return
+    tmp = dst + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.copytree(src, tmp)
+    shutil.rmtree(dst, ignore_errors=True)
+    os.replace(tmp, dst)
+
+
 def newest_firmware(directory: str) -> str | None:
     """Самый свежий *.bin в папке (блокирующая)."""
     try:
@@ -605,6 +692,8 @@ class OtaManager:
         self.fw_version_flashed: str | None = None # версия из CHANGELOG прошитой копии
         self.fw_version_new: str | None = None     # версия из текущего CHANGELOG
         self.fw_current_section: list[dict] = []   # верхний раздел CHANGELOG прошитой копии
+        self.backups: list[dict] = []              # v1.18: резервные копии прошивки (свежие первыми)
+        self._rollback: dict | None = None         # v1.18: идёт откат на эту копию
 
     # ================= загрузка / сохранение =================
     async def async_load(self) -> None:
@@ -927,6 +1016,46 @@ class OtaManager:
             raise OtaError(f"нет ключа: задай его в настройках или {SECRET_NAME} в {SECRETS_PATH}")
         return key
 
+    # ================= v1.18: резервная копия и откат прошивки =================
+    @property
+    def backup_dir(self) -> str:
+        return os.path.join(self.firmware_dir, BACKUP_SUBDIR)
+
+    async def async_refresh_backups(self) -> None:
+        b = await self.hass.async_add_executor_job(list_backups, self.backup_dir)
+        if [x["name"] for x in b] != [x["name"] for x in self.backups]:
+            self.backups = b
+            self._notify()
+
+    async def async_backup_current(self) -> dict:
+        """Перед «Установить» с галочкой «Резервная копия»: сохранить образ, что сейчас на датчике
+        (ищется в папке прошивок по хешу из версии датчика), и копию его YAML — для отката."""
+        fv = self.firmware_version or ""
+        sha = fv.rsplit("-", 1)[-1] if "-" in fv else ""
+        if len(sha) != 8:
+            raise OtaError("версия прошивки на датчике ещё не известна (дождись пробуждения) — "
+                           "резервную копию сделать не из чего")
+        meta = {"firmware_version": fv, "flashed_hash": self.flashed_hash, "fw_version": self.fw_version_flashed}
+        snap = os.path.join(self.snap_root, "flashed")
+        b = await self.hass.async_add_executor_job(
+            make_backup, self.firmware_dir, self.backup_dir, sha, meta, snap)
+        if b is None:
+            raise OtaError(f"образа прошивки, что сейчас на датчике ({sha}), нет в {self.firmware_dir} "
+                           "(прошит из ESPHome Builder или удалён уборкой) — резервную копию сделать нельзя. "
+                           "Сними галочку «Резервная копия» или собери эту версию заново")
+        _LOGGER.info("%s: firmware backup %s (%s)", self.name, b["name"], fv)
+        await self.async_refresh_backups()
+        return b
+
+    async def async_rollback(self, timeout_min: int = 180) -> dict:
+        """Прошить последнюю резервную копию (тем же путём: Wi-Fi в сервисном режиме, иначе BLE)."""
+        await self.async_refresh_backups()
+        if not self.backups:
+            raise OtaError("резервных копий прошивки нет — их делает «Установить» с галочкой «Резервная копия»")
+        b = self.backups[0]
+        await self.async_start(b["image"], timeout_min, rollback=b)
+        return b
+
     async def async_build_and_flash(
         self, configuration: str | None = None, timeout_min: int = 180, start: bool = True
     ) -> str:
@@ -991,10 +1120,12 @@ class OtaManager:
             self._set(ST_IDLE, progress=0)
         return path
 
-    async def async_start(self, file: str | None = None, timeout_min: int = 180) -> None:
+    async def async_start(self, file: str | None = None, timeout_min: int = 180,
+                          rollback: dict | None = None) -> None:
         await self.async_auth_gate("firmware flash")
         if self._ota is not None:
             raise OtaError("прошивка уже идёт или ждёт окно")
+        self._rollback = rollback   # v1.18: откат — после прошивки вернуть хеш и копию YAML той версии
         path = file
         if path and not os.path.isabs(path):
             path = os.path.join(self.firmware_dir, path)
@@ -1019,6 +1150,7 @@ class OtaManager:
             if self._build_hash and self.last_build and path == self.last_build.get("file"):
                 self.flashed_hash = self._build_hash
                 self._promote_snapshot()
+            self._apply_rollback()
             prev = self.last_flash if (self.last_flash or {}).get("result") == "flashed" else None
             if prev is not None:
                 # v1.15.5: запись о настоящей прошивке остаётся, проверка — отдельным полем
@@ -1049,6 +1181,7 @@ class OtaManager:
     async def async_cancel(self) -> None:
         """Отменить прошивку (настройки продолжат ждать окно). v1.15: и на этапе сборки."""
         self._shutdown_job = None
+        self._rollback = None
         if self._ota is None and self.status == ST_BUILDING:
             self._build_cancelled = True
             self._set(ST_CANCELLED, finished=dt_util.now())
@@ -1151,6 +1284,7 @@ class OtaManager:
         mtime = await self.hass.async_add_executor_job(config_tree_mtime, ESPHOME_DIR, cfg)
         changed = h != self.config_hash or mtime != self.config_mtime
         imgs = await self.hass.async_add_executor_job(firmware_stats, self.firmware_dir)   # v1.16.2
+        await self.async_refresh_backups()   # v1.18
         if imgs != self.fw_images:
             self.fw_images, changed = imgs, True
         self.config_hash = h
@@ -1184,6 +1318,24 @@ class OtaManager:
             await self.hass.async_add_executor_job(job)
         except Exception as err:  # noqa: BLE001 — без копии просто не будет diff
             _LOGGER.warning("%s: build snapshot failed: %s", self.name, err)
+
+    def _apply_rollback(self) -> None:
+        """v1.18: на датчике версия из резервной копии — хеш YAML и копия YAML той версии,
+        чтобы «Firmware» снова предложила текущий YAML как обновление."""
+        b, self._rollback = self._rollback, None
+        if not b or self.file != b.get("image"):
+            return
+        self.flashed_hash = b.get("flashed_hash") or "older"
+
+        async def job() -> None:
+            try:
+                await self.hass.async_add_executor_job(restore_snapshot, b, self.snap_root)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("%s: rollback snapshot restore failed: %s", self.name, err)
+            self._changes_key = None
+            await self.async_refresh_config_hash()
+        self.hass.async_create_task(job())
+        _LOGGER.info("%s: rolled back to %s", self.name, b.get("firmware_version") or b.get("name"))
 
     def _promote_snapshot(self) -> None:
         async def job() -> None:
@@ -1942,7 +2094,8 @@ class OtaManager:
             return self._shutdown_job   # выгрузка/остановка HA: задание сохранено до очистки
 
         left = max(0.0, self._ota.deadline - time.monotonic())
-        return {"file": self.file, "deadline": (dt_util.utcnow().timestamp() + left), "build_hash": self._build_hash}
+        return {"file": self.file, "deadline": (dt_util.utcnow().timestamp() + left), "build_hash": self._build_hash,
+                "rollback": self._rollback}
 
     async def _resume_job(self, job: dict) -> None:
         """После перезапуска HA продолжить ожидание/прошивку тем же файлом (с начала)."""
@@ -1953,7 +2106,7 @@ class OtaManager:
             return
         try:
             self._build_hash = job.get("build_hash")
-            await self.async_start(path, int(left_min))
+            await self.async_start(path, int(left_min), rollback=job.get("rollback"))
             _LOGGER.info("%s: firmware job resumed after HA restart (%s)", self.name, os.path.basename(path))
         except OtaError as err:
             self._set(ST_ERROR, error=f"после перезапуска HA: {err}", finished=dt_util.now())
@@ -1965,9 +2118,11 @@ class OtaManager:
         self._need_read = True
         self._resync = True   # v1.14.0: новая прошивка могла сбросить настройки
         self._rebooted_after_flash = False
-        if self._build_hash and self.file and self.last_build and self.file == self.last_build.get("file"):
+        if self._rollback is None and self._build_hash and self.file and self.last_build \
+                and self.file == self.last_build.get("file"):
             self.flashed_hash = self._build_hash   # v1.15: на датчике — эта сборка
             self._promote_snapshot()
+        self._apply_rollback()
         self.last_channel = channel
         now = dt_util.now()
         secs = round(time.monotonic() - self._flash_t0, 1) if self._flash_t0 is not None else None
