@@ -248,7 +248,8 @@ class MoveSensorBlePanel extends HTMLElement {
     // on a phone the name is already in the toolbar — keep the row for the badges
     main.appendChild(this._card(this._narrow ? { type: "heading", heading: "", badges }
       : { type: "heading", heading: this._dev.title, heading_style: "title", icon: "mdi:motion-sensor", badges }));
-    this._attention = this._el("div", { class: "attention", role: "status" });
+    this._attention = this._el("div", { class: "attention", role: "status", hidden: true });
+    this._attKey = null;   // new box: fill it even if the items did not change
     main.appendChild(this._attention);
 
     const grid = this._el("div", { class: "tiles" });
