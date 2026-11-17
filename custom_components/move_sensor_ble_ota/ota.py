@@ -39,6 +39,9 @@ from .const import (
     CMD_BEGIN,
     CMD_END,
     CMD_GET_SETTINGS,
+    CMD_GET_BATTERY,
+    CMD_SET_BATTERY,
+    BATTERY_KEYS,
     CMD_HELLO,
     CMD_INFO,
     CMD_DIAG,
@@ -113,6 +116,9 @@ OFFSET_NONE = 0x7FFF
 SETTINGS_MASK = {"detect_delay": 0x01, "keep_time": 0x02, "climate_interval": 0x04, "led": 0x08, "voltage_factor": 0x10,
                  "motion_window": 0x20, "climate_window": 0x40,
                  "temp_offset": 0x80, "hum_offset": 0x80}  # поправки — общий бит, отсутствующая = 0x7FFF
+# v1.19: батарея — своя команда (0x15/0x16) и своя маска; старый пакет настроек (20 байт) не меняется
+BATTERY_MASK = {"battery_capacity": 0x01, "battery_low": 0x02}
+SETTING_KEYS = set(SETTINGS_MASK) | set(BATTERY_MASK)
 
 
 # длины объектов BTHome v2 (байт данных) — только то, что шлёт датчик и соседние типы;
@@ -584,6 +590,33 @@ def pack_settings(values: dict) -> bytes:
     )
 
 
+def pack_battery(values: dict) -> bytes:
+    """[маска, ёмкость u16 LE, порог u8] для CMD_SET_BATTERY; нет значения — 0xFFFF / 0xFF."""
+    mask = 0
+    for k in values:
+        mask |= BATTERY_MASK.get(k, 0)
+    cap = values.get("battery_capacity")
+    low = values.get("battery_low")
+    return bytes([mask]) + struct.pack(
+        "<HB",
+        0xFFFF if cap is None else max(0, min(0xFFFE, int(round(float(cap))))),
+        0xFF if low is None else max(0, min(0xFE, int(round(float(low))))),
+    )
+
+
+def unpack_battery(rsp: bytes) -> tuple[dict, int | None]:
+    """Ответ CMD_GET/SET_BATTERY: [cmd|0x80, статус, ёмкость u16, порог u8, номер правки]."""
+    out: dict = {}
+    if len(rsp) < 5:
+        return out, None
+    cap, low = struct.unpack_from("<HB", rsp, 2)
+    if cap != 0xFFFF:
+        out["battery_capacity"] = cap
+    if low != 0xFF:
+        out["battery_low"] = low
+    return out, (rsp[5] if len(rsp) >= 6 else None)
+
+
 def same_value(key: str, a, b) -> bool:
     if a is None or b is None:
         return False
@@ -621,6 +654,7 @@ class OtaManager:
         self._unsub_reset = None
         # --- настройки
         self.desired: dict = {}   # что задано в HA и ещё не подтверждено датчиком
+        self.battery_unsupported = False   # v1.19: прошивка не знает команду батареи (до 1.6.0)
         self.applied: dict = {}   # что датчик подтвердил последним
         # v1.14.0: что должно стоять на датчике (последнее подтверждённое заданное из HA).
         # После перезагрузки датчика (прошивка по USB, стёртый флеш, смена прошивки) его
@@ -842,7 +876,9 @@ class OtaManager:
 
     # ================= публичное: настройки =================
     def pending(self) -> dict:
-        return {k: v for k, v in self.desired.items() if not same_value(k, v, self.applied.get(k))}
+        return {k: v for k, v in self.desired.items()
+                if not same_value(k, v, self.applied.get(k))
+                and not (k in BATTERY_MASK and self.battery_unsupported)}
 
     def value(self, key: str):
         """Значение для сущности: заданное (если ждёт применения), иначе подтверждённое датчиком."""
@@ -905,6 +941,19 @@ class OtaManager:
     def window_supported(self) -> bool:
         """Прошивка умеет окна (прочитаны с датчика)."""
         return "motion_window" in self.applied
+
+    @property
+    def battery_supported(self) -> bool:
+        """v1.19: прошивка 1.6.0+ отвечает на команду батареи (прочитано с датчика)."""
+        return "battery_capacity" in self.applied
+
+    def battery_remaining_mah(self) -> float | None:
+        """Остаток, мА·ч = ёмкость × процент — так же, как li_battery на датчике (remaining)."""
+        cap = self.applied.get("battery_capacity")
+        pct = self.data_value("battery")
+        if cap is None or pct is None:
+            return None
+        return round(float(cap) * float(pct) / 100.0)
 
     @property
     def offsets_supported(self) -> bool:
@@ -1628,7 +1677,7 @@ class OtaManager:
         elif key == "settings_rev":
             if value is not None:
                 self._on_rev(int(value), "wifi")
-        elif key in SETTINGS_MASK and value is not None:
+        elif key in SETTING_KEYS and value is not None:
             self.applied[key] = value
             echo = self._wifi_echo.get(key)
             if echo is not None and same_value(key, value, echo[0]):
@@ -1648,7 +1697,7 @@ class OtaManager:
             return
         async with self._wifi_lock:
             actual = {}
-            for k in SETTINGS_MASK:
+            for k in SETTING_KEYS:
                 if self.wifi.has(k):
                     v = self.wifi.current(k)
                     if v is not None:
@@ -2461,8 +2510,24 @@ class OtaManager:
         self._notify()
         _LOGGER.info("%s: reset diagnostics: %s", self.name, diag)
 
+    async def _sync_battery(self, command, bpend: dict) -> tuple[dict, int | None] | None:
+        """v1.19: ёмкость и порог батареи — своя команда (ответ 6 байт, влезает в любой MTU).
+        Прошивка до 1.6.0 отвечает «неверная команда» — запоминаем и больше не спрашиваем."""
+        if self.battery_unsupported:
+            return None
+        req = bytes([CMD_SET_BATTERY]) + pack_battery(bpend) if bpend else bytes([CMD_GET_BATTERY])
+        rsp = await command(req)
+        if len(rsp) < 6 or rsp[1] != 0:
+            if len(rsp) >= 2 and rsp[1] == 10:   # ST_STATE: команда незнакома (старая прошивка)
+                self.battery_unsupported = True
+                _LOGGER.info("%s: firmware has no battery settings (before 1.6.0)", self.name)
+            return None
+        return unpack_battery(rsp)
+
     async def _sync_settings(self, command) -> None:
-        pend = self.pending()
+        pend_all = self.pending()
+        pend = {k: v for k, v in pend_all.items() if k in SETTINGS_MASK}
+        bpend = {k: v for k, v in pend_all.items() if k in BATTERY_MASK}
         if pend:
             mask = 0
             for k in pend:
@@ -2477,6 +2542,16 @@ class OtaManager:
         actual = unpack_settings(rsp[2:])
         # v1.15: 18-й байт — номер правки на датчике после этой команды
         rev = rsp[2 + 17] if len(rsp) >= 2 + 18 else None
+        # v1.19: батарея — отдельной командой в том же сеансе; её номер правки — самый свежий
+        bat = await self._sync_battery(command, bpend)
+        if bat is not None:
+            actual.update(bat[0])
+            if bat[1] is not None:
+                rev = bat[1]
+            pend = {**pend, **bpend}
+        else:
+            # сбой только этой команды — прежние значения батареи не теряем
+            actual.update({k: self.applied[k] for k in BATTERY_MASK if k in self.applied})
         if rev is not None:
             self.rev_capable = True
             if pend:
@@ -2494,7 +2569,8 @@ class OtaManager:
             if self._resync and self.target:
                 # v1.14.0: после перезагрузки датчика вернуть заданные из HA значения
                 drift = {k: v for k, v in self.target.items()
-                         if k in SETTINGS_MASK and v is not None and not same_value(k, v, actual.get(k))}
+                         if k in SETTING_KEYS and v is not None and k in actual
+                         and not same_value(k, v, actual.get(k))}
                 self._resync = False
                 if drift:
                     _LOGGER.warning("%s: settings reset on the sensor after reboot, restoring: %s",
@@ -2509,7 +2585,7 @@ class OtaManager:
                 # прочитано по запросу (Read settings / первый запуск): датчик — источник правды
                 # (например, настройку поменяли на сайте датчика по Wi-Fi)
                 self._resync = False
-                self.target.update({k: v for k, v in actual.items() if k in SETTINGS_MASK and v is not None})
+                self.target.update({k: v for k, v in actual.items() if k in SETTING_KEYS and v is not None})
                 self._after_adopt(old_target)
         else:
             self._settings_event("saved_ble", {k: (old_target.get(k), actual.get(k)) for k in pend
@@ -2520,7 +2596,7 @@ class OtaManager:
             if self._adopt:
                 # правку на датчике сделали не из HA — остальные ключи принимаем как есть
                 self.target.update({k: v for k, v in actual.items()
-                                    if k in SETTINGS_MASK and k not in pend and v is not None})
+                                    if k in SETTING_KEYS and k not in pend and v is not None})
                 self._after_adopt(old_target)
         notes = []
         for k, want in list(pend.items()):

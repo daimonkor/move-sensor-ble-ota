@@ -48,6 +48,8 @@ def device_id(ble_address: str) -> str:
 TEST_MODE_MIN = 30     # на сколько минут включать быстрый тест
 CMD_GET_SETTINGS = 0x10
 CMD_SET_SETTINGS = 0x11
+CMD_GET_BATTERY = 0x15   # v1.19: ёмкость (мА·ч) и порог «низкого» заряда (%), ответ 6 байт
+CMD_SET_BATTERY = 0x16
 RSP_ACK = 0x84
 
 # коды статуса датчика -> текст
@@ -109,7 +111,11 @@ SETTINGS = {
     # Поправка температуры пересчитывает и влажность по точке росы (абсолютная влажность та же).
     "temp_offset": ("Temperature offset", -10, 10, 0.1, "°C", "mdi:thermometer-plus"),
     "hum_offset": ("Humidity offset", -20, 20, 0.1, "%", "mdi:water-plus"),
+    # v1.19 / прошивка 1.6.0: батарея (li_battery) — отдельной BLE-командой 0x15/0x16
+    "battery_capacity": ("Battery capacity", 100, 5000, 10, "mAh", "mdi:battery-plus-variant"),
+    "battery_low": ("Battery low level", 5, 50, 1, "%", "mdi:battery-low"),
 }
+BATTERY_KEYS = ("battery_capacity", "battery_low")
 WINDOW_KEYS = ("motion_window", "climate_window")
 OFFSET_KEYS = ("temp_offset", "hum_offset")
 FLOAT_KEYS = ("voltage_factor", "temp_offset", "hum_offset")

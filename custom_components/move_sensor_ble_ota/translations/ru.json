@@ -245,6 +245,9 @@
           "missing": "No key",
           "unknown": "Not checked yet"
         }
+      },
+      "battery_remaining": {
+        "name": "Battery remaining"
       }
     },
     "binary_sensor": {
@@ -282,6 +285,12 @@
       },
       "pir_stuck_threshold": {
         "name": "PIR stuck after"
+      },
+      "setting_battery_capacity": {
+        "name": "Battery capacity"
+      },
+      "setting_battery_low": {
+        "name": "Battery low level"
       }
     },
     "switch": {

@@ -32,7 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_add_entities([
         SettingsStatusSensor(mgr),   # v1.15: OTA status / progress / Firmware version -> сущность «Firmware»
         BrownoutCountSensor(mgr), CrashCountSensor(mgr), LastResetReasonSensor(mgr), LastSeenSensor(mgr),
-        BatteryDaysLeftSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
+        BatteryDaysLeftSensor(mgr), BatteryRemainingSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
         LastMotionSensor(mgr),
         DataSensor(mgr, "temperature", "Temperature", SensorDeviceClass.TEMPERATURE, "°C", 1),
         DataSensor(mgr, "humidity", "Humidity", SensorDeviceClass.HUMIDITY, PERCENTAGE, 1),
@@ -387,6 +387,32 @@ class BatteryDaysLeftSensor(OtaEntity, SensorEntity):
         f = self.mgr.battery_forecast()
         f.pop("days_left", None)
         return f
+
+
+class BatteryRemainingSensor(OtaEntity, SensorEntity):
+    """v1.19: остаток в мА·ч = ёмкость (настройка датчика) × процент из пакета BTHome —
+    то же, что считает li_battery на датчике; по BLE не передаётся, пакет рекламы не меняется."""
+
+    _attr_native_unit_of_measurement = "mAh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:battery-heart-variant"
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "battery_remaining", "Battery remaining")
+
+    @property
+    def available(self) -> bool:
+        return self.mgr.battery_supported and super().available
+
+    @property
+    def native_value(self):
+        return self.mgr.battery_remaining_mah()
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"capacity_mah": self.mgr.applied.get("battery_capacity"),
+                "battery_percent": self.mgr.data_value("battery")}
 
 
 class MotionEventsTodaySensor(OtaEntity, SensorEntity):

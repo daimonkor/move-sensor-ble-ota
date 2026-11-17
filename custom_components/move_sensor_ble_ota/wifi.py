@@ -41,6 +41,8 @@ SETTING_MAP = {
     "number/Climate window": "climate_window",
     "number/Temperature offset": "temp_offset",
     "number/Humidity offset": "hum_offset",
+    "number/Battery capacity": "battery_capacity",     # v1.19, прошивка 1.6.0
+    "number/Battery low level": "battery_low",
     "switch/Motion tracking LED": "led",
 }
 # остаются на виду в ESPHome-устройстве (Wi-Fi и сервисный режим); остальное — копии, скрываются

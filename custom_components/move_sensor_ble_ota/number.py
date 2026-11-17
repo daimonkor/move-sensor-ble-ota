@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, FLOAT_KEYS, OFFSET_KEYS, SETTINGS, WINDOW_KEYS
+from .const import BATTERY_KEYS, DOMAIN, FLOAT_KEYS, OFFSET_KEYS, SETTINGS, WINDOW_KEYS
 from .entity import OtaEntity
 from .ota import OtaError
 
@@ -45,6 +45,8 @@ class SettingNumber(OtaEntity, NumberEntity):
             return self.mgr.window_supported
         if self.key in OFFSET_KEYS:
             return self.mgr.offsets_supported
+        if self.key in BATTERY_KEYS:   # v1.19: прошивка 1.6.0+
+            return self.mgr.battery_supported
         return super().available
 
     @property
