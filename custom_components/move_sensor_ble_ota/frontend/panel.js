@@ -50,7 +50,7 @@ const CONTROL = {
   setting_battery_capacity: "box",
 };
 const SHORT = { battery_days_left: "Days left", battery_remaining: "Remaining", voltage: "Voltage",
-                last_motion: "Last motion", pir_stuck: "PIR stuck" };
+                last_motion: "Last motion", pir_stuck: "PIR stuck", wifi_reset: "Reset Wi-Fi" };
 const ACTION_NAMES = { identify: "Blink LED", settings_read: "Read", wifi_reset: "Reset" };
 const DANGER = { wifi_reset: "Reset Wi-Fi on the sensor to the network built into its firmware?" };
 const LAYOUT_KEYS = new Set([
@@ -198,7 +198,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const action = { action: "perform-action", perform_action: "button.press", target: { entity_id: id } };
       if (DANGER[key]) action.confirmation = { text: DANGER[key] };
       // a button row says what happens («Blink LED») — a tile would show the last press time instead
-      return { type: "entities", entities: [{ type: "button", entity: id, name, action_name: ACTION_NAMES[key] || "Press",
+      return { type: "entities", entities: [{ type: "button", entity: id, name: SHORT[key] || name, action_name: ACTION_NAMES[key] || "Press",
                                               tap_action: action }] };
     }
     if (domain === "number" || domain === "switch") return this._settingCard(key);
@@ -356,7 +356,7 @@ class MoveSensorBlePanel extends HTMLElement {
         for (const k of keys) { const c = this._infoCard(k); if (c) body.appendChild(this._card(c)); }
         if (sec.id === "diagnostics") {
           body.appendChild(this._card({ type: "entities", entities: [{
-            type: "button", name: "Configure (OTA key, display)", icon: "mdi:cog", action_name: "Open",
+            type: "button", name: "Configure", icon: "mdi:cog", action_name: "Open",
             tap_action: { action: "navigate", navigation_path: this._dev.configure } }] }));
         }
       }
