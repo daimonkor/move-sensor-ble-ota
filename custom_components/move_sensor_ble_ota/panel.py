@@ -34,25 +34,10 @@ def _remove_own(hass: HomeAssistant) -> None:
         frontend.async_remove_panel(hass, PANEL_URL, warn_if_unknown=False)
 
 
-# (платформа, ключ) — в порядке показа
-SECTIONS = [
-    ("Sensor", [("binary_sensor", "occupancy"), ("sensor", "temperature"), ("sensor", "humidity"),
-                ("sensor", "battery"), ("sensor", "last_motion"),
-                ("binary_sensor", "pir_stuck"), ("sensor", "battery_days_left"),
-                ("sensor", "battery_remaining")]),
-    ("Settings", [("number", "setting_keep_time"), ("number", "setting_detect_delay"),
-                  ("number", "setting_climate_interval"), ("switch", "setting_led"),
-                  ("number", "setting_temp_offset"), ("number", "setting_hum_offset"),
-                  ("number", "setting_voltage_factor"), ("number", "setting_battery_capacity"),
-                  ("number", "setting_battery_low"), ("number", "pir_stuck_threshold"),
-                  ("sensor", "settings_status"), ("event", "settings_change"), ("button", "settings_read")]),
-    ("BLE", [("sensor", "link"), ("sensor", "signal"), ("sensor", "signal_level"), ("sensor", "last_seen"),
-             ("sensor", "tx_power"), ("sensor", "ota_key"), ("number", "setting_motion_window"),
-             ("number", "setting_climate_window"), ("switch", "auto_window"), ("button", "identify"),
-             ("button", "wifi_reset")]),
-    ("Firmware", [("update", "firmware"), ("sensor", "device_id"), ("sensor", "voltage"),
-                  ("sensor", "last_reset_reason"), ("sensor", "brownout_count"), ("sensor", "crash_count")]),
-]
+# v1.20: панель — табы Overview / Settings / Advanced на встроенных карточках HA (tile + features).
+# Раскладку собирает frontend/panel.js; отсюда — сущности по ключам (unique_id = <адрес>_<ключ>).
+# Новая сущность интеграции без места в раскладке попадает в Advanced › Diagnostics (не теряется).
+PLATFORMS_ORDER = ("binary_sensor", "sensor", "number", "switch", "button", "event", "update")
 
 
 _STALE_DONE = f"{DOMAIN}_panel_store_removed"
@@ -62,63 +47,48 @@ def _store(hass: HomeAssistant) -> Store:
     return Store(hass, 1, f"{DOMAIN}.panel")
 
 
+def _firmware_rows(fw: str | None, entry_id: str) -> list:
+    """Строки раздела Firmware: само обновление, этап, кнопки (с подтверждением на необратимом)."""
+    if not fw:
+        return []
+    return [
+        fw,
+        # v1.18.1: этап сборки/прошивки на всех шагах (у самой «Firmware» процент — только при прошивке)
+        {"type": "attribute", "entity": fw, "attribute": "ota_status", "name": "OTA status", "icon": "mdi:progress-upload"},
+        {"type": "button", "name": "Install firmware (with backup)", "icon": "mdi:download", "action_name": "Install",
+         "tap_action": {"action": "perform-action", "perform_action": "update.install",
+                        "target": {"entity_id": fw}, "data": {"backup": True},
+                        "confirmation": {"text": "Build and flash the sensor firmware? The current firmware is backed up first."}}},
+        {"type": "button", "name": "Build only (check)", "icon": "mdi:hammer-wrench", "action_name": "Build",
+         "tap_action": {"action": "perform-action", "perform_action": f"{DOMAIN}.build_and_flash",
+                        "data": {"config_entry_id": entry_id, "start": False}}},
+        {"type": "attribute", "entity": fw, "attribute": "backup", "name": "Backup", "icon": "mdi:backup-restore"},
+        {"type": "button", "name": "Roll back to backup", "icon": "mdi:undo-variant", "action_name": "Roll back",
+         "tap_action": {"action": "perform-action", "perform_action": f"{DOMAIN}.rollback",
+                        "data": {"config_entry_id": entry_id},
+                        "confirmation": {"text": "Roll back to the backup firmware? The sensor is flashed again on its next wake."}}},
+        {"type": "attribute", "entity": fw, "attribute": "last_flash", "name": "Last flash", "icon": "mdi:history"},
+        {"type": "attribute", "entity": fw, "attribute": "stored_images", "name": "Stored images", "icon": "mdi:folder-zip-outline"},
+        {"type": "button", "name": "Cancel firmware update", "icon": "mdi:cancel", "action_name": "Cancel",
+         "tap_action": {"action": "perform-action", "perform_action": f"{DOMAIN}.cancel",
+                        "data": {"config_entry_id": entry_id}}},
+    ]
+
+
 def _config(hass: HomeAssistant) -> dict:
+    from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
+
     from .wifi import ESPHOME_VISIBLE  # noqa: PLC0415
 
     reg = er.async_get(hass)
     devices = []
     for entry_id, mgr in (hass.data.get(DOMAIN) or {}).items():
-        sections = []
-        for title, items in SECTIONS:
-            ids = []
-            for platform, key in items:
-                eid = reg.async_get_entity_id(platform, DOMAIN, f"{mgr.address}_{key}")
-                if eid:
-                    ids.append(eid)
-            if title == "BLE":
-                # «Настроить» — ключ OTA и папка прошивок (страница интеграции)
-                ids.insert(6 if len(ids) > 6 else len(ids), {
-                    "type": "button", "name": "Configure (OTA key, display)", "icon": "mdi:cog",
-                    "action_name": "Open", "tap_action": {"action": "navigate",
-                                                          "navigation_path": f"/config/integrations/integration/{DOMAIN}"}})
-            if title == "Firmware":
-                fw = reg.async_get_entity_id("update", DOMAIN, f"{mgr.address}_firmware")
-                if fw:
-                    # v1.18.1: этап сборки/прошивки на всех шагах (у самой «Firmware» процент — только при прошивке)
-                    ids.insert(1, {"type": "attribute", "entity": fw, "attribute": "ota_status",
-                                   "name": "OTA status", "icon": "mdi:progress-upload"})
-                    # v1.15.3: когда, каким каналом и как быстро прошивали в последний раз
-                    ids.insert(2, {"type": "attribute", "entity": fw, "attribute": "last_flash",
-                                   "name": "Last flash", "icon": "mdi:history"})
-                    # v1.16.2: образы в папке прошивок (хранятся последние N)
-                    ids.insert(3, {"type": "attribute", "entity": fw, "attribute": "stored_images",
-                                   "name": "Stored images", "icon": "mdi:folder-zip-outline"})
-                    # v1.18.1: кнопки прошивки прямо в панели
-                    ids.insert(4, {"type": "button", "name": "Install firmware (with backup)",
-                                   "icon": "mdi:download", "action_name": "Install",
-                                   "tap_action": {"action": "perform-action", "perform_action": "update.install",
-                                                  "target": {"entity_id": fw}, "data": {"backup": True},
-                                                  "confirmation": {"text": "Build and flash the sensor firmware? "
-                                                                   "The current firmware is backed up first."}}})
-                    ids.insert(5, {"type": "button", "name": "Build only (check)", "icon": "mdi:hammer-wrench",
-                                   "action_name": "Build",
-                                   "tap_action": {"action": "perform-action",
-                                                  "perform_action": f"{DOMAIN}.build_and_flash",
-                                                  "data": {"config_entry_id": entry_id, "start": False}}})
-                    ids.insert(6, {"type": "attribute", "entity": fw, "attribute": "backup",
-                                   "name": "Backup", "icon": "mdi:backup-restore"})
-                    ids.insert(7, {"type": "button", "name": "Roll back to backup", "icon": "mdi:undo-variant",
-                                   "action_name": "Roll back",
-                                   "tap_action": {"action": "perform-action", "perform_action": f"{DOMAIN}.rollback",
-                                                  "data": {"config_entry_id": entry_id},
-                                                  "confirmation": {"text": "Flash the last backup firmware back "
-                                                                   "to the sensor?"}}})
-                ids.append({"type": "button", "name": "Cancel firmware update", "icon": "mdi:cancel",
-                            "action_name": "Cancel",
-                            "tap_action": {"action": "perform-action",
-                                           "perform_action": f"{DOMAIN}.cancel",
-                                           "data": {"config_entry_id": entry_id}}})
-            sections.append({"title": title, "entities": ids})
+        prefix = f"{mgr.address}_"
+        ids: dict[str, str] = {}
+        for ent in er.async_entries_for_config_entry(reg, entry_id):
+            if ent.platform != DOMAIN or ent.disabled_by or not (ent.unique_id or "").startswith(prefix):
+                continue
+            ids[ent.unique_id[len(prefix):]] = ent.entity_id
         wifi_ids = []
         wifi = getattr(mgr, "wifi", None)
         if wifi is not None and wifi.device_id:
@@ -126,23 +96,18 @@ def _config(hass: HomeAssistant) -> dict:
                 ent = reg.entities.get_entry(reg_id)
                 if ent is not None and suf in ESPHOME_VISIBLE and not ent.disabled_by:
                     wifi_ids.append(ent.entity_id)
-        # Wi-Fi — только когда связь по Wi-Fi (сервисный режим); в режиме BLE вместо карточки — подсказка
-        link = reg.async_get_entity_id("sensor", DOMAIN, f"{mgr.address}_link")
-        sections.insert(3, {"title": "Wi-Fi (service mode)", "entities": wifi_ids,
-                            "show_if": {"entity": link, "state": "wifi"} if link and wifi_ids else None,
-                            "hidden_note": "Wi-Fi is off — the sensor works over BLE. Turn on the WiFi switch "
-                                           "on the sensor (service mode) to see Wi-Fi settings here.",
-                            "note": None if wifi_ids else "No ESPHome device for this sensor."})
         # имена строк — без имени устройства («Move Sensor BLE Keep time» -> «Keep time»)
-        from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
-
         strip = {mgr.name}
         if wifi is not None and wifi.device_id:
             dev = dr.async_get(hass).async_get(wifi.device_id)
             if dev is not None:
                 strip |= {n for n in (dev.name_by_user, dev.name) if n}
-        devices.append({"title": mgr.name, "device_id": mgr.device_id, "sections": sections,
-                        "strip": sorted(strip, key=len, reverse=True)})
+        devices.append({
+            "title": mgr.name, "device_id": mgr.device_id, "entry_id": entry_id, "ids": ids,
+            "firmware": _firmware_rows(ids.get("firmware"), entry_id),
+            "wifi": wifi_ids, "configure": f"/config/integrations/integration/{DOMAIN}",
+            "strip": sorted(strip, key=len, reverse=True),
+        })
     return {"devices": devices}
 
 
@@ -171,7 +136,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.19.0",
+        module_url=f"{STATIC_URL}/panel.js?v=1.20.0",
         config=_config(hass),
         require_admin=False,
     )

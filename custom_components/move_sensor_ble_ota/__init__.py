@@ -224,6 +224,11 @@ def _remove_replaced_entities(hass: HomeAssistant, address: str) -> None:
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Удаление интеграции: показать скрытое НАМИ, вернуть голосовых помощников (как Switch as X)."""
     await async_unhide_on_remove(hass, entry)
+    # v1.20: уведомления «Ремонта» этого датчика
+    from homeassistant.helpers import issue_registry as ir  # noqa: PLC0415
+
+    for kind in OtaManager.ISSUES:
+        ir.async_delete_issue(hass, DOMAIN, f"{kind}_{entry.entry_id}")
 
 
 async def _reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

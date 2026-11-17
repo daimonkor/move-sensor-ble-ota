@@ -12,7 +12,8 @@
 A battery-powered PIR motion sensor on a **Seeed XIAO ESP32-C3** (SR602 PIR, SHT41, LiPo) running ESPHome
 with **BTHome v2** over BLE and deep sleep — plus a Home Assistant integration, **Move Sensor BLE OTA**:
 one *Move Sensor BLE* device with data and settings from BLE or Wi-Fi, firmware updates over Bluetooth through
-ESPHome Bluetooth proxies (or Wi-Fi in service mode), a sidebar panel. The sensor never needs Wi-Fi in normal operation.
+ESPHome Bluetooth proxies (or Wi-Fi in service mode), a sidebar panel with Overview / Settings / Advanced tabs on Home Assistant's
+own cards, and Repairs notifications for a low or empty battery and a silent sensor. The sensor never needs Wi-Fi in normal operation.
 
 ## 📖 Documentation
 
@@ -50,8 +51,9 @@ Issues and pull requests are disabled — a personal project published as-is.
 
 Батарейный датчик движения на **Seeed XIAO ESP32-C3** (PIR SR602, SHT41, LiPo) с **BTHome v2** по BLE и deep sleep —
 и интеграция Home Assistant **Move Sensor BLE OTA**: одно устройство *Move Sensor BLE* с данными и настройками из BLE или
-Wi-Fi, прошивка по Bluetooth через прокси ESPHome (или по Wi-Fi в сервисном режиме), панель в меню. Wi-Fi датчику в обычной
-работе не нужен.
+Wi-Fi, прошивка по Bluetooth через прокси ESPHome (или по Wi-Fi в сервисном режиме), панель в меню с табами Overview / Settings /
+Advanced на стандартных карточках Home Assistant и уведомления в «Ремонте» о севшей батарее и пропавшем датчике. Wi-Fi датчику
+в обычной работе не нужен.
 
 **📖 Документация: [daimonkor.github.io/move-sensor-ble-ota](https://daimonkor.github.io/move-sensor-ble-ota/?lang=ru)** —
 быстрый старт (от деталей до движения в HA), установка, настройка, прошивка, настройки датчика, сущности, API, протокол,

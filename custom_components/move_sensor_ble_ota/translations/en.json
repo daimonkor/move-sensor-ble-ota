@@ -341,6 +341,22 @@
     "no_key": {
       "title": "{name}: no OTA key",
       "description": "There is no BLE OTA key: the «OTA key» field in the integration options is empty and `{secret}` was not found in `{path}`. Firmware updates, settings and diagnostics over BLE are paused. Sensor data via BTHome still works.\n\nFix: add `{secret}` to `{path}` (the same value the firmware was built with) or enter the key in the options."
+    },
+    "battery_low": {
+      "title": "{name}: battery is low ({pct} %)",
+      "description": "The battery of **{name}** is at {pct} %, at or below the warning level you set ({level} %). About {days} days left at the current rate.\n\nCharge the battery. This notice goes away by itself once the battery is back above {level} % + 5 %.\n\nThe warning level is the «Battery low level» setting of the sensor."
+    },
+    "battery_empty": {
+      "title": "{name}: sensor stopped, battery empty",
+      "description": "**{name}** has not reported since {last}. Its last battery voltage was {volt} V, so it most likely ran out of power.\n\nCharge the battery. The sensor starts reporting again on its own and this notice goes away."
+    },
+    "not_reporting": {
+      "title": "{name}: sensor not reporting",
+      "description": "**{name}** has not reported since {last}, while its battery was fine ({pct} %).\n\nCheck that the sensor is within range of a Bluetooth adapter or Bluetooth proxy, and that it is not switched off. This notice goes away once the sensor reports again."
+    },
+    "pir_stuck": {
+      "title": "{name}: motion stuck on «detected»",
+      "description": "**{name}** has reported motion without a break for more than {minutes} minutes. The motion sensor may be stuck, or something keeps moving in front of it (a curtain, a heater, a pet).\n\nThis notice goes away once the sensor reports «clear» again. The time limit is the «PIR stuck after» setting."
     }
   }
 }

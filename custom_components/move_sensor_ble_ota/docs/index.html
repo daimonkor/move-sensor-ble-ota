@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.19.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.20.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -205,6 +205,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <a href="#setup"><svg class="i"><use href="#i-sliders"/></svg>Как настроить</a>
   <a href="#flash"><svg class="i"><use href="#i-upload"/></svg>Как прошивать</a>
   <a href="#settings"><svg class="i"><use href="#i-cog"/></svg>Настройки датчика</a>
+  <a href="#panel"><svg class="i"><use href="#i-layers"/></svg>Панель</a>
   <a href="#migrate"><svg class="i"><use href="#i-truck"/></svg>Перенос на новый HA</a>
   <a href="#entities"><svg class="i"><use href="#i-layers"/></svg>Сущности</a>
   <a href="#security"><svg class="i"><use href="#i-shield"/></svg>Защита</a>
@@ -401,6 +402,27 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <span class="chip c-red">Error</span>
     <span style="color:var(--muted);font-size:13px">Что произошло — событие <b>Settings change</b>: saved_wifi / saved_ble / changed_on_sensor / restored (было → стало, в журнале и истории)</span>
   </div>
+</section>
+
+<section id="panel">
+  <h2><span class="ic bg-sky"><svg class="i"><use href="#i-layers"/></svg></span>Панель (v1.20)</h2>
+  <p class="lead">Панель <b>Move Sensor BLE</b> в боковом меню — три таба, только стандартные карточки Home Assistant (tile с элементами управления, значки, график истории). Ничего доустанавливать не нужно.</p>
+  <table>
+    <tr><th>Таб</th><th>Что там</th></tr>
+    <tr><td><b>Overview</b></td><td>Значки: связь, сигнал, когда был на связи, статус настроек. «Needs attention» появляется, только если что-то не так (батарея садится, нет данных, движение залипло, новая прошивка, настройки не приняты). Четыре карточки: Motion, Temperature, Humidity, Battery. <b>Нажатие</b> на карточку (или шестерёнку) — шторка с историей за сутки и настройками этой величины; на телефоне она выезжает снизу и поднимается над клавиатурой. <b>Долгое нажатие</b> — стандартное окно Home Assistant (полная история, статистика); его же открывает иконка графика в шторке.</td></tr>
+    <tr><td><b>Settings</b></td><td>Повседневные настройки в трёх группах: Motion (Keep time, Motion LED), Temperature &amp; humidity (Report interval), Battery (Capacity, Low level). Редкие (Detect delay, поправки) — под «Show more». Числа меняются кнопками − / +, порог — слайдером; вводом с цифровой клавиатуры — только ёмкость.</td></tr>
+    <tr><td><b>Advanced</b></td><td>Свёрнутые разделы: Firmware (установка, сборка, резервная копия, откат, отмена), Bluetooth (сигнал, окна, Identify), Wi-Fi (сервисный режим, только когда он включён), Calibration (коэффициент напряжения, PIR stuck after), Diagnostics. Необратимые действия (откат, сброс Wi-Fi) просят подтверждения. Новая сущность интеграции без своего места попадает в Diagnostics.</td></tr>
+  </table>
+  <h3 style="margin-top:22px">Уведомления (Настройки › Ремонт)</h3>
+  <table>
+    <tr><th>Уведомление</th><th>Когда</th><th>Исчезает</th></tr>
+    <tr><td>Батарея садится</td><td>заряд не выше «Battery low level» (предупреждение)</td><td>само на пороге + 5 %</td></tr>
+    <tr><td>Датчик остановился, батарея села</td><td>нет данных дольше 3 интервалов климата (минимум 15 мин), последнее напряжение ≤ 3,55 В (ошибка)</td><td>когда датчик снова на связи</td></tr>
+    <tr><td>Датчик не выходит на связь</td><td>нет данных столько же, а батарея была в порядке — связь или питание (ошибка)</td><td>когда датчик снова на связи</td></tr>
+    <tr><td>Движение «залипло»</td><td>«занято» дольше «PIR stuck after» (предупреждение)</td><td>при «свободно»</td></tr>
+  </table>
+  <p>Каждое новое уведомление ещё и событие <code>move_sensor_ble_ota_issue</code> (<code>issue</code>, <code>name</code>, <code>address</code> и числа из текста) — повесьте на него автоматизацию с пушем на телефон.</p>
+  <p style="color:var(--muted);font-size:13px">Малополезные сущности при новой установке выключены: Signal в дБм (Signal level в % остаётся), BLE TX power, счётчики brownout и сбоев. Нужны — включите в настройках сущности.</p>
 </section>
 
 <!-- ПЕРЕНОС -->

@@ -172,6 +172,7 @@ def custom_parse(manufacturer_data: dict) -> dict:
 
 # v1.15: данные датчика, которые показывает основное устройство (из любого канала)
 DATA_KEYS = ("occupancy", "temperature", "humidity", "battery", "voltage")
+ISSUE_EMPTY_V = 3.55   # v1.20: молчит и последнее напряжение ниже этого — «батарея села», а не «пропал»
 WIFI_ECHO_S = 5.0   # сколько ждём эхо своей записи по Wi-Fi
 
 
@@ -1959,6 +1960,7 @@ class OtaManager:
             # applied -> idle через SETTINGS_APPLIED_SHOW_MIN: обновить сенсор
             self._last_sst = sst
             self._notify()
+        self._check_issues()
         stuck = self.pir_stuck
         if stuck != getattr(self, "_stuck_reported", None) or before != self.stats.get("date"):
             if stuck and not getattr(self, "_stuck_reported", False):
@@ -1966,6 +1968,68 @@ class OtaManager:
             self._stuck_reported = stuck
             self._save()
             self._notify()
+
+    # ================= Repairs (v1.20): батарея и пропажа датчика =================
+    ISSUES = ("battery_low", "battery_empty", "not_reporting", "pir_stuck")
+
+    def _issue(self, kind: str) -> str:
+        return f"{kind}_{self.entry.entry_id}"
+
+    def _set_issue(self, kind: str, on: bool, severity=None, **placeholders) -> None:
+        """Создать/обновить или убрать уведомление в «Ремонте». На новом — событие для автоматизаций."""
+        active = self.__dict__.get("_issues_on")
+        if active is None:
+            # после перезапуска: уже висящие уведомления считаем своими (без повторного события)
+            reg = ir.async_get(self.hass)
+            active = {k for k in self.ISSUES if reg.async_get_issue(DOMAIN, self._issue(k)) is not None}
+            self.__dict__["_issues_on"] = active
+        if not on:
+            if kind in active:
+                active.discard(kind)
+                ir.async_delete_issue(self.hass, DOMAIN, self._issue(kind))
+            return
+        ph = {"name": self.name} | {k: str(v) for k, v in placeholders.items()}
+        if kind not in active or self.__dict__.get(f"_issue_ph_{kind}") != ph:
+            ir.async_create_issue(
+                self.hass, DOMAIN, self._issue(kind), is_fixable=False,
+                is_persistent=kind in ("battery_empty", "not_reporting"),
+                severity=severity or ir.IssueSeverity.WARNING, translation_key=kind, translation_placeholders=ph,
+            )
+            self.__dict__[f"_issue_ph_{kind}"] = ph
+        if kind not in active:
+            active.add(kind)
+            self.hass.bus.async_fire(f"{DOMAIN}_issue", {"issue": kind, "name": self.name,
+                                                         "address": self.address, **ph})
+
+    def remove_issues(self) -> None:
+        for kind in self.ISSUES:
+            ir.async_delete_issue(self.hass, DOMAIN, self._issue(kind))
+        self.__dict__["_issues_on"] = set()
+
+    def _check_issues(self) -> None:
+        pct = self.data_value("battery")
+        volt = self.data_value("voltage")
+        low = self.value("battery_low")
+        low = float(low) if low is not None else 10.0
+        if pct is not None:
+            days = (self.battery_forecast() or {}).get("days_left")
+            if pct <= low:
+                self._set_issue("battery_low", True, pct=round(pct), level=round(low),
+                                days=f"{round(days)}" if days is not None else "?")
+            elif pct >= low + 5:
+                self._set_issue("battery_low", False)
+        silent = False
+        if self.last_seen is not None and not self.test_mode_on and self.status not in (ST_FLASHING, ST_CONNECTING):
+            ci = self.value("climate_interval") or 5
+            mins = (dt_util.utcnow() - self.last_seen).total_seconds() / 60
+            silent = mins > max(15.0, 3 * float(ci))
+        empty = silent and ((volt is not None and float(volt) <= ISSUE_EMPTY_V) or (pct is not None and pct <= 3))
+        when = dt_util.as_local(self.last_seen).strftime("%d.%m %H:%M") if self.last_seen else "?"
+        self._set_issue("battery_empty", empty, ir.IssueSeverity.ERROR, last=when,
+                        volt=f"{float(volt):.2f}" if volt is not None else "?")
+        self._set_issue("not_reporting", silent and not empty, ir.IssueSeverity.ERROR, last=when,
+                        pct=round(pct) if pct is not None else "?")
+        self._set_issue("pir_stuck", self.pir_stuck, minutes=self.stuck_threshold_min)
 
     def _check_missed_climate(self) -> None:
         """Нет пакета дольше 1,8 x Climate report interval (+1 мин) при «пусто» — климат-пакет потерян:

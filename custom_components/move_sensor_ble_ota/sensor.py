@@ -206,6 +206,7 @@ class LastSeenSensor(OtaEntity, SensorEntity):
     """Когда пришёл последний пакет BTHome (любое пробуждение: движение или климат).
     Норма — не реже Climate report interval; дольше двух интервалов — разряд, сбой или нет связи."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC   # v1.20
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-check-outline"
 
@@ -273,6 +274,7 @@ class SignalSensor(OtaEntity, SensorEntity):
     _attr_native_unit_of_measurement = "dBm"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False   # v1.20: сигнал в dBm — шумный, по умолчанию выключен (есть Signal level, %)
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "signal", "Signal")
@@ -312,6 +314,7 @@ class TxPowerSensor(OtaEntity, SensorEntity):
 
     _attr_native_unit_of_measurement = "dBm"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False   # v1.20: редко нужен — выключен по умолчанию
     _attr_icon = "mdi:antenna"
 
     def __init__(self, mgr) -> None:

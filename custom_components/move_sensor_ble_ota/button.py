@@ -77,7 +77,7 @@ class IdentifyButton(OtaEntity, ButtonEntity):
     Уходит по BLE в ближайшее пробуждение (движение перед датчиком будит его сразу)."""
 
     _attr_device_class = ButtonDeviceClass.IDENTIFY
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC   # v1.20: правило HA — Identify всегда «diagnostic»
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "identify", "Identify (BLE)")
