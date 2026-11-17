@@ -108,6 +108,9 @@ class BleOta : public Component {
   void set_climate_window(number::Number *n) { this->climate_window_ = n; }
   void set_temp_offset(number::Number *n) { this->temp_offset_ = n; }
   void set_hum_offset(number::Number *n) { this->hum_offset_ = n; }
+  // 1.6.0: батарея — команды 0x15 (прочитать) / 0x16 (записать), 6 байт ответа, влезает в любой MTU
+  void set_bat_capacity(number::Number *n) { this->bat_capacity_ = n; }
+  void set_bat_low(number::Number *n) { this->bat_low_ = n; }
 #endif
 
   // занят: есть подключение, идёт приём или ждём перезагрузку — спать нельзя
@@ -160,6 +163,8 @@ class BleOta : public Component {
   number::Number *climate_window_{nullptr};
   number::Number *temp_offset_{nullptr};
   number::Number *hum_offset_{nullptr};
+  number::Number *bat_capacity_{nullptr};
+  number::Number *bat_low_{nullptr};
 #endif
 
   BTHome *parent_{nullptr};

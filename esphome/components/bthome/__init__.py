@@ -57,6 +57,9 @@ OTA_SETTINGS = {
     # поправки SHT41 (2026-11-14): °C и %, со знаком
     "temp_offset": ("number", "set_temp_offset"),
     "hum_offset": ("number", "set_hum_offset"),
+    # 1.6.0: батарея (li_battery) — отдельная команда 0x15/0x16, старый пакет настроек не меняется
+    "bat_capacity": ("number", "set_bat_capacity"),
+    "bat_low": ("number", "set_bat_low"),
 }
 
 # Configuration constants

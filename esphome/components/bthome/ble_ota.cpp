@@ -45,6 +45,8 @@ enum : uint8_t {
   CMD_IDENTIFY = 0x14,
   CMD_GET_SETTINGS = 0x10,
   CMD_SET_SETTINGS = 0x11,
+  CMD_GET_BATTERY = 0x15,   // 1.6.0: ёмкость (мА·ч) и порог «низкого» заряда (%) для li_battery
+  CMD_SET_BATTERY = 0x16,
   RSP_ACK = 0x84,
 };
 
@@ -420,6 +422,12 @@ void BleOta::loop() {
   }
 }
 
+#ifdef BLE_OTA_SETTINGS
+// объявлены ниже (рядом с пакетом настроек); нужны и в команде батареи (1.6.0)
+static uint16_t num_u16(number::Number *n, float scale);
+static void num_set(number::Number *n, uint16_t raw, float scale, const char *what);
+#endif
+
 void BleOta::handle_command_() {
   const uint8_t *c = this->cmd_buf_;
   const uint16_t len = this->cmd_len_;
@@ -641,6 +649,42 @@ void BleOta::handle_command_() {
       this->reply_(r, 2);
       break;
     }
+#ifdef BLE_OTA_SETTINGS
+    // 1.6.0: настройки батареи отдельной командой — старый пакет настроек (17 байт + номер правки =
+    // 20 байт, ровно минимальный MTU) не трогаем. Запрос SET: [0x16, маска, ёмкость u16 LE, порог u8],
+    // маска: 0x01 ёмкость, 0x02 порог. Ответ GET/SET: [cmd|0x80, статус, ёмкость u16 LE, порог u8,
+    // номер правки] — 6 байт. Нет настройки -> 0xFFFF / 0xFF.
+    case CMD_GET_BATTERY:
+    case CMD_SET_BATTERY: {
+      r[0] = c[0] | 0x80;
+      if (this->state_ != ST_AUTHED) {
+        r[1] = this->state_ == ST_IDLE ? ST_NOT_AUTH : ST_STATE;
+        this->reply_(r, 2);
+        break;
+      }
+      r[1] = ST_OK;
+      if (c[0] == CMD_SET_BATTERY) {
+        if (len < 5) {
+          r[1] = ST_STATE;
+          this->reply_(r, 2);
+          break;
+        }
+        const uint8_t mask = c[1];
+        if (mask & 0x01)
+          num_set(this->bat_capacity_, (uint16_t) (c[2] | (c[3] << 8)), 1.0f, "battery capacity, mAh");
+        if ((mask & 0x02) && c[4] != 0xFF)
+          num_set(this->bat_low_, c[4], 1.0f, "battery low level, %");
+      }
+      const uint16_t cap = num_u16(this->bat_capacity_, 1.0f);
+      const uint16_t low = num_u16(this->bat_low_, 1.0f);
+      r[2] = cap & 0xFF;
+      r[3] = cap >> 8;
+      r[4] = low > 0xFE ? 0xFF : (uint8_t) low;
+      r[5] = this->rev_commit();
+      this->reply_(r, 6);
+      break;
+    }
+#endif
     case CMD_GET_SETTINGS:
     case CMD_SET_SETTINGS: {
       r[0] = c[0] | 0x80;

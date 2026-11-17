@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.5.0"
+  fw_version: "1.6.0"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -345,11 +345,14 @@ globals:
 li_battery:
   id: bat
   chemistry: lipo
-  capacity: 920
+  capacity: bat_capacity          # 1.6.0: настройка (мА·ч) — сайт / ESPHome и по BLE из HA
   restore: rtc
-  low: 10
-  critical: 3.50
+  low: bat_low_level              # 1.6.0: настройка (%), снимается на 5 % выше
+  critical: 3.50                  # защита банки — только в прошивке
   resume: 3.65
+  remaining:                      # 1.6.0: остаток, мА·ч (ёмкость × процент) — сервисный режим
+    name: "Battery remaining"
+    entity_category: diagnostic
 
 # ------------------------------------------------------------------ BTHome
 bthome:
@@ -375,6 +378,8 @@ bthome:
       climate_window: climate_window
       temp_offset: temp_offset
       hum_offset: hum_offset
+      bat_capacity: bat_capacity      # 1.6.0: команда 0x15/0x16, пакет рекламы BTHome не меняется
+      bat_low: bat_low_level
   trigger_based: true        # HA не помечает спящее устройство как unavailable
   # 2026-11-16 (v1.15.5): пакет в эфир ТОЛЬКО по send_state (id(bth).send_now). Раньше каждое
   # тихое пробуждение (фронт PIR, отправлять нечего) и каждое изменение значения уходили в эфир
@@ -733,6 +738,40 @@ number:
       - lambda: "if (ms::boot_done && ms::setting_changed(x, id(vbat_factor).state)) ms::rev_pending = true;"
     on_value:
       - lambda: "id(vbat).update();"
+
+  # 1.6.0: батарея — ёмкость и порог «низкого» заряда для li_battery. Меняются на сайте датчика /
+  # в ESPHome (сервисный режим) и из HA по BLE (интеграция, команда 0x16). Во флеше.
+  - platform: template
+    id: bat_capacity
+    name: "Battery capacity"
+    icon: mdi:battery-plus-variant
+    entity_category: config
+    unit_of_measurement: mAh
+    min_value: 100
+    max_value: 5000
+    step: 10
+    initial_value: 920
+    optimistic: true
+    restore_value: true
+    mode: box
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(bat_capacity).state)) ms::rev_pending = true;"
+
+  - platform: template
+    id: bat_low_level
+    name: "Battery low level"
+    icon: mdi:battery-low
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 5
+    max_value: 50
+    step: 1
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+    mode: box
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(bat_low_level).state)) ms::rev_pending = true;"
 
   - platform: template
     id: detect_delay
