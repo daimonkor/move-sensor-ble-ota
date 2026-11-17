@@ -151,6 +151,11 @@ class MoveSensorBlePanel extends HTMLElement {
     return el;
   }
 
+  _wide(el) {
+    el.classList.add("wide");
+    return el;
+  }
+
   _el(tag, attrs = {}, children = []) {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -342,7 +347,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const body = this._el("div", { class: "secgrid" });
       if (sec.id === "firmware") {
         const rows = (this._dev.firmware || []).map((r) => (typeof r === "string" ? { entity: r, name: "Firmware" } : r));
-        if (rows.length) body.appendChild(this._card({ type: "entities", entities: rows, state_color: true }));
+        if (rows.length) body.appendChild(this._wide(this._card({ type: "entities", entities: rows, state_color: true })));
       } else if (sec.id === "wifi") {
         this._wifiBody = body;
         this._fillWifi();
@@ -393,8 +398,8 @@ class MoveSensorBlePanel extends HTMLElement {
     body.innerHTML = "";
     const wifi = (this._dev && this._dev.wifi) || [];
     if (on && wifi.length) {
-      body.appendChild(this._card({ type: "entities",
-        entities: wifi.map((e) => ({ entity: e, name: this._name(e) })) }));
+      body.appendChild(this._wide(this._card({ type: "entities",
+        entities: wifi.map((e) => ({ entity: e, name: this._name(e) })) })));
     } else {
       body.appendChild(this._el("p", { class: "note", text: wifi.length
         ? "Wi-Fi is off and the sensor talks over Bluetooth. Turn on the Wi-Fi switch on the sensor (service mode) to change its network or update it faster."
@@ -570,7 +575,7 @@ const STYLE = `
                        background: var(--card-background-color); border-radius: var(--ha-card-border-radius, 12px); }
   ha-expansion-panel ha-icon[slot="leading-icon"] { color: var(--secondary-text-color); margin-inline-end: var(--ha-space-2, 8px); }
   .secgrid { padding: var(--ha-space-1, 4px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); display: grid; gap: var(--ha-space-2, 8px); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
-  .secgrid > hui-entities-card, .secgrid > *:only-child { grid-column: 1 / -1; }
+  .secgrid > .wide, .secgrid > p { grid-column: 1 / -1; }
   .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center;
            padding: var(--ha-space-6, 24px); box-sizing: border-box; animation: fade var(--ha-animation-base-duration, 350ms) ease-out; }
   .sheet { width: 100%; max-width: 560px; max-height: calc(100% - 48px); overflow: auto; background: var(--card-background-color);
