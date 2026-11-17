@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по повітрю та віддалені налаштування для батарейного датчика руху — по Bluetooth,
          через Bluetooth-проксі ESPHome. Датчик спить, Wi-Fi не потрібен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.20.1</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.21.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -421,6 +421,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <tr><td>Датчик не виходить на зв'язок</td><td>немає даних стільки ж, а батарея була в порядку — зв'язок або живлення (помилка)</td><td>коли датчик знову на зв'язку</td></tr>
     <tr><td>Рух «залип»</td><td>«зайнято» довше за «PIR stuck after» (попередження)</td><td>при «вільно»</td></tr>
   </table>
+  <p style="margin-top:10px">Скільки вважати «немає даних»: інтеграція → <b>Налаштувати</b> → <b>Параметри</b> → «Сообщать, если нет данных» (Notify when no data for): Авто (3 × інтервал клімату, щонайменше 15 хв) або 10 хв … 2 год. Не коротше за два інтервали клімату — сплячий датчик не дає хибних тривог. Якщо звіти клімату вимкнені (інтервал 0), без руху датчик може мовчати годинами — тоді сповіщення немає. Поки датчик мовчить, «рух залип» не повідомляється: «зайнято» — це просто його остання посилка.</p>
   <p>Кожне нове сповіщення — ще й подія <code>move_sensor_ble_ota_issue</code> (<code>issue</code>, <code>name</code>, <code>address</code> і числа з тексту) — повісьте на неї автоматизацію з пушем на телефон.</p>
   <p style="color:var(--muted);font-size:13px">Малокорисні сутності при новому встановленні вимкнені: Signal у дБм (Signal level у % лишається), BLE TX power, лічильники brownout і збоїв. Потрібні — увімкніть у налаштуваннях сутності.</p>
 </section>

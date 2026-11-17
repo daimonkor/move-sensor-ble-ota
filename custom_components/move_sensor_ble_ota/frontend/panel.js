@@ -435,15 +435,20 @@ class MoveSensorBlePanel extends HTMLElement {
       const d = days && !isNaN(parseFloat(days.state)) ? ` About ${Math.round(parseFloat(days.state))} days left.` : "";
       items.push({ icon: "mdi:battery-alert-variant-outline", text: `Battery is at ${Math.round(parseFloat(bat.state))} %. Charge it soon.${d}` });
     }
-    const stuck = this._st("pir_stuck");
-    if (stuck && stuck.state === "on") items.push({ icon: "mdi:motion-sensor-off", text: "Motion has been “detected” for too long. The motion sensor may be stuck." });
+    // same rule as the integration's Repairs notice (ota.py silent_limit_min)
     const seen = this._st("last_seen");
-    const ci = this._st("setting_climate_interval");
-    if (seen && seen.state && !isNaN(Date.parse(seen.state))) {
+    const ciSt = this._st("setting_climate_interval");
+    const ci = ciSt && !isNaN(parseFloat(ciSt.state)) ? parseFloat(ciSt.state) : 5;
+    const opt = (this._dev && this._dev.silent_after) || "auto";
+    const limit = ci <= 0 ? null : (/^\d+$/.test(opt) ? Math.max(parseFloat(opt), 2 * ci) : Math.max(15, 3 * ci));
+    let silent = false;
+    if (limit !== null && seen && seen.state && !isNaN(Date.parse(seen.state))) {
       const mins = (Date.now() - Date.parse(seen.state)) / 60000;
-      const limit = Math.max(15, 3 * (ci && !isNaN(parseFloat(ci.state)) ? parseFloat(ci.state) : 5));
-      if (mins > limit) items.push({ icon: "mdi:bluetooth-off", text: `No data from the sensor for ${Math.round(mins)} minutes. Check the battery and that a Bluetooth proxy is in range.` });
+      silent = mins > limit;
+      if (silent) items.push({ icon: "mdi:bluetooth-off", text: `No data from the sensor for ${Math.round(mins)} minutes. Check the battery and that a Bluetooth proxy is in range.` });
     }
+    const stuck = this._st("pir_stuck");
+    if (!silent && stuck && stuck.state === "on") items.push({ icon: "mdi:motion-sensor-off", text: "Motion has been “detected” for too long. The motion sensor may be stuck." });
     const fw = this._st("firmware");
     if (fw && fw.state === "on") {
       items.push({ icon: "mdi:package-up", text: `Firmware ${fw.attributes.latest_version || ""} is available.`.replace("  ", " "),

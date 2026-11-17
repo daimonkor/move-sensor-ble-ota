@@ -49,12 +49,14 @@
           "firmware_dir": "Firmware folder (.bin)",
           "keep_images": "Keep last firmware images (.bin), 1–10",
           "ota_password": "OTA password (Wi-Fi)",
-          "api_key": "API encryption key (ESPHome)"
+          "api_key": "API encryption key (ESPHome)",
+          "silent_after": "Notify when no data for"
         },
         "data_description": {
           "keep_images": "Older .bin files in the firmware folder are deleted after every build and upload. The image being flashed or waiting for a window is never deleted.",
           "ota_password": "For flashing over Wi-Fi in service mode (sensor firmware 1.4.0+). Stored in /config/esphome/secrets.yaml (move_sensor_ota_password). Empty — keep the current one, or generate a random one and save it if there is none. To view or change: ESPHome Builder → Secrets.",
-          "api_key": "32 bytes, base64. Encrypts the sensor–HA link in service mode; the integration puts it into the sensor's ESPHome device itself — no confirmation after flashing. Stored in secrets.yaml (move_sensor_api_key). Empty — keep the current one, or generate and save one if there is none."
+          "api_key": "32 bytes, base64. Encrypts the sensor–HA link in service mode; the integration puts it into the sensor's ESPHome device itself — no confirmation after flashing. Stored in secrets.yaml (move_sensor_api_key). Empty — keep the current one, or generate and save one if there is none.",
+          "silent_after": "«Sensor not reporting» in Repairs. Auto = 3 × the climate report interval, at least 15 min. Never shorter than two report intervals, so a sleeping sensor gives no false alarm. With climate reports off the sensor may stay quiet for hours without motion — no notification then."
         }
       }
     },
@@ -357,6 +359,18 @@
     "pir_stuck": {
       "title": "{name}: motion stuck on «detected»",
       "description": "**{name}** has reported motion without a break for more than {minutes} minutes. The motion sensor may be stuck, or something keeps moving in front of it (a curtain, a heater, a pet).\n\nThis notice goes away once the sensor reports «clear» again. The time limit is the «PIR stuck after» setting."
+    }
+  },
+  "selector": {
+    "silent_after": {
+      "options": {
+        "auto": "Auto (3 × report interval, ≥ 15 min)",
+        "10": "10 min",
+        "15": "15 min",
+        "30": "30 min",
+        "60": "1 hour",
+        "120": "2 hours"
+      }
     }
   }
 }

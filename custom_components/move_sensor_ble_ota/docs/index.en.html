@@ -186,7 +186,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.20.1</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.21.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -422,6 +422,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <tr><td>Sensor not reporting</td><td>no data for as long, the battery was fine — range or power (error)</td><td>when the sensor reports again</td></tr>
     <tr><td>Motion stuck</td><td>«detected» longer than «PIR stuck after» (warning)</td><td>at «clear»</td></tr>
   </table>
+  <p style="margin-top:10px">How long counts as «no data»: integration → <b>Configure</b> → <b>Options</b> → «Notify when no data for»: Auto (3 × report interval, at least 15 min) or 10 min … 2 h. It is never shorter than two report intervals, so a sleeping sensor gives no false alarm. With climate reports off (interval 0) the sensor may be quiet for hours without motion — no notification then. While the sensor is silent, «Motion stuck» is not reported: «detected» is just the last thing it sent.</p>
   <p>Every new notification also fires the event <code>move_sensor_ble_ota_issue</code> (<code>issue</code>, <code>name</code>, <code>address</code> and the numbers from the text) — use it in an automation to get a push on your phone.</p>
   <p style="color:var(--muted);font-size:13px">Less useful entities are off by default for new installs: Signal in dBm (Signal level in % stays), BLE TX power, brownout and crash counters. Turn them on in the entity settings if you need them.</p>
 </section>

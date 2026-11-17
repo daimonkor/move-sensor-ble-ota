@@ -104,6 +104,7 @@ def _config(hass: HomeAssistant) -> dict:
                 strip |= {n for n in (dev.name_by_user, dev.name) if n}
         devices.append({
             "title": mgr.name, "device_id": mgr.device_id, "entry_id": entry_id, "ids": ids,
+            "silent_after": str(mgr.entry.options.get("silent_after", "auto")),
             "firmware": _firmware_rows(ids.get("firmware"), entry_id),
             "wifi": wifi_ids, "configure": f"/config/integrations/integration/{DOMAIN}",
             "strip": sorted(strip, key=len, reverse=True),
@@ -136,7 +137,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.20.1",
+        module_url=f"{STATIC_URL}/panel.js?v=1.21.0",
         config=_config(hass),
         require_admin=False,
     )

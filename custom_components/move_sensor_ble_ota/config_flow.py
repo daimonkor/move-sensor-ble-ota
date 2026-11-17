@@ -37,6 +37,7 @@ from homeassistant.helpers.selector import (
 
 from . import secrets_store
 from .const import (CONF_ADDRESS, CONF_API_KEY, CONF_FIRMWARE_DIR, CONF_KEEP_IMAGES, CONF_KEY, CONF_OTA_PASSWORD,
+                    CONF_SILENT_AFTER, SILENT_AFTER_OPTIONS,
                     DEFAULT_FIRMWARE_DIR, DEFAULT_KEEP_IMAGES, DEFAULT_NAME, DOMAIN, device_id)
 
 
@@ -211,6 +212,7 @@ class MoveSensorBleOtaOptions(OptionsFlow):
                     CONF_KEY: (user_input.get(CONF_KEY) or "").strip(),
                     CONF_FIRMWARE_DIR: user_input.get(CONF_FIRMWARE_DIR) or DEFAULT_FIRMWARE_DIR,
                     CONF_KEEP_IMAGES: int(user_input.get(CONF_KEEP_IMAGES) or DEFAULT_KEEP_IMAGES),
+                    CONF_SILENT_AFTER: user_input.get(CONF_SILENT_AFTER) or "auto",
                 }
             )
         cur = {**self.config_entry.data, **self.config_entry.options}
@@ -222,6 +224,9 @@ class MoveSensorBleOtaOptions(OptionsFlow):
                 vol.Optional(CONF_FIRMWARE_DIR, default=cur.get(CONF_FIRMWARE_DIR, DEFAULT_FIRMWARE_DIR)): TextSelector(),
                 vol.Optional(CONF_KEEP_IMAGES, default=int(cur.get(CONF_KEEP_IMAGES, DEFAULT_KEEP_IMAGES))):
                     NumberSelector(NumberSelectorConfig(min=1, max=10, step=1, mode=NumberSelectorMode.BOX)),
+                vol.Optional(CONF_SILENT_AFTER, default=str(cur.get(CONF_SILENT_AFTER, "auto"))): SelectSelector(
+                    SelectSelectorConfig(options=SILENT_AFTER_OPTIONS, mode=SelectSelectorMode.DROPDOWN,
+                                         translation_key=CONF_SILENT_AFTER)),
                 **_secret_fields(),
             }
         )

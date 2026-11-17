@@ -35,6 +35,7 @@ from homeassistant.util import dt as dt_util
 from . import fwnotes
 from .const import (
     CMD_ABORT,
+    CONF_SILENT_AFTER,
     CMD_AUTH,
     CMD_BEGIN,
     CMD_END,
@@ -2006,6 +2007,19 @@ class OtaManager:
             ir.async_delete_issue(self.hass, DOMAIN, self._issue(kind))
         self.__dict__["_issues_on"] = set()
 
+    def silent_limit_min(self) -> float | None:
+        """Через сколько минут без данных датчик считается пропавшим. None — не следим
+        (климат выключен: без движения датчик молчит сколько угодно, это норма)."""
+        ci = self.value("climate_interval")
+        ci = 5.0 if ci is None else float(ci)
+        if ci <= 0:
+            return None
+        opt = str(self.entry.options.get(CONF_SILENT_AFTER, "auto"))
+        if not opt.isdigit():
+            return max(15.0, 3 * ci)
+        # не короче двух интервалов климата: между обычными посылками ложной тревоги не будет
+        return max(float(opt), 2 * ci)
+
     def _check_issues(self) -> None:
         pct = self.data_value("battery")
         volt = self.data_value("voltage")
@@ -2019,17 +2033,19 @@ class OtaManager:
             elif pct >= low + 5:
                 self._set_issue("battery_low", False)
         silent = False
-        if self.last_seen is not None and not self.test_mode_on and self.status not in (ST_FLASHING, ST_CONNECTING):
-            ci = self.value("climate_interval") or 5
+        limit = self.silent_limit_min()
+        if limit is not None and self.last_seen is not None and not self.test_mode_on \
+                and self.status not in (ST_FLASHING, ST_CONNECTING):
             mins = (dt_util.utcnow() - self.last_seen).total_seconds() / 60
-            silent = mins > max(15.0, 3 * float(ci))
+            silent = mins > limit
         empty = silent and ((volt is not None and float(volt) <= ISSUE_EMPTY_V) or (pct is not None and pct <= 3))
         when = dt_util.as_local(self.last_seen).strftime("%d.%m %H:%M") if self.last_seen else "?"
         self._set_issue("battery_empty", empty, ir.IssueSeverity.ERROR, last=when,
                         volt=f"{float(volt):.2f}" if volt is not None else "?")
         self._set_issue("not_reporting", silent and not empty, ir.IssueSeverity.ERROR, last=when,
                         pct=round(pct) if pct is not None else "?")
-        self._set_issue("pir_stuck", self.pir_stuck, minutes=self.stuck_threshold_min)
+        # молчит — «занято» осталось от последней посылки, это не залипание датчика
+        self._set_issue("pir_stuck", self.pir_stuck and not silent, minutes=self.stuck_threshold_min)
 
     def _check_missed_climate(self) -> None:
         """Нет пакета дольше 1,8 x Climate report interval (+1 мин) при «пусто» — климат-пакет потерян:

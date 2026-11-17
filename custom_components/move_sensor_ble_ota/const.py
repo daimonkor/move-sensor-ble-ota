@@ -14,6 +14,9 @@ CONF_KEEP_IMAGES = "keep_images"
 CONF_OTA_PASSWORD = "ota_password"
 CONF_API_KEY = "api_key"
 DEFAULT_KEEP_IMAGES = 3
+# v1.21: после скольких минут без данных — уведомление «не выходит на связь» (auto = 3 × интервал климата, ≥ 15 мин)
+CONF_SILENT_AFTER = "silent_after"
+SILENT_AFTER_OPTIONS = ["auto", "10", "15", "30", "60", "120"]
 # если ключ в настройках пустой — берём его отсюда (тот же, что в прошивке)
 SECRETS_PATH = "/config/esphome/secrets.yaml"
 SECRET_NAME = "move_sensor_ble_ota_key"
