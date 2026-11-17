@@ -260,7 +260,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const cfg = { type: "tile", entity: id, name: sh.title, tap_action: open, icon_tap_action: open,
                     hold_action: { action: "more-info" } };
       if (this._narrow) { cfg.vertical = true; cfg.content_layout = "vertical"; }
-      if (key === "motion") cfg.state_content = ["state", "last_changed"];
+      if (key === "motion") cfg.state_content = this._narrow ? "state" : ["state", "last_changed"];
       else cfg.features = [{ type: "trend-graph", hours_to_show: 24 }];
       const wrap = this._el("div", { class: "tilewrap" });
       wrap.appendChild(this._card(cfg));
