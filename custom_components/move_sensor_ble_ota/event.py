@@ -20,7 +20,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 class SettingsChangeEvent(OtaEntity, EventEntity):
     _attr_event_types = SETTINGS_EVENT_TYPES
-    _attr_icon = "mdi:cog-transfer"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "settings_change", "Settings change")

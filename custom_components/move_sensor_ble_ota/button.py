@@ -22,7 +22,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class FlashButton(OtaEntity, ButtonEntity):
-    _attr_icon = "mdi:bluetooth-transfer"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "ota_flash", "Flash firmware (BLE)")
@@ -37,7 +36,6 @@ class FlashButton(OtaEntity, ButtonEntity):
 class BuildFlashButton(OtaEntity, ButtonEntity):
     """Собрать YAML этого датчика (move-sensor-ble-<device id>.yaml) в аддоне ESPHome и сразу прошить по BLE."""
 
-    _attr_icon = "mdi:hammer-wrench"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "ota_build_flash", "Build & flash firmware (BLE)")
@@ -50,7 +48,6 @@ class BuildFlashButton(OtaEntity, ButtonEntity):
 
 
 class CancelButton(OtaEntity, ButtonEntity):
-    _attr_icon = "mdi:cancel"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "ota_cancel", "Cancel OTA")
@@ -63,7 +60,6 @@ class ReadSettingsButton(OtaEntity, ButtonEntity):
     """Прочитать фактические настройки с датчика в ближайшее окно."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:cog-refresh"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "settings_read", "Read settings (BLE)")
@@ -95,7 +91,6 @@ class ResetWifiButton(OtaEntity, ButtonEntity):
     Датчик ставит флаг и мигает LED 6 раз; сеть меняется при входе в сервисный режим (или сразу, если он включён)."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:wifi-refresh"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "wifi_reset", "Reset Wi-Fi to default (BLE)")

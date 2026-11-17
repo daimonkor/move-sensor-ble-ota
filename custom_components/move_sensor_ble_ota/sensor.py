@@ -47,7 +47,6 @@ class DeviceIdSensor(OtaEntity, SensorEntity):
     SSID точки доступа (MoveSensorBLE-148F98) и на сайте датчика. Различать несколько датчиков (2026-11-15)."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:identifier"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "device_id", "Device ID")
@@ -66,7 +65,6 @@ class OtaStatusSensor(OtaEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC  # сервисное — в «Диагностику»
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [ST_IDLE, ST_BUILDING, ST_WAITING, ST_CONNECTING, ST_FLASHING, ST_SUCCESS, ST_ERROR, ST_CANCELLED]
-    _attr_icon = "mdi:bluetooth-transfer"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "ota_status", "OTA status")
@@ -84,7 +82,6 @@ class OtaProgressSensor(OtaEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC  # сервисное — в «Диагностику»
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:progress-upload"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "ota_progress", "OTA progress")
@@ -101,7 +98,6 @@ class SettingsStatusSensor(OtaEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [SST_IDLE, SST_PENDING, SST_UNKNOWN, SST_ERROR]
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:cog-sync"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "settings_status", "Settings status")
@@ -119,7 +115,6 @@ class FirmwareVersionSensor(OtaEntity, SensorEntity):
     """Версия сборки на датчике (как «Build Version»), прочитанная по BLE при последнем подключении."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:wrench"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "firmware_version", "Firmware version (BLE)")
@@ -150,7 +145,6 @@ class BrownoutCountSensor(OtaEntity, SensorEntity):
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:flash-alert"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "brownout_count", "Brownout count")
@@ -170,7 +164,6 @@ class CrashCountSensor(OtaEntity, SensorEntity):
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:alert-octagon-outline"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "crash_count", "Crash count")
@@ -188,7 +181,6 @@ class LastResetReasonSensor(OtaEntity, SensorEntity):
     """Причина последней загрузки «не из сна» (power on, brownout, panic, watchdog, software...)."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:restart-alert"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "last_reset_reason", "Last reset reason")
@@ -208,7 +200,6 @@ class LastSeenSensor(OtaEntity, SensorEntity):
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC   # v1.20
     _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_icon = "mdi:clock-check-outline"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "last_seen", "Last seen")
@@ -252,7 +243,6 @@ class LinkSensor(OtaEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["ble", "wifi"]
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:transit-connection-variant"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "link", "Link")
@@ -295,7 +285,6 @@ class SignalPercentSensor(OtaEntity, SensorEntity):
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:signal"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "signal_level", "Signal level")
@@ -315,7 +304,6 @@ class TxPowerSensor(OtaEntity, SensorEntity):
     _attr_native_unit_of_measurement = "dBm"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False   # v1.20: редко нужен — выключен по умолчанию
-    _attr_icon = "mdi:antenna"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "tx_power", "BLE TX power")
@@ -335,7 +323,6 @@ class OtaKeySensor(OtaEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["accepted", "rejected", "missing", "unknown"]
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:key-variant"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "ota_key", "OTA key")
@@ -356,7 +343,6 @@ class LastMotionSensor(OtaEntity, SensorEntity):
     Старая прошивка (без своего блока): время последнего перехода в «занято»."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_icon = "mdi:motion-sensor"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "last_motion", "Last motion")
@@ -375,7 +361,6 @@ class BatteryDaysLeftSensor(OtaEntity, SensorEntity):
 
     _attr_native_unit_of_measurement = "d"
     _attr_device_class = SensorDeviceClass.DURATION
-    _attr_icon = "mdi:battery-clock-outline"
     _attr_suggested_display_precision = 0
 
     def __init__(self, mgr) -> None:
@@ -398,7 +383,6 @@ class BatteryRemainingSensor(OtaEntity, SensorEntity):
 
     _attr_native_unit_of_measurement = "mAh"
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:battery-heart-variant"
     _attr_suggested_display_precision = 0
 
     def __init__(self, mgr) -> None:
@@ -423,7 +407,6 @@ class MotionEventsTodaySensor(OtaEntity, SensorEntity):
     _attr_entity_registry_enabled_default = False   # v1.15: техническая, выключена по умолчанию
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:motion-sensor"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "motion_events_today", "Motion events today")
@@ -444,7 +427,6 @@ class WakesTodaySensor(OtaEntity, SensorEntity):
     """Пробуждения за сегодня: всего (по Wake count), с отправкой пакета и тихие (без радио)."""
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:sleep-off"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "wakes_today", "Wakes today")

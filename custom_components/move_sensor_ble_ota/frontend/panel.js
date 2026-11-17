@@ -49,6 +49,8 @@ const CONTROL = {
   setting_battery_low: "slider",
   setting_battery_capacity: "box",
 };
+const SHORT = { battery_days_left: "Days left", battery_remaining: "Remaining", voltage: "Voltage",
+                last_motion: "Last motion", pir_stuck: "PIR stuck" };
 const DANGER = { wifi_reset: "Reset Wi-Fi on the sensor to the network built into its firmware?" };
 const LAYOUT_KEYS = new Set([
   ...Object.values(SHEETS).flatMap((s) => [s.entity, ...s.info, ...s.settings]),
@@ -106,8 +108,10 @@ class MoveSensorBlePanel extends HTMLElement {
   }
 
   set narrow(v) {
+    const changed = !!v !== !!this._narrow;
     this._narrow = v;
     if (this._menu) this._menu.narrow = v;
+    if (changed && this._hass && this._config && !this._sheet) this._render();   // phone layout of the tiles
   }
 
   _tabFromHash() {
@@ -241,8 +245,9 @@ class MoveSensorBlePanel extends HTMLElement {
     const badges = ["link", "signal_level", "last_seen", "settings_status"]
       .map((k) => this._id(k)).filter(Boolean)
       .map((e) => ({ type: "entity", entity: e, show_name: true, show_state: true, show_icon: true, name: this._name(e) }));
-    main.appendChild(this._card({ type: "heading", heading: this._dev.title, heading_style: "title",
-                                  icon: "mdi:motion-sensor", badges }));
+    // on a phone the name is already in the toolbar — keep the row for the badges
+    main.appendChild(this._card(this._narrow ? { type: "heading", heading: "", badges }
+      : { type: "heading", heading: this._dev.title, heading_style: "title", icon: "mdi:motion-sensor", badges }));
     this._attention = this._el("div", { class: "attention", role: "status" });
     main.appendChild(this._attention);
 
@@ -253,7 +258,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const open = { action: "fire-dom-event", msb_sheet: key };
       const cfg = { type: "tile", entity: id, name: sh.title, tap_action: open, icon_tap_action: open,
                     hold_action: { action: "more-info" } };
-      if (this._narrow) cfg.content_layout = "vertical";
+      if (this._narrow) { cfg.vertical = true; cfg.content_layout = "vertical"; }
       if (key === "motion") cfg.state_content = ["state", "last_changed"];
       else cfg.features = [{ type: "trend-graph", hours_to_show: 24 }];
       const wrap = this._el("div", { class: "tilewrap" });
@@ -479,7 +484,7 @@ class MoveSensorBlePanel extends HTMLElement {
     body.appendChild(this._card({ type: "history-graph", hours_to_show: 24, entities: [{ entity: id, name: sh.title }] }));
     const info = sh.info.map((k) => this._id(k)).filter(Boolean);
     if (info.length) body.appendChild(this._card({ type: "glance", show_name: true, show_state: true,
-      entities: info.map((e) => ({ entity: e, name: this._name(e) })) }));
+      entities: sh.info.filter((k) => this._id(k)).map((k) => ({ entity: this._id(k), name: SHORT[k] || this._name(this._id(k)) })) }));
     body.appendChild(this._el("h3", { text: "Settings" }));
     for (const k of sh.settings) { const c = this._settingCard(k); if (c) body.appendChild(this._card(c)); }
     this._sheetBody = body;

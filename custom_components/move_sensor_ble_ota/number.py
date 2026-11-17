@@ -32,7 +32,6 @@ class SettingNumber(OtaEntity, NumberEntity):
         self._attr_native_max_value = vmax
         self._attr_native_step = step
         self._attr_native_unit_of_measurement = unit
-        self._attr_icon = icon
 
     @property
     def native_value(self):
@@ -79,7 +78,6 @@ class StuckThresholdNumber(OtaEntity, NumberEntity):
     _attr_native_max_value = 240
     _attr_native_step = 5
     _attr_native_unit_of_measurement = "min"
-    _attr_icon = "mdi:timer-alert-outline"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "pir_stuck_threshold", "PIR stuck after")

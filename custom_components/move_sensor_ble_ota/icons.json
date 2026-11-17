@@ -1,0 +1,130 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "pir_stuck": {
+        "default": "mdi:motion-sensor-off"
+      }
+    },
+    "button": {
+      "ota_flash": {
+        "default": "mdi:bluetooth-transfer"
+      },
+      "ota_build_flash": {
+        "default": "mdi:hammer-wrench"
+      },
+      "ota_cancel": {
+        "default": "mdi:cancel"
+      },
+      "settings_read": {
+        "default": "mdi:cog-refresh"
+      },
+      "wifi_reset": {
+        "default": "mdi:wifi-refresh"
+      }
+    },
+    "event": {
+      "settings_change": {
+        "default": "mdi:cog-transfer"
+      }
+    },
+    "number": {
+      "pir_stuck_threshold": {
+        "default": "mdi:timer-alert-outline"
+      },
+      "setting_detect_delay": {
+        "default": "mdi:timer-sand"
+      },
+      "setting_keep_time": {
+        "default": "mdi:timer-outline"
+      },
+      "setting_climate_interval": {
+        "default": "mdi:thermometer-auto"
+      },
+      "setting_voltage_factor": {
+        "default": "mdi:division"
+      },
+      "setting_motion_window": {
+        "default": "mdi:broadcast"
+      },
+      "setting_climate_window": {
+        "default": "mdi:access-point"
+      },
+      "setting_temp_offset": {
+        "default": "mdi:thermometer-plus"
+      },
+      "setting_hum_offset": {
+        "default": "mdi:water-plus"
+      },
+      "setting_battery_capacity": {
+        "default": "mdi:battery-plus-variant"
+      },
+      "setting_battery_low": {
+        "default": "mdi:battery-low"
+      }
+    },
+    "sensor": {
+      "device_id": {
+        "default": "mdi:identifier"
+      },
+      "ota_status": {
+        "default": "mdi:bluetooth-transfer"
+      },
+      "ota_progress": {
+        "default": "mdi:progress-upload"
+      },
+      "settings_status": {
+        "default": "mdi:cog-sync"
+      },
+      "firmware_version": {
+        "default": "mdi:wrench"
+      },
+      "brownout_count": {
+        "default": "mdi:flash-alert"
+      },
+      "crash_count": {
+        "default": "mdi:alert-octagon-outline"
+      },
+      "last_reset_reason": {
+        "default": "mdi:restart-alert"
+      },
+      "last_seen": {
+        "default": "mdi:clock-check-outline"
+      },
+      "link": {
+        "default": "mdi:transit-connection-variant"
+      },
+      "signal_level": {
+        "default": "mdi:signal"
+      },
+      "tx_power": {
+        "default": "mdi:antenna"
+      },
+      "ota_key": {
+        "default": "mdi:key-variant"
+      },
+      "last_motion": {
+        "default": "mdi:motion-sensor"
+      },
+      "battery_days_left": {
+        "default": "mdi:battery-clock-outline"
+      },
+      "battery_remaining": {
+        "default": "mdi:battery-heart-variant"
+      },
+      "motion_events_today": {
+        "default": "mdi:motion-sensor"
+      },
+      "wakes_today": {
+        "default": "mdi:sleep-off"
+      }
+    },
+    "switch": {
+      "auto_window": {
+        "default": "mdi:signal-variant"
+      },
+      "setting_led": {
+        "default": "mdi:led-on"
+      }
+    }
+  }
+}

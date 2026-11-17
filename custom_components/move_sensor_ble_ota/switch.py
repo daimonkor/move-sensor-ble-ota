@@ -23,7 +23,6 @@ class LedSwitch(OtaEntity, SwitchEntity):
     def __init__(self, mgr) -> None:
         name, *_rest, icon = SETTINGS["led"]
         super().__init__(mgr, "setting_led", f"{name} (BLE)")
-        self._attr_icon = icon
 
     @property
     def is_on(self) -> bool | None:
@@ -48,7 +47,6 @@ class AutoWindowSwitch(OtaEntity, SwitchEntity):
     Ручное изменение окна выключает авто. Настройка интеграции; на датчик уходят сами окна."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:signal-variant"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "auto_window", "Auto advertising window")

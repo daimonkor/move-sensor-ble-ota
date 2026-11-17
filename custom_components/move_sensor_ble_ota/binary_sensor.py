@@ -43,7 +43,6 @@ class PirStuckSensor(OtaEntity, BinarySensorEntity):
     тепло/солнце/сквозняк в поле линзы, просадка питания SR602, влага."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_icon = "mdi:motion-sensor-off"
 
     def __init__(self, mgr) -> None:
         super().__init__(mgr, "pir_stuck", "PIR stuck")
