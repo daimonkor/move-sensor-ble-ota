@@ -29,7 +29,8 @@ DATA_MAP = {
     "sensor/Humidity": "humidity",
     "sensor/Battery": "battery",
     "sensor/Voltage": "voltage",
-    "sensor/WiFi RSSI": "wifi_rssi",
+    "sensor/WiFi RSSI": "wifi_rssi",     # прошивка до 1.6.1
+    "sensor/Wi-Fi RSSI": "wifi_rssi",    # прошивка 1.6.1+: имена по правилам HA
     "sensor/Settings revision": "settings_rev",
 }
 SETTING_MAP = {
@@ -47,12 +48,16 @@ SETTING_MAP = {
 }
 # остаются на виду в ESPHome-устройстве (Wi-Fi и сервисный режим); остальное — копии, скрываются
 ESPHOME_VISIBLE = {
-    "text_sensor/Wi-Fi SSID", "text_sensor/WiFi IP", "sensor/WiFi Signal", "text_sensor/Wi-Fi Scan Results",
-    "text_sensor/AP password", "text_sensor/AP password status",
+    "text_sensor/Wi-Fi SSID", "text_sensor/AP password", "text_sensor/AP password status",
     "button/Reconnect to router", "button/Scan Wi-Fi networks", "button/Save AP password",
     "button/Reset Wi-Fi to firmware defaults",
-    "text_info/New Wi-Fi SSID", "text_info/New Wi-Fi Password", "text_info/New AP Password",
-    "text/New Wi-Fi SSID", "text/New Wi-Fi Password", "text/New AP Password",
+    "text_info/New Wi-Fi SSID", "text/New Wi-Fi SSID",
+    # прошивка до 1.6.1
+    "text_sensor/WiFi IP", "sensor/WiFi Signal", "text_sensor/Wi-Fi Scan Results",
+    "text_info/New Wi-Fi Password", "text_info/New AP Password", "text/New Wi-Fi Password", "text/New AP Password",
+    # прошивка 1.6.1+: те же сущности, имена по правилам HA (Wi-Fi, заглавная только в начале)
+    "text_sensor/Wi-Fi IP", "sensor/Wi-Fi signal", "text_sensor/Wi-Fi scan results",
+    "text_info/New Wi-Fi password", "text_info/New AP password", "text/New Wi-Fi password", "text/New AP password",
 }
 
 
