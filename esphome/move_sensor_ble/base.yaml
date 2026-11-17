@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.4.1"
+  fw_version: "1.4.2"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -1212,7 +1212,7 @@ script:
   - id: send_state
     parameters:
       state: bool
-      led: bool     # мигать светодиодом (только на реальные события: занято / освободилось)
+      led: bool     # реальное событие (занято / освободилось): длинное окно рекламы; мигаем только на «занято»
     then:
       - lambda: |-
           // батарею в рабочем режиме меряем только на старте (до радио, on_boot 550):
@@ -1231,7 +1231,9 @@ script:
           id(occupancy).publish_state(state);
           id(tx_pending) = true;
           if (led) id(tx_motion) = true;   // led = реальное событие (занято / освободилось)
-          if (led) id(blink).execute(state ? 1 : 2);
+          // 1.4.2: мигаем только на «занято» (новое движение); на «освободилось» — нет,
+          // как у серийных датчиков (Shelly BLU Motion, Aqara P1, Hue)
+          if (led && state) id(blink).execute(1);
           // 2026-11-16: собрать пакет через 80 мс — SHT41 (~10 мс) и остальные значения уже в нём
           id(bth).send_now(80);
 
