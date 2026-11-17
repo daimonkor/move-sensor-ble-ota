@@ -197,6 +197,21 @@ class MoveSensorBlePanel extends HTMLElement {
     return { type: "tile", entity: id, name, tap_action: { action: "more-info" } };
   }
 
+  // trend graph to the card edges: the tile keeps a 12 px padding around its features and has no
+  // CSS variable for it, so add one rule inside the tile itself (only for tiles with a graph)
+  _edgeToEdge(card) {
+    const apply = (tries = 0) => {
+      const sr = card.shadowRoot;
+      if (!sr || !sr.querySelector("hui-card-features")) { if (tries < 50) setTimeout(() => apply(tries + 1), 100); return; }
+      if (sr.querySelector("style[data-msb-edge]")) return;
+      const st = document.createElement("style");
+      st.setAttribute("data-msb-edge", "");
+      st.textContent = "hui-card-features { padding: 0 !important; } ha-card { overflow: hidden; }";
+      sr.appendChild(st);
+    };
+    Promise.resolve(card.updateComplete).then(() => apply());
+  }
+
   // ---------- render ----------
   async _render() {
     if (this._rendering) { this._again = true; return; }
@@ -263,7 +278,9 @@ class MoveSensorBlePanel extends HTMLElement {
       if (key === "motion") cfg.state_content = this._narrow ? "state" : ["state", "last_changed"];
       else cfg.features = [{ type: "trend-graph", hours_to_show: 24 }];
       const wrap = this._el("div", { class: "tilewrap" });
-      wrap.appendChild(this._card(cfg));
+      const tile = this._card(cfg);
+      if (cfg.features) this._edgeToEdge(tile);
+      wrap.appendChild(tile);
       wrap.appendChild(this._el("button", {
         class: "cog", "aria-label": `${sh.title}: history and settings`, title: "History and settings",
         onclick: () => this._openSheet(key),
@@ -545,10 +562,11 @@ const STYLE = `
   .sync { color: var(--secondary-text-color); }
   .sync.waiting { color: var(--info-color, var(--primary-color)); }
   .sync.error { color: var(--error-color); }
-  ha-expansion-panel { --expansion-panel-summary-padding: 0 var(--ha-space-4, 16px); --expansion-panel-content-padding: 0 var(--ha-space-4, 16px) var(--ha-space-4, 16px);
+  /* content padding lives on our grid: on the panel itself it stays visible (an empty 16 px strip) while collapsed */
+  ha-expansion-panel { --expansion-panel-summary-padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); --expansion-panel-content-padding: 0;
                        background: var(--card-background-color); border-radius: var(--ha-card-border-radius, 12px); }
   ha-expansion-panel ha-icon[slot="leading-icon"] { color: var(--secondary-text-color); margin-inline-end: var(--ha-space-2, 8px); }
-  .secgrid { display: grid; gap: var(--ha-space-2, 8px); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
+  .secgrid { padding: var(--ha-space-1, 4px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); display: grid; gap: var(--ha-space-2, 8px); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
   .secgrid > hui-entities-card, .secgrid > *:only-child { grid-column: 1 / -1; }
   .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center;
            padding: var(--ha-space-6, 24px); box-sizing: border-box; animation: fade var(--ha-animation-base-duration, 350ms) ease-out; }
