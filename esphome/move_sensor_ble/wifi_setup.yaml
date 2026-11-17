@@ -12,7 +12,7 @@
 # Жёсткий (заводской) сброс без отката — 3 включения сервисного переключателя за 10 с
 # (move_sensor_ble/base.yaml, service_enter -> factory_reset_net): сеть из прошивки + заводской пароль точки.
 #
-# Пароль своей точки доступа (2026-11-15): «New AP Password» -> «Save AP password» (8–63 символа ASCII).
+# Пароль своей точки доступа (2026-11-15): «New AP password» -> «Save AP password» (8–63 символа ASCII).
 # Хранится во флеше (globals ap_password_custom); датчик перезагружается (~5 с) и поднимает точку с новым паролем.
 
 # Для окна «Wi-Fi роутера»: текущая сеть (пусто — нет связи) и список найденных сетей
@@ -26,12 +26,12 @@ text_sensor:
       entity_category: diagnostic
     scan_results:
       id: wifi_scan_results
-      name: "Wi-Fi Scan Results"
+      name: "Wi-Fi scan results"
       icon: "mdi:wifi-marker"
       entity_category: diagnostic
     ip_address:
       id: wifi_ip
-      name: "WiFi IP"
+      name: "Wi-Fi IP"
       icon: "mdi:ip-network"
       entity_category: diagnostic
   # какой пароль у своей точки сейчас: default (заводской, на наклейке) / custom (задан с сайта)
@@ -74,7 +74,7 @@ text:
     icon: "mdi:wifi-plus"
 
   - platform: template
-    name: "New Wi-Fi Password"
+    name: "New Wi-Fi password"
     id: new_wifi_password
     mode: password
     max_length: 64
@@ -93,7 +93,7 @@ text:
             - script.execute: wifi_password_autoclear
 
   - platform: template
-    name: "New AP Password"
+    name: "New AP password"
     id: new_ap_password
     mode: password
     max_length: 63
@@ -241,7 +241,7 @@ button:
                   title: "${friendly_name}: пароль точки НЕ изменён"
                   message: !lambda |-
                     if (id(new_ap_pw).empty())
-                      return std::string("Поле «New AP Password» пустое — сначала введите новый пароль, потом нажмите «Save AP password».");
+                      return std::string("Поле «New AP password» пустое — сначала введите новый пароль, потом нажмите «Save AP password».");
                     return std::string("Пароль не принят: нужно 8–63 латинских символа (буквы, цифры, знаки, без кириллицы). Старый пароль остался.");
             - text.set: {id: new_ap_password, value: ""}
 

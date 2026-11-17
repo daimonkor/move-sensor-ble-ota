@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.6.0"
+  fw_version: "1.6.1"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -611,14 +611,14 @@ sensor:
   # ---- уровень сигнала: Wi-Fi (работает только в сервисном режиме)
   - platform: wifi_signal
     id: wifi_rssi
-    name: "WiFi RSSI"
+    name: "Wi-Fi RSSI"
     icon: mdi:wifi-strength-3
     update_interval: 10s
     entity_category: diagnostic
 
   - platform: copy
     source_id: wifi_rssi
-    name: "WiFi Signal"
+    name: "Wi-Fi signal"
     icon: mdi:wifi
     unit_of_measurement: "%"
     device_class: ""

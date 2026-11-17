@@ -278,7 +278,7 @@ inline void configure_dhcp(esp_netif_t *ap, esp_netif_ip_info_t info) {
 // связь (так было на кнопке «Найти сети»). Здесь — фоновый скан ESP-IDF: между каналами радио
 // возвращается на свой (coex_background_scan, как у роуминг-скана ESPHome), ассоциация остаётся.
 // Результаты всё равно забирает обработчик WIFI_EVENT_SCAN_DONE ESPHome и раздаёт слушателям —
-// wifi_info scan_results («Wi-Fi Scan Results») обновляется сам. Состояние wifi ESPHome не трогаем.
+// wifi_info scan_results («Wi-Fi scan results») обновляется сам. Состояние wifi ESPHome не трогаем.
 // Не подключены к роутеру — ESPHome и так сканирует в цикле подключения, тогда штатный скан.
 inline void scan_networks() {
   auto *w = esphome::wifi::global_wifi_component;
