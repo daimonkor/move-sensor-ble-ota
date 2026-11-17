@@ -21,7 +21,7 @@ from homeassistant.util import dt as dt_util
 from . import fwnotes
 from .const import DOMAIN, ST_FLASHING
 from .entity import OtaEntity
-from .ota import OtaError
+from .ota import OtaError, ota_status_text
 
 CHANGELOG_URL = "https://github.com/daimonkor/move-sensor-ble-ota/blob/main/esphome/move_sensor_ble/CHANGELOG.md"
 
@@ -94,9 +94,14 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
         imgs = self.mgr.fw_images
         stored = (f"{imgs[0]} · {imgs[1] / 1048576:.1f} MB (keep {self.mgr.keep_images})" if imgs else None)
         b = self.mgr.backups[0] if self.mgr.backups else None
-        return {"last_flash": self.mgr.last_flash_summary, "last_flash_channel": lf.get("channel"),
+        return {"ota_status": ota_status_text(self.mgr.status, self.mgr.progress, self.mgr.error,
+                                              self.mgr.last_build),   # v1.18.1
+                "last_flash": self.mgr.last_flash_summary, "last_flash_channel": lf.get("channel"),
                 "last_flash_result": lf.get("result"), "stored_images": stored,
-                "backup": (f"{b.get('fw_version') or '?'} · {b.get('firmware_version')}" if b else None),
+                # v1.18.1: «1.4.1 · build 17.11 00:49» (раньше версия повторялась: «1.4.1 · 1.4.1 v2026…»)
+                "backup": (" · ".join(x for x in (b.get("fw_version"),
+                                                  self.mgr.build_label(b.get("firmware_version"))
+                                                  or b.get("firmware_version")) if x) if b else None),
                 "backups": len(self.mgr.backups)}
 
     async def async_release_notes(self) -> str | None:

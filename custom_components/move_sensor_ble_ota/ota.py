@@ -214,6 +214,36 @@ def config_tree_mtime(esphome_dir: str, device_yaml: str) -> float:
     return m
 
 
+def ota_status_text(status: str | None, progress: int = 0, error: str | None = None,
+                    last_build: dict | None = None) -> str:
+    """v1.18.1: этап сборки/прошивки одной строкой для панели (имена сущностей и статусы — по-английски).
+    В покое — итог последней сборки («Idle · built 12:06 · 1.2 MB»): сборка из кэша идёт секунды,
+    и без этого кнопку «Build» не видно по панели."""
+    if status == ST_BUILDING:
+        return f"Building {progress} %"
+    if status == ST_WAITING:
+        return "Waiting for sensor wake (motion wakes it)"
+    if status == ST_CONNECTING:
+        return "Connecting"
+    if status == ST_FLASHING:
+        return f"Flashing {progress} %"
+    if status == ST_SUCCESS:
+        return "Success"
+    if status == ST_CANCELLED:
+        return "Cancelled"
+    if status == ST_ERROR:
+        return f"Error: {error}"[:200] if error else "Error"
+    lb = last_build or {}
+    if lb.get("built"):
+        try:
+            t = dt_util.as_local(dt_util.parse_datetime(lb["built"])).strftime("%H:%M")
+        except (TypeError, ValueError, AttributeError):
+            return "Idle"
+        size = f" · {lb['size'] / 1048576:.1f} MB" if lb.get("size") else ""
+        return f"Idle · built {t}{size}"
+    return "Idle"
+
+
 def fw_semver(version: str | None) -> str | None:
     """v1.17.0: версия прошивки из строки INFO датчика («1.4.0 v2026…» -> «1.4.0»); старые — None."""
     import re  # noqa: PLC0415
@@ -2236,11 +2266,14 @@ class OtaManager:
             ver = info[2:].decode(errors="replace")
             if self._ota is not None and self.status != ST_FLASHING:
                 self.device_version = ver  # «было» для этой прошивки
+            ver_changed = ver != self.firmware_version
             self.firmware_version = ver
             self.firmware_seen = dt_util.now()
             self._save()
             self._notify()
-            if self.flashed_hash is None:   # первый запуск: теперь можно сравнить YAML со сборкой
+            # первый запуск — теперь можно сравнить YAML со сборкой; v1.18.1: датчик сообщил другую версию
+            # (новая прошивка встала) — сразу пересчитать «Firmware», а не через 5 мин по таймеру
+            if self.flashed_hash is None or ver_changed:
                 self.hass.async_create_task(self.async_refresh_config_hash())
             # после успешной прошивки датчик перезагрузился и ответил — итог подтверждён:
             # сразу idle / 0 % (не ждать RESULT_HOLD_S); итог остаётся в атрибуте last_result
