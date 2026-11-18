@@ -222,6 +222,21 @@ class MoveSensorBlePanel extends HTMLElement {
     Promise.resolve(card.updateComplete).then(() => apply());
   }
 
+  // ha-expansion-panel tints its header on any focus (.top.focused), so after a mouse click the header
+  // stays highlighted; keep the tint for keyboard focus only. Adopted sheets win ties, so the selector is stronger
+  _noClickTint(panel) {
+    const apply = (tries = 0) => {
+      const sr = panel.shadowRoot;
+      if (!sr || !sr.querySelector(".top")) { if (tries < 50) setTimeout(() => apply(tries + 1), 100); return; }
+      if (sr.querySelector("style[data-msb-tint]")) return;
+      const st = document.createElement("style");
+      st.setAttribute("data-msb-tint", "");
+      st.textContent = ":host div.top.focused { background: none; } :host div.top.focused:has(#summary:focus-visible) { background: var(--input-fill-color); }";
+      sr.appendChild(st);
+    };
+    Promise.resolve(panel.updateComplete).then(() => apply());
+  }
+
   // ---------- render ----------
   async _render() {
     if (this._rendering) { this._again = true; return; }
@@ -363,6 +378,7 @@ class MoveSensorBlePanel extends HTMLElement {
         }
       }
       panel.appendChild(body);
+      this._noClickTint(panel);
       this._secPanels = this._secPanels || {};
       this._secPanels[sec.id] = panel;
       main.appendChild(panel);
@@ -583,6 +599,8 @@ const STYLE = `
   ha-expansion-panel ha-icon[slot="leading-icon"] { color: var(--secondary-text-color); margin-inline-end: var(--ha-space-2, 8px); }
   .secgrid { padding: var(--ha-space-1, 4px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); display: grid; gap: var(--ha-space-2, 8px); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
   .secgrid > .wide, .secgrid > p { grid-column: 1 / -1; }
+  /* a note in a section lines up with the section title (icon 24 px + its 8 px gap), not with the icon */
+  .secgrid > p.note { padding-inline-start: calc(24px + var(--ha-space-2, 8px)); }
   .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center;
            padding: var(--ha-space-6, 24px); box-sizing: border-box; animation: fade var(--ha-animation-base-duration, 350ms) ease-out; }
   .sheet { width: 100%; max-width: 560px; max-height: calc(100% - 48px); overflow: auto; background: var(--card-background-color);
