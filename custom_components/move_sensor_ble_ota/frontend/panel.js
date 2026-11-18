@@ -214,7 +214,9 @@ class MoveSensorBlePanel extends HTMLElement {
       if (sr.querySelector("style[data-msb-edge]")) return;
       const st = document.createElement("style");
       st.setAttribute("data-msb-edge", "");
-      st.textContent = "hui-card-features { padding: 0 !important; } ha-card { overflow: hidden; }";
+      // the trend graph closes its fill 3.5 of 42 units above its bottom (hui-graph-base),
+      // which leaves a strip under the fill: shift the graph down 4px, ha-card clips it
+      st.textContent = "hui-card-features { padding: 0 !important; transform: translateY(4px); } ha-card { overflow: hidden; }";
       sr.appendChild(st);
     };
     Promise.resolve(card.updateComplete).then(() => apply());

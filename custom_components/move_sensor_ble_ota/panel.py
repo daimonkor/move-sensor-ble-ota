@@ -137,7 +137,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.21.1",
+        module_url=f"{STATIC_URL}/panel.js?v=1.21.2",
         config=_config(hass),
         require_admin=False,
     )
