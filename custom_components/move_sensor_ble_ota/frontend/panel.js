@@ -599,6 +599,10 @@ const STYLE = `
   ha-expansion-panel ha-icon[slot="leading-icon"] { color: var(--secondary-text-color); margin-inline-end: var(--ha-space-2, 8px); }
   .secgrid { padding: var(--ha-space-1, 4px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); display: grid; gap: var(--ha-space-2, 8px); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
   .secgrid > .wide, .secgrid > p { grid-column: 1 / -1; }
+  /* a full-width list (firmware, Wi-Fi) is the section's own content, not a card inside a card: no border or
+     background, and its 16 px padding replaces ours so the row icons line up with the section icon */
+  .secgrid > .wide { --ha-card-border-width: 0; --ha-card-background: transparent; --ha-card-box-shadow: none;
+                     margin: 0 calc(-1 * var(--ha-space-4, 16px)); }
   /* a note in a section lines up with the section title (icon 24 px + its 8 px gap), not with the icon */
   .secgrid > p.note { padding-inline-start: calc(24px + var(--ha-space-2, 8px)); }
   .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center;
