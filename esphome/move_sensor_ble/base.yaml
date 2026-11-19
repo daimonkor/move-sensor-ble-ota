@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.7.3"
+  fw_version: "1.7.4"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -286,6 +286,12 @@ web_server:
   # js_url: "" — не тянуть www.js с CDN. НЕ ставить local: true — тогда главная не грузит /0.js.
   js_url: ""
   js_include: move_sensor_ble/site_bundle.js
+  # 1.7.4: свои страницы датчика, которым ESPHome 2026.11 разрешает запросы с другого адреса.
+  # После смены роутера страница на адресе точки (окно входа) опрашивает <имя>.local — без этого
+  # защита ESPHome отвечала ей 403, и попап узнавал результат только запасным путём.
+  allowed_origins:
+    - "http://100.64.4.1"
+    - "http://${name}.local"
 
 # -------------------------------------------------------------------- I2C
 i2c:
