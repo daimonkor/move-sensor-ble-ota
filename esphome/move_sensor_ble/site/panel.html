@@ -153,31 +153,7 @@
   <!-- тост (2026-11-15): заметное сообщение поверх всего — например, «пароль точки не принят» -->
   <div class="toast hide" id="ms-toast" role="alert" aria-live="assertive"></div>
 
-  <!-- «Wi-Fi роутера» (move_sensor_ble/wifi_setup.yaml): лендинг точки доступа открывает /#wifi -->
-  <div class="sheet hide" id="ms-wsheet" role="dialog" aria-modal="true" aria-labelledby="ms-wt">
-    <div class="sbox">
-      <div class="shead">
-        <h2 id="ms-wt"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg><span data-i="wifiTitle">Router Wi-Fi</span></h2>
-        <button class="ib" id="ms-wclose" type="button" data-it="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-      </div>
-      <p class="sdesc" id="ms-wnow">—</p>
-      <div class="nets" id="ms-nets"></div>
-      <button class="wbtn ghost" id="ms-wscan" type="button" data-i="wScan"></button>
-      <label class="fld"><span data-i="wNet"></span><input id="ms-wssid" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32"></label>
-      <label class="fld"><span data-i="wPass"></span><input id="ms-wpass" type="password" autocomplete="off" maxlength="64"></label>
-      <p class="sdesc" data-i="wHint"></p>
-      <button class="wbtn primary" id="ms-wgo" type="button"></button>
-      <button class="wbtn ghost" id="ms-wreset" type="button" data-i="wReset"></button>
-      <h3 class="ssub" data-i="apHead"></h3>
-      <p class="sdesc" id="ms-apnow">—</p>
-      <label class="fld"><span data-i="apNew"></span><input id="ms-appass" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" maxlength="63"></label>
-      <button class="wbtn primary" id="ms-apgo" type="button" data-i="apGo"></button>
-      <p class="sdesc small" data-i="apHint"></p>
-      <p class="sdesc small" data-i="apReset"></p>
-      <p class="sstat" id="ms-wstat" role="status"></p>
-    </div>
-  </div>
-
+  <!-- «Wi-Fi роутера» (1.7.0): попап библиотеки ap_portal, своего окна больше нет -->
   <!-- инструкция пользователя (2026-11-15): текст на трёх языках — manual.html, build.js кладёт его
        в window.MS_MANUAL; вставляется при первом открытии, показывается статья текущего языка -->
   <div class="sheet hide" id="ms-hsheet" role="dialog" aria-modal="true" aria-labelledby="ms-ht">

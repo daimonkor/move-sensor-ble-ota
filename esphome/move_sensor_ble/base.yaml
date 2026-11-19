@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.6.1"
+  fw_version: "1.7.0"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -76,11 +76,10 @@ esphome:
   # 2026-11-15: это общий шаблон (move_sensor_ble/base.yaml). В ESPHome Builder у каждого датчика
   # своя карточка — move-sensor-ble-<Device ID>.yaml в корне esphome/ с именем целиком
   # (move-sensor-ble-148f98) и mac_suffix: "false". Device ID = хвост MAC Wi-Fi.
-  # Точка доступа — MoveSensorBLE-<DEVICE ID> (ставится в on_boot ниже).
+  # Точка доступа — MoveSensorBLE-<DEVICE ID> (ap_portal: ssid_suffix_mac).
   name_add_mac_suffix: ${mac_suffix}
   includes:
     - move_sensor_rtc.h
-    - move_sensor_ble/ms_ap.h     # своя точка доступа + DNS + лендинг (как у весов и батареи)
   on_boot:
     # первым делом снимаем удержание пина LED, которое ставится перед сном
     - priority: 1000
@@ -97,17 +96,6 @@ esphome:
       then:
         - lambda: |-
             // 2026-11-15: SSID точки доступа = MoveSensorBLE-<хвост MAC Wi-Fi> (Device ID), до старта Wi-Fi
-            {
-              uint8_t mac[6];
-              esp_read_mac(mac, ESP_MAC_WIFI_STA);
-              char ssid[24];
-              snprintf(ssid, sizeof(ssid), "MoveSensorBLE-%02X%02X%02X", mac[3], mac[4], mac[5]);
-              wifi::WiFiAP ap = wifi::global_wifi_component->get_ap();
-              ap.set_ssid(ssid);
-              // 2026-11-15: свой пароль точки (с сайта, во флеше) вместо заводского
-              if (id(ap_password_custom).size() >= 8) ap.set_password(id(ap_password_custom));
-              wifi::global_wifi_component->set_ap(ap);
-            }
             ms::bat_phase = 1;
             id(vbat).update();
             ms::bat_phase = 2;
@@ -164,15 +152,22 @@ esphome:
         - lambda: |-
             ms::boot_done = true;
             id(settings_rev_sensor).publish_state(ms::settings_rev);
-        # точка доступа: SSID/пароль берём из wifi: -> ap:
+        # 1.7.0: пароль точки, заданный с сайта до перехода на ap_portal (globals ap_password_custom),
+        # один раз переносится в библиотеку (её NVS) — у пользователя пароль не меняется.
         - lambda: |-
-            ms_ap::setup([](std::string &ssid, std::string &pass) {
-              auto ap = wifi::global_wifi_component->get_ap();
-              auto s = ap.get_ssid();
-              auto p = ap.get_password();
-              ssid.assign(s.c_str(), s.size());
-              pass.assign(p.c_str(), p.size());
-            });
+            const std::string &pw = id(ap_password_custom);
+            if (pw.size() >= 8) {
+              // переносим только то, что библиотека примет (8–63 печатных ASCII); иначе оставляем как есть
+              bool ok = pw.size() <= 63;
+              for (char c : pw) ok = ok && c >= 0x20 && c <= 0x7E;
+              if (ok) {
+                id(portal).set_password(pw);
+                id(ap_password_custom) = "";
+                ESP_LOGW("ms", "AP password: custom password moved to ap_portal");
+              } else {
+                ESP_LOGW("ms", "AP password: stored custom password is not valid for ap_portal - not moved");
+              }
+            }
         - script.execute: boot_dispatch
 
 esp32:
@@ -192,6 +187,12 @@ external_components:
   # 1.5.0: батарея — библиотека li_battery (github.com/daimonkor/esphome-li-battery), версия по тегу
   - source: github://daimonkor/esphome-li-battery@v1.0.0
     components: [li_battery]
+  # 1.7.0: своя точка доступа — библиотека ap_portal (github.com/daimonkor/esphome-ap-portal):
+  # точка рядом с роутером в сервисном режиме, DNS, окно «Войти в сеть», попап «Wi-Fi роутера».
+  # Закреплена на коммите (ревью 2026-11-19): сборка повторяемая, правка библиотеки попадает в датчик
+  # только сменой этой строки (и видна интеграции HA как изменение файлов прошивки).
+  - source: github://daimonkor/esphome-ap-portal@69a4eff00412dac2937e8cfd84faef1680648e61
+    components: [ap_portal]
 
 logger:
   # 2026-11-14: в прошивку компилируется всё до DEBUG, но на старте уровень INFO —
@@ -206,21 +207,42 @@ wifi:
   enable_on_boot: false     # в обычном режиме Wi-Fi не включается вообще
   fast_connect: true
   reboot_timeout: 0s
-  # Своя точка доступа (2026-11-11, move_sensor_ble/ms_ap.h) — как у весов и батареи Deye:
-  # живёт весь сервисный режим параллельно с роутером (APSTA), свой DNS и лендинг
-  # «Войти в сеть» -> сайт датчика / «Wi-Fi роутера». В рабочем режиме Wi-Fi выключен целиком.
-  # captive_portal не ставим: он показывал бы свою страницу вместо сайта датчика.
+  # 1.7.0: ESPHome 2026.11 держит точку рядом с роутером сам (ap_mode: always_on), без хаков;
+  # always_on требует отключить переход на роутер с лучшим сигналом после подключения.
+  post_connect_roaming: false
+  # Своя точка доступа (1.7.0 — библиотека ap_portal, раньше move_sensor_ble/ms_ap.h): живёт весь
+  # сервисный режим параллельно с роутером, свой DNS, окно «Войти в сеть» и попап «Wi-Fi роутера».
+  # В рабочем режиме Wi-Fi выключен целиком.
   ap:
-    # SSID ставится в on_boot: MoveSensorBLE-<Device ID> (хвост MAC Wi-Fi) — у каждого датчика свой
+    ap_mode: always_on
+    # MoveSensorBLE-<Device ID> (хвост MAC Wi-Fi) — у каждого датчика свой (ap_portal: ssid_suffix_mac)
     ssid: "MoveSensorBLE"
     password: !secret move_sensor_ap_password
-    # адрес вне частных диапазонов (ms_ap.h, AP_IP_B): иначе Android не показывает окно входа
+    # адрес вне частных диапазонов: иначе Android не показывает окно входа
     manual_ip:
       static_ip: 100.64.4.1
       gateway: 100.64.4.1
       subnet: 255.255.255.0
 
-# Настройка домашней сети с сайта: New Wi-Fi SSID/Password, Reconnect, Scan, Reset to firmware
+# Точка доступа датчика (1.7.0): библиотека ap_portal. Работает только в сервисном режиме.
+# Окно «Войти в сеть» — стартовая страница в стиле сайта датчика; кнопка Wi-Fi на сайте и на
+# стартовой странице открывает попап библиотеки (сети, смена сети роутера, пароль точки).
+ap_portal:
+  id: portal
+  active: !lambda "return id(service_mode);"
+  ssid_suffix_mac: true
+  password_persist: true        # пароль, заданный с сайта, во флеше; заводской — в secrets (наклейка)
+  password_reset:
+    power_cycles: 0             # заводской сброс — переключателем WiFi (3 раза за 10 с) или по BLE
+  api:
+    from_home: true             # попап Wi-Fi работает и с сайта из домашней сети
+  landing:
+    mode: redirect
+    title: "Move Sensor BLE"
+    accent_color: "#3d7bff"
+    icon_svg: '<svg viewBox="0 0 24 24"><g transform="translate(3 2.5) scale(.78)"><circle cx="13.5" cy="3.6" r="2"/><path d="M9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3A7.3 7.3 0 0 0 19 13v-2a5 5 0 0 1-4.3-2.4l-1-1.6a2 2 0 0 0-2.5-.8L6 8.3V13h2V9.6z"/></g></svg>'
+
+# Wi-Fi-сущности для HA: текущая сеть, IP, какой пароль у точки, сброс сети на прошивочную
 packages:
   wifi_setup: !include wifi_setup.yaml
 
@@ -979,9 +1001,15 @@ text_sensor:
       const uint8_t *sha = esp_app_get_description()->app_elf_sha256;
       // 1.4.0: версия прошивки — первой («1.4.0 v2026.11.16.171328-078195f0»): ответ INFO по BLE
       // обрезается по MTU, при обрезке теряется хвост, а версия остаётся
-      char buf[56];
-      snprintf(buf, sizeof(buf), "%s v%04d.%02d.%02d.%02d%02d%02d-%02x%02x%02x%02x", "${fw_version}",
-               year, month, day, hh, mm, ss, sha[0], sha[1], sha[2], sha[3]);
+      // 2026-11-19: + « t<отпечаток файлов прошивки>» (components/bthome/__init__.py) — по нему
+      // интеграция HA точно знает, из каких файлов собрана прошивка, кто бы её ни ставил
+      #ifndef BUILD_TREE_FP
+      #define BUILD_TREE_FP "--------"
+      #endif
+      char buf[72];
+      // отпечаток — сразу за версией: ответ INFO по BLE при малом MTU обрезает хвост
+      snprintf(buf, sizeof(buf), "%s t%s v%04d.%02d.%02d.%02d%02d%02d-%02x%02x%02x%02x", "${fw_version}",
+               BUILD_TREE_FP, year, month, day, hh, mm, ss, sha[0], sha[1], sha[2], sha[3]);
       return {std::string(buf)};
 
   - platform: template
@@ -1015,11 +1043,6 @@ interval:
             id(service_by_switch) = false;
             id(service_exit).execute();
           }
-  # точка доступа: держать APSTA, отвечать DNS, лендинг. Только в сервисном режиме —
-  # в рабочем Wi-Fi выключен, и Keeper не должен его поднимать.
-  - interval: 250ms
-    then:
-      - lambda: "if (id(service_mode)) ms_ap::tick();"
   - interval: 5s
     then:
       - if:
@@ -1029,7 +1052,7 @@ interval:
             - lambda: |-
                 id(vbat).update();
                 id(climate_read).execute();
-                id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+                id(wake_counter).publish_state(ms::wake_count & 0x3FFF);
                 id(custom_data_update).execute();
                 id(bth).send_now(80);   // 2026-11-16: в сервисном режиме — пакет раз в 5 с
 
@@ -1227,8 +1250,14 @@ script:
   - id: custom_data_update
     then:
       - lambda: |-
-          const uint8_t cd[4] = {(uint8_t) (ms::wake_count & 0xFF), (uint8_t) ((ms::wake_count >> 8) & 0xFF),
-                                 ms::settings_rev, ms::motion_count};
+          // 1.7.0 (2026-11-19): два старших бита поля wake — флаги для HA, счётчик 14 бит (по кругу):
+          // bit15 — сервисный режим, bit14 — подключён к роутеру. По ним HA видит «Wi-Fi включён»,
+          // даже когда по Wi-Fi датчик недоступен (другая сеть / только своя точка доступа).
+          // В пакет BTHome лишний байт не влезает (31 байт) — поэтому флаги в этом поле.
+          uint16_t w = ms::wake_count & 0x3FFF;
+          if (id(service_mode)) w |= 0x8000;
+          if (id(service_mode) && wifi::global_wifi_component->is_connected()) w |= 0x4000;
+          const uint8_t cd[4] = {(uint8_t) (w & 0xFF), (uint8_t) (w >> 8), ms::settings_rev, ms::motion_count};
           id(bth).set_custom_data(0xFFFF, cd, sizeof(cd));
 
   # Публикация состояния: один BTHome-пакет со всем сразу
@@ -1245,7 +1274,7 @@ script:
           // значения попадут в пакет в пределах tx_window
           id(climate_read).execute();
           ms::climate_last_ms = ms::now_ms();   // климат уходит в этом пакете
-          id(wake_counter).publish_state(ms::wake_count & 0xFFFF);
+          id(wake_counter).publish_state(ms::wake_count & 0x3FFF);
           id(custom_data_update).execute();   // свой блок рекламы: wake, settings_rev, motion_count
           if (state) ms::motion_tx_ms = ms::now_ms();
           // повтор «свободно» (2026-11-15): любой пакет со «свободно» его выполняет. Флаг ставит
@@ -1443,11 +1472,6 @@ script:
             // Ждёт сброс из HA (BLE) — не мигаем: сейчас будут 6 быстрых, без каши из серий.
             id(service_blink).execute((int) ms::svc_on_count);
           }
-      - lambda: |-
-          // v1.15.3: пустые поля ввода вместо «unknown» в HA
-          if (id(new_wifi_ssid).state.empty()) id(new_wifi_ssid).publish_state("");
-          if (id(new_wifi_pw).empty()) id(new_wifi_password).publish_state("");
-          if (id(new_ap_pw).empty()) id(new_ap_password).publish_state("");
       - component.update: build_version_text
       - component.update: device_id_text
       - component.update: last_reset_reason_text
@@ -1475,9 +1499,9 @@ script:
           id(ap_password_custom) = "";
           ESP_LOGW("ms", "FACTORY RESET: Wi-Fi -> firmware network, AP password -> default");
           // пишет в NVS и сразу подключается к сети из прошивки; точка доступа остаётся,
-          // но с заводским паролем — подключённые к ней клиенты отключатся
+          // но с заводским паролем (ap_portal: из wifi: ap:) — подключённые к ней клиенты отключатся
           wifi::global_wifi_component->save_wifi_sta("${fw_wifi_ssid}", "${fw_wifi_password}");
-          ms_ap::set_password("${fw_ap_password}");
+          id(portal).reset_password();
       - component.update: ap_password_mode
       - script.execute: wifi_reset_blink
       - delay: 200ms        # globals успевают записать новое значение в NVS-очередь
@@ -1502,6 +1526,9 @@ script:
       - delay: 500ms
       - logger.set_level: INFO
       - wifi.disable:
+      # ревью 2026-11-19: пакет с уже снятыми флагами (bit15 сервис / bit14 роутер) — иначе HA
+      # до следующего пакета считает Wi-Fi включённым; send_state ставит tx_pending -> окно рекламы
+      - lambda: "id(send_state).execute(ms::occupied, false);"
       - script.execute: motion_eval
 
   # индикатор срабатываний: count коротких вспышек (только если включён Motion tracking LED)

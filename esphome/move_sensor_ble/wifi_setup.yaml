@@ -1,33 +1,16 @@
-# Настройка домашней сети с сайта датчика (2026-11-11) — копия esp32_c3_plus_honey_weight/wifi_setup.yaml
-# весов (там же — как у батареи Deye). Нужна, когда у роутера сменили сеть/пароль: включить
-# сервисный режим → подключиться к точке доступа датчика «MoveSensorBLE-<Device ID>», напр. MoveSensorBLE-148F98 (ms_ap.h) → сайт →
-# «Wi-Fi роутера». Работает только в сервисном режиме (в рабочем Wi-Fi выключен).
-#
-# Штатный wifi.configure (esphome/components/wifi/automation.h):
-#   • ssid совпадает с текущим и связь есть — ничего не делает, считается успехом;
-#   • save: true пишет в NVS сразу, а при неудаче за timeout САМ откатывает на прежние;
-#   • на время попытки гасит радио целиком (STA и AP) — ms_ap.h поднимает AP за ~1 с.
-# Скан — фоновый (ms_ap::scan_networks), связь с роутером не рвёт; штатный start_scanning()
-# переподключал Wi-Fi и сайт отваливался (2026-11-11).
-# Жёсткий (заводской) сброс без отката — 3 включения сервисного переключателя за 10 с
+# Wi-Fi датчика для HA (1.7.0). Сеть роутера, поиск сетей и пароль своей точки доступа теперь
+# меняются в попапе библиотеки ap_portal («Wi-Fi роутера» на сайте датчика и в окне «Войти в сеть»),
+# поэтому прежние поля New Wi-Fi SSID/password, New AP password и кнопки Reconnect / Scan /
+# Save AP password убраны. Работает только в сервисном режиме (в рабочем Wi-Fi выключен).
+# Заводской сброс без сайта — 3 включения сервисного переключателя за 10 с
 # (move_sensor_ble/base.yaml, service_enter -> factory_reset_net): сеть из прошивки + заводской пароль точки.
-#
-# Пароль своей точки доступа (2026-11-15): «New AP password» -> «Save AP password» (8–63 символа ASCII).
-# Хранится во флеше (globals ap_password_custom); датчик перезагружается (~5 с) и поднимает точку с новым паролем.
 
-# Для окна «Wi-Fi роутера»: текущая сеть (пусто — нет связи) и список найденных сетей
-# "SSID: -63dB" по строке (обновляется на сканах самого wifi и по кнопке).
 text_sensor:
   - platform: wifi_info
     ssid:
       id: wifi_ssid_now
       name: "Wi-Fi SSID"
       icon: "mdi:wifi"
-      entity_category: diagnostic
-    scan_results:
-      id: wifi_scan_results
-      name: "Wi-Fi scan results"
-      icon: "mdi:wifi-marker"
       entity_category: diagnostic
     ip_address:
       id: wifi_ip
@@ -40,211 +23,10 @@ text_sensor:
     name: "AP password"
     icon: "mdi:access-point-network"
     entity_category: diagnostic
-    update_interval: never
-    lambda: 'return {id(ap_password_custom).size() >= 8 ? "custom" : "default"};'
-  # Результат последнего «Save AP password» (2026-11-15) — видно и на штатной вкладке «Устройство»,
-  # и в HA; сайт показывает его тостом. Пусто до первого нажатия.
-  - platform: template
-    id: ap_password_status
-    name: "AP password status"
-    icon: "mdi:message-alert-outline"
-    entity_category: diagnostic
-    update_interval: never
-
-# 2026-11-15: пароли из полей ввода не публикуем как состояние — иначе HA пишет их открытым
-# текстом в историю (recorder) и в JSON сайта. Значение живёт только в RAM (globals ниже),
-# а состояние поля — маска «********» (или пусто). Маска, присланная обратно, пароль не меняет.
-globals:
-  - id: new_wifi_pw
-    type: std::string
-    restore_value: false
-  - id: new_ap_pw
-    type: std::string
-    restore_value: false
-
-text:
-  - platform: template
-    name: "New Wi-Fi SSID"
-    id: new_wifi_ssid
-    mode: text
-    optimistic: true
-    initial_value: ""
-    max_length: 32
-    entity_category: config
-    icon: "mdi:wifi-plus"
-
-  - platform: template
-    name: "New Wi-Fi password"
-    id: new_wifi_password
-    mode: password
-    max_length: 64
-    entity_category: config
-    icon: "mdi:form-textbox-password"
-    # пароль — в new_wifi_pw (RAM); стираем, если 5 мин не нажали «Reconnect to router»
-    set_action:
-      - lambda: |-
-          if (x == "********") return;
-          id(new_wifi_pw) = x;
-          id(new_wifi_password).publish_state(x.empty() ? "" : "********");
-      - if:
-          condition:
-            lambda: 'return !x.empty() && x != "********";'
-          then:
-            - script.execute: wifi_password_autoclear
-
-  - platform: template
-    name: "New AP password"
-    id: new_ap_password
-    mode: password
-    max_length: 63
-    # 2026-11-15: HA проверяет ввод сам и показывает ошибку сразу (пусто — для очистки поля прошивкой)
-    pattern: "^$|^[ -~]{8,63}$"
-    entity_category: config
-    icon: "mdi:access-point-network"
-    # пароль — в new_ap_pw (RAM), в поле — маска
-    set_action:
-      - lambda: |-
-          if (x == "********") return;
-          id(new_ap_pw) = x;
-          id(new_ap_password).publish_state(x.empty() ? "" : "********");
-      - if:
-          condition:
-            lambda: 'return !x.empty() && x != "********";'
-          then:
-            - script.execute: ap_password_autoclear
-
-script:
-  - id: ap_password_autoclear
-    mode: restart
-    then:
-      - delay: 5min
-      - text.set:
-          id: new_ap_password
-          value: ""
-
-  - id: wifi_password_autoclear
-    mode: restart
-    then:
-      - delay: 5min
-      - text.set:
-          id: new_wifi_password
-          value: ""
+    update_interval: 60s
+    lambda: 'return {id(portal).has_custom_password() ? "custom" : "default"};'
 
 button:
-  # Пустое поле SSID → переподключиться к текущей сети (save: false);
-  # заполнено → сохранить и подключиться к новой (save: true, откат сам при неудаче).
-  - platform: template
-    name: "Reconnect to router"
-    id: reconnect_wifi
-    icon: "mdi:wifi-sync"
-    entity_category: diagnostic
-    on_press:
-      - if:
-          condition:
-            lambda: 'return !id(new_wifi_ssid).state.empty();'
-          then:
-            - wifi.configure:
-                ssid: !lambda 'return id(new_wifi_ssid).state;'
-                password: !lambda 'return id(new_wifi_pw);'
-                save: true
-                timeout: 20s
-                on_connect:
-                  - logger.log: "reconnect_wifi: connected, new network saved"
-                  - text.set: {id: new_wifi_ssid, value: ""}
-                  - text.set: {id: new_wifi_password, value: ""}
-                on_error:
-                  - logger.log:
-                      format: "reconnect_wifi: new network failed - wifi.configure rolled back"
-                      level: WARN
-                  - text.set: {id: new_wifi_ssid, value: ""}
-                  - text.set: {id: new_wifi_password, value: ""}
-          else:
-            # 2026-11-15: было — сеть из прошивки (secrets.yaml); после смены сети с сайта
-            # «Reconnect» уводил датчик обратно на старый роутер. Теперь — текущая сохранённая сеть.
-            - wifi.configure:
-                ssid: !lambda 'return std::string(wifi::global_wifi_component->get_sta().get_ssid().c_str());'
-                password: !lambda 'return std::string(wifi::global_wifi_component->get_sta().get_password().c_str());'
-                save: false
-                timeout: 20s
-                on_connect:
-                  - logger.log: "reconnect_wifi: reconnected to current router"
-                on_error:
-                  - logger.log:
-                      format: "reconnect_wifi: reconnect to current router failed"
-                      level: WARN
-
-  - platform: template
-    name: "Scan Wi-Fi networks"
-    id: scan_wifi_networks
-    icon: "mdi:wifi-refresh"
-    entity_category: diagnostic
-    on_press:
-      - lambda: 'ms_ap::scan_networks();'
-
-  # Новый пароль своей точки: 8–63 печатных ASCII (требование WPA2). Ответ сайту уходит,
-  # через 1.5 с точка перезапускается с новым паролем (телефон отключится — войти заново).
-  - platform: template
-    name: "Save AP password"
-    id: save_ap_password
-    icon: "mdi:content-save-cog"
-    entity_category: diagnostic
-    on_press:
-      - if:
-          condition:
-            lambda: |-
-              const std::string &p = id(new_ap_pw);
-              if (p.size() < 8 || p.size() > 63) return false;
-              for (char ch : p) if (ch < 0x20 || ch > 0x7e) return false;
-              return true;
-          then:
-            - text_sensor.template.publish:
-                id: ap_password_status
-                state: "saved, rebooting"
-            - lambda: |-
-                id(ap_password_custom) = id(new_ap_pw);
-                ESP_LOGW("ms", "AP password: custom saved (%u chars)", (unsigned) id(ap_password_custom).size());
-            - text.set: {id: new_ap_password, value: ""}
-            - component.update: ap_password_mode
-            # уведомление в HA (нужна опция интеграции ESPHome «Разрешить устройству выполнять действия HA»)
-            - homeassistant.action:
-                action: persistent_notification.create
-                data:
-                  notification_id: move_sensor_ble_ap_password
-                  title: "${friendly_name}: пароль точки изменён"
-                  message: !lambda |-
-                    return "Датчик перезагружается (~5 с). Подключайтесь к точке " +
-                           std::string(wifi::global_wifi_component->get_ap().get_ssid().c_str()) +
-                           " с новым паролем. Забыли — заводской сброс переключателем WiFi (наклейка).";
-            # 2026-11-15: смена пароля на лету (esp_wifi_set_config, ESP_OK) на практике не действовала —
-            # телефон заходил со старым паролем. Надёжно: записать во флеш и перезагрузиться; WiFi включён,
-            # поэтому датчик сразу вернётся в сервисный режим, а on_boot поднимет точку с новым паролем.
-            - delay: 1500ms
-            - lambda: |-
-                global_preferences->sync();
-                ESP_LOGW("ms", "AP password: rebooting to apply");
-            - delay: 300ms
-            - lambda: "App.safe_reboot();"
-          else:
-            # причина отказа — в лог, в «AP password status» (штатная вкладка, HA, тост сайта)
-            - lambda: |-
-                const std::string &p = id(new_ap_pw);
-                std::string why;
-                if (p.empty()) why = "rejected: field is empty";
-                else if (p.size() < 8 || p.size() > 63) why = "rejected: " + std::to_string(p.size()) + " characters, need 8-63";
-                else why = "rejected: only Latin letters, digits and symbols";
-                ESP_LOGW("ms", "AP password %s", why.c_str());
-                id(ap_password_status).publish_state(why);
-            - homeassistant.action:
-                action: persistent_notification.create
-                data:
-                  notification_id: move_sensor_ble_ap_password
-                  title: "${friendly_name}: пароль точки НЕ изменён"
-                  message: !lambda |-
-                    if (id(new_ap_pw).empty())
-                      return std::string("Поле «New AP password» пустое — сначала введите новый пароль, потом нажмите «Save AP password».");
-                    return std::string("Пароль не принят: нужно 8–63 латинских символа (буквы, цифры, знаки, без кириллицы). Старый пароль остался.");
-            - text.set: {id: new_ap_password, value: ""}
-
   # Жёсткий сброс: NVS снова на сеть из прошивки (secrets.yaml), и после перезагрузки тоже.
   - platform: template
     name: "Reset Wi-Fi to firmware defaults"

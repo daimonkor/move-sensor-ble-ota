@@ -409,7 +409,6 @@
     if (id.indexOf("/") < 0 && j.name) id = id.split("-")[0] + "/" + j.name;
     S[id] = j;
     lastMsg = lastUpd = Date.now();
-    if (id === "text_sensor/AP password status") apStatus(j.state);
     render();
   }
   // имя из прошивки: «Move Sensor BLE 148f98» — хвост MAC (Device ID) показываем заглавными (2026-11-15)
@@ -444,117 +443,21 @@
     if (es) { es.close(); es = null; }
   }
 
-  // ── «Wi-Fi роутера» (move_sensor_ble/wifi_setup.yaml): как у весов. Данные — из того же SSE,
-  // действия — REST: текст в «New Wi-Fi SSID/Password» → «Reconnect to router». ──
-  function post(url) { return fetch(url, { method: "POST" }).then(function (r) { if (!r.ok) throw new Error(r.status); }); }
-  function postText(name, v) { return post("/text/" + encodeURIComponent(name) + "/set?value=" + encodeURIComponent(v)); }
-  function press(name) { return post("/button/" + encodeURIComponent(name) + "/press"); }
-  var wBusy = false, resetArmed = 0;
-  function wstat(t) { txt("ms-wstat", t || ""); }
-  function setWBusy(on) {
-    wBusy = on;
-    Array.prototype.forEach.call(document.querySelectorAll("#ms-wsheet button:not(#ms-wclose), #ms-wsheet input"), function (c) { c.disabled = on; });
+  // ── «Wi-Fi роутера» (1.7.0): попап библиотеки ap_portal (сети, смена сети роутера, пароль точки).
+  // popup.js подключается без своей плавающей кнопки: открывает его кнопка Wi-Fi в шапке сайта и
+  // ссылка «#wifi». Работает со стороны точки доступа и из домашней сети (ap_portal api.from_home). ──
+  (function () {
+    var s = document.createElement("script");
+    s.src = "/ap_portal/popup.js"; s.setAttribute("data-button", "none"); s.setAttribute("data-accent", "#3d7bff");
+    document.head.appendChild(s);
+  })();
+  function openWifi() {
+    if (window.apPortalPopup) { window.apPortalPopup.open(); return; }
+    var n = 0; (function wait() { if (window.apPortalPopup) window.apPortalPopup.open(); else if (++n < 20) setTimeout(wait, 250); })();
   }
-  function syncGo() { txt("ms-wgo", $("ms-wssid").value.trim() ? t("wConnect") : t("wReconnect")); }
-  function parseNets(text) {  // "SSID: -63dB" по строке (wifi_info scan_results)
-    var out = [], seen = {};
-    (text || "").split("\n").forEach(function (l) {
-      var m = /^(.*): (-?\d+)dB$/.exec(l.trim());
-      if (m && m[1] && !seen[m[1]]) { seen[m[1]] = 1; out.push({ ssid: m[1], rssi: parseInt(m[2], 10) }); }
-    });
-    return out.sort(function (a, b) { return b.rssi - a.rssi; });
-  }
-  var netsKey = null;
-  function renderAp() {  // «AP password»: default / custom (wifi_setup.yaml)
-    var m = str("text_sensor/AP password");
-    txt("ms-apnow", m === "custom" ? t("apCustom") : m === "default" ? t("apDefault") : "—");
-  }
-  function renderWifi() {
-    if ($("ms-wsheet").classList.contains("hide")) return;
-    renderAp();
-    var now = str("text_sensor/Wi-Fi SSID");
-    txt("ms-wnow", now ? t("wNow", now) : t("wNoRouter"));
-    var raw = str("text_sensor/Wi-Fi Scan Results") || "", cur = $("ms-wssid").value.trim();
-    if (raw + "|" + cur === netsKey) return;
-    netsKey = raw + "|" + cur;
-    var box = $("ms-nets"), nets = parseNets(raw);
-    box.textContent = "";
-    if (!nets.length) { var e = document.createElement("div"); e.className = "none"; e.textContent = t("wNoNets"); box.appendChild(e); return; }
-    nets.forEach(function (n) {
-      var b = document.createElement("button"), nm = document.createElement("span"), r = document.createElement("span");
-      b.type = "button"; b.className = n.ssid === cur ? "on" : "";
-      nm.textContent = n.ssid; r.className = "rs"; r.textContent = n.rssi + " dBm";
-      b.appendChild(nm); b.appendChild(r);
-      b.addEventListener("click", function () { $("ms-wssid").value = n.ssid; syncGo(); $("ms-wpass").focus(); renderWifi(); });
-      box.appendChild(b);
-    });
-  }
-  function openWifi() { $("ms-wsheet").classList.remove("hide"); netsKey = null; syncGo(); wstat(""); renderWifi(); }
-  function closeWifi() {
-    if (wBusy) return;
-    $("ms-wsheet").classList.add("hide");
-    if (location.hash === "#wifi") history.replaceState(null, "", location.pathname);
-  }
+  function renderWifi() {}
   $("ms-wopen").addEventListener("click", openWifi);
-  $("ms-wclose").addEventListener("click", closeWifi);
-  $("ms-wsheet").addEventListener("click", function (e) { if (e.target === $("ms-wsheet")) closeWifi(); });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeWifi(); });
-  $("ms-wssid").addEventListener("input", function () { syncGo(); renderWifi(); });
-  // После переподключения датчик пропадает до ~20 с (+ откат) — ждём, пока снова пойдёт SSE.
-  function waitBack(t0, want) {
-    (function wait() {
-      setTimeout(function () {
-        var now = str("text_sensor/Wi-Fi SSID");
-        if (lastMsg > t0 + 5000 && now && (!want || now === want)) {
-          setWBusy(false); var ok = t("wDone", now); wstat(ok);
-          // успех — показать «Готово» 2 с и закрыть окно (если его не открыли/не трогали заново)
-          setTimeout(function () { if (!wBusy && $("ms-wstat").textContent === ok) closeWifi(); }, 2000);
-        }
-        else if (Date.now() - t0 < 45000) wait();
-        else { setWBusy(false); wstat(lastMsg > t0 + 5000 ? t("wFail") : t("wLost")); }
-      }, 2500);
-    })();
-  }
-  $("ms-wgo").addEventListener("click", function () {
-    if (wBusy) return;
-    var ssid = $("ms-wssid").value.trim(), pass = $("ms-wpass").value;
-    wstat(t("wSent")); setWBusy(true);
-    postText("New Wi-Fi SSID", ssid)
-      .then(function () { return postText("New Wi-Fi Password", ssid ? pass : ""); })
-      .then(function () { return press("Reconnect to router"); })
-      .then(function () { $("ms-wpass").value = ""; waitBack(Date.now(), ssid); },
-            function () { setWBusy(false); wstat(t("wSendFail")); });
-  });
-  $("ms-wscan").addEventListener("click", function () {
-    if (wBusy) return;
-    var before = str("text_sensor/Wi-Fi Scan Results"), t0 = Date.now();
-    wstat(t("wScanning")); setWBusy(true);
-    press("Scan Wi-Fi networks").then(function () {
-      (function wait() {
-        setTimeout(function () {
-          // фоновый скан ~2–4 с; тот же список — результат не меняется, ждём не дольше 10 с
-          var nowRes = str("text_sensor/Wi-Fi Scan Results");
-          if (nowRes !== before || Date.now() - t0 > 10000) {
-            setWBusy(false); netsKey = null; renderWifi();
-            wstat(nowRes ? "" : t("wNoFound"));
-          }
-          else wait();
-        }, 1000);
-      })();
-    }, function () { setWBusy(false); wstat(t("wSendFail")); });
-  });
-  $("ms-wreset").addEventListener("click", function () {  // два нажатия вместо confirm()
-    var b = $("ms-wreset");
-    if (Date.now() > resetArmed) {
-      resetArmed = Date.now() + 4000; b.classList.add("warn"); b.textContent = t("sure");
-      setTimeout(function () { if (Date.now() > resetArmed) { b.classList.remove("warn"); b.textContent = t("wReset"); } }, 4100);
-      return;
-    }
-    resetArmed = 0; b.classList.remove("warn"); b.textContent = t("wReset");
-    wstat(t("wSent")); setWBusy(true);
-    press("Reset Wi-Fi to firmware defaults").then(function () { waitBack(Date.now(), ""); },
-      function () { setWBusy(false); wstat(t("wSendFail")); });
-  });
+
   // ── тост: заметное сообщение на 6 с (ошибка — красный) ──
   var toastT = 0;
   function toast(msg, bad) {
@@ -564,45 +467,6 @@
   }
   $("ms-toast").addEventListener("click", function () { this.classList.add("hide"); });
 
-  // Результат «Save AP password» от датчика — тостом, в том числе когда сохраняли на штатной
-  // вкладке «Устройство» или из HA. Значения первых секунд после загрузки не показываем; своё нажатие
-  // на панели уже показало тост — его не дублируем.
-  var apStReady = Date.now() + 4000, apSelfT = 0;   // первые 4 с — начальные состояния SSE
-  function apStatus(v) {
-    if (Date.now() < apStReady) return;
-    if (!v || Date.now() - apSelfT < 5000) return;
-    var m = /^rejected: (\d+) characters/.exec(v);
-    if (v.indexOf("saved") === 0) toast(t("apSaved"), false);
-    else if (v === "rejected: field is empty") toast(t("apEmptyField"), true);
-    else if (m) toast(t("apLen", m[1]), true);
-    else if (v.indexOf("rejected") === 0) toast(t("apChars"), true);
-  }
-
-  // ── пароль своей точки доступа: «New AP Password» → «Save AP password», два нажатия ──
-  var apArmed = 0;
-  $("ms-apgo").addEventListener("click", function () {
-    if (wBusy) return;
-    var b = $("ms-apgo"), p = $("ms-appass").value;
-    if (!p) { var m0 = t("apEnter"); wstat(m0); toast(m0, true); return; }
-    if (p.length < 8 || p.length > 63 || !/^[\x20-\x7e]+$/.test(p)) {
-      var m1 = t("apBad") + (p.length < 8 ? t("apNow", p.length) : "");
-      wstat(m1); toast(m1, true); return;
-    }
-    if (Date.now() > apArmed) {
-      apArmed = Date.now() + 4000; b.classList.add("warn"); b.textContent = t("apSure");
-      setTimeout(function () { if (Date.now() > apArmed) { b.classList.remove("warn"); b.textContent = t("apGo"); } }, 4100);
-      return;
-    }
-    apArmed = 0; b.classList.remove("warn"); b.textContent = t("apGo");
-    wstat(t("saving")); setWBusy(true); apSelfT = Date.now();
-    postText("New AP Password", p)
-      .then(function () { return press("Save AP password"); })
-      .then(function () {
-        $("ms-appass").value = ""; setWBusy(false);
-        var ok = t("apSaved");
-        wstat(ok); toast(ok, false);
-      }, function () { setWBusy(false); wstat(t("wSendFail")); toast(t("apSendFail"), true); });
-  });
   window.addEventListener("hashchange", function () { if (location.hash === "#wifi") openWifi(); });
 
   // ── тема: авто → светлая → тёмная (как у весов), одна на панель и штатный интерфейс ──
@@ -688,8 +552,8 @@
 
   // ── язык: EN → UA → RU по кругу, выбор помнит браузер ──
   function applyLang() {
-    applyStatic(); syncSnd(); applyTheme(); syncGo(); renderOnline(); showManLang();
-    netsKey = null; render(); txt("ms-upd", lastUpd ? hms(lastUpd) : "—");
+    applyStatic(); syncSnd(); applyTheme(); renderOnline(); showManLang();
+    render(); txt("ms-upd", lastUpd ? hms(lastUpd) : "—");
   }
   $("ms-lang").addEventListener("click", function () {
     LANG = LANGS[(LANGS.indexOf(LANG) + 1) % LANGS.length];

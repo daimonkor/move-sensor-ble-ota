@@ -306,7 +306,42 @@ CONFIG_SCHEMA = cv.All(
 FINAL_VALIDATE_SCHEMA = _final_validate
 
 
+# local patch (2026-11-19): отпечаток файлов, из которых собрана прошивка Move Sensor BLE.
+# Прошивка добавляет его в Build Version («... t1a2b3c4d»), интеграция move_sensor_ble_ota
+# считает тот же отпечаток по /config/esphome и сравнивает: прошивку поставили из текущих файлов
+# или нет — неважно, кто собирал (интеграция, ESPHome Builder, Builder на Mac). Список и формат
+# ДОЛЖНЫ совпадать с fw_fingerprint() в custom_components/move_sensor_ble_ota/ota.py.
+def _tree_fingerprint() -> str:
+    import hashlib  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    base = str(CORE.config_dir)
+    rel = [os.path.basename(str(CORE.config_path)), "move_sensor_rtc.h"]
+    msb = os.path.join(base, "move_sensor_ble")
+    if os.path.isdir(msb):
+        rel += sorted(
+            "move_sensor_ble/" + f for f in os.listdir(msb)
+            if f.endswith(".yaml") and ".bak" not in f and not f.startswith(".")
+        )
+    rel.append("move_sensor_ble/site_bundle.js")
+    bt = os.path.join(base, "components", "bthome")
+    if os.path.isdir(bt):
+        rel += sorted(
+            "components/bthome/" + f for f in os.listdir(bt)
+            if f.endswith((".py", ".h", ".cpp")) and ".bak" not in f and not f.startswith(".")
+        )
+    h = hashlib.sha256()
+    for r in rel:
+        path = os.path.join(base, r)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "rb") as fh:
+            h.update(r.encode() + b"\0" + fh.read())
+    return h.hexdigest()[:8]
+
+
 async def to_code(config):
+    cg.add_define("BUILD_TREE_FP", _tree_fingerprint())
     # Calculate sizes for StaticVector compile-time allocation
     num_sensors = max(1, len(config.get(CONF_SENSORS, [])))
     num_binary_sensors = max(1, len(config.get(CONF_BINARY_SENSORS, [])))

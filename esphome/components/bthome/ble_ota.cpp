@@ -432,7 +432,7 @@ void BleOta::handle_command_() {
   const uint8_t *c = this->cmd_buf_;
   const uint16_t len = this->cmd_len_;
   this->last_activity_ms_ = millis();
-  uint8_t r[40];
+  uint8_t r[64];  // 2026-11-19: INFO = версия + сборка + отпечаток файлов (~44 байта)
 
   switch (c[0]) {
     case CMD_HELLO: {
