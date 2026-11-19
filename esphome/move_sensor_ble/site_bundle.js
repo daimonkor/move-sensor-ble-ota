@@ -82,14 +82,14 @@ window.MS_MANUAL = "<!-- Инструкция пользователя на са
     occ: "binary_sensor/Occupancy", svc: "binary_sensor/Service mode",
     temp: "sensor/Temperature", hum: "sensor/Humidity", bat: "sensor/Battery", volt: "sensor/Voltage",
     d0: "sensor/D0 raw voltage", wakes: "sensor/Wake count",
-    wPct: "sensor/WiFi Signal", wDbm: "sensor/WiFi RSSI", bPct: "sensor/BLE Signal", bDbm: "sensor/BLE RSSI",
+    wPct: "sensor/Wi-Fi signal", wDbm: "sensor/Wi-Fi RSSI", bPct: "sensor/BLE Signal", bDbm: "sensor/BLE RSSI",
     why: "text_sensor/Wake reason", esv: "text_sensor/ESPHome Version", build: "text_sensor/Build Version",
     keep: "number/Keep time", delay: "number/Detect delay", clim: "number/Climate report interval", vf: "number/Voltage factor",
     led: "switch/Motion tracking LED",
     // 2026-11-15: настройки, которые HA шлёт по BLE, + батарея в покое и IP (раньше на сайте не было)
     mwin: "number/Motion window", cwin: "number/Climate window",
     toff: "number/Temperature offset", hoff: "number/Humidity offset",
-    rest: "sensor/Battery rest voltage", ip: "text_sensor/WiFi IP", devid: "text_sensor/Device ID",
+    rest: "sensor/Battery rest voltage", ip: "text_sensor/Wi-Fi IP", devid: "text_sensor/Device ID",
     pir: "binary_sensor/PIR raw", bo: "sensor/Brownout count", crash: "sensor/Crash count",
     rlast: "text_sensor/Last reset reason"
   };
