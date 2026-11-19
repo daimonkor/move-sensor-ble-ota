@@ -94,8 +94,11 @@ def _config(hass: HomeAssistant) -> dict:
         if wifi is not None and wifi.device_id:
             for reg_id, suf in wifi.all_entities.items():
                 ent = reg.entities.get_entry(reg_id)
-                if ent is not None and suf in ESPHOME_VISIBLE and not ent.disabled_by:
-                    wifi_ids.append(ent.entity_id)
+                if ent is None or suf not in ESPHOME_VISIBLE or ent.disabled_by:
+                    continue
+                # сущности без состояния (убраны прошивкой 1.7.0) отсеивает panel.js при показе —
+                # список строится один раз, а состояния появляются позже (ревью 2026-11-19)
+                wifi_ids.append(ent.entity_id)
         # имена строк — без имени устройства («Move Sensor BLE Keep time» -> «Keep time»)
         strip = {mgr.name}
         if wifi is not None and wifi.device_id:
@@ -137,7 +140,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.21.5",
+        module_url=f"{STATIC_URL}/panel.js?v=1.21.10",
         config=_config(hass),
         require_admin=False,
     )

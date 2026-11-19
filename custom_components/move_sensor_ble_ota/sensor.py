@@ -254,7 +254,8 @@ class LinkSensor(OtaEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         w = self.mgr.wifi
-        return {"esphome_device": bool(w and w.device_id), "wifi_mac": w.mac if w else None}
+        return {"esphome_device": bool(w and w.device_id), "wifi_mac": w.mac if w else None,
+                "service": self.mgr.service_state}
 
 
 class SignalSensor(OtaEntity, SensorEntity):

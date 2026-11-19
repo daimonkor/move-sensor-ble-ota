@@ -32,7 +32,11 @@ DATA_MAP = {
     "sensor/WiFi RSSI": "wifi_rssi",     # прошивка до 1.6.1
     "sensor/Wi-Fi RSSI": "wifi_rssi",    # прошивка 1.6.1+: имена по правилам HA
     "sensor/Settings revision": "settings_rev",
+    # 2026-11-19: версия прошивки по Wi-Fi («1.7.0 t<отпечаток> v…») — в сервисном режиме интеграция
+    # не подключается по BLE и иначе не знает, что датчик прошили (фальшивое «new build»)
+    "text_sensor/Build Version": "build_version",
 }
+TEXT_KEYS = {"build_version"}
 SETTING_MAP = {
     "number/Detect delay": "detect_delay",
     "number/Keep time": "keep_time",
@@ -125,6 +129,10 @@ class WifiChannel:
                 key = DATA_MAP.get(suf) or SETTING_MAP.get(suf)
                 if key:
                     self.entities[key] = ent.entity_id
+                if key == "build_version" and ent.disabled_by is not None:
+                    # нужна интеграции (версия по Wi-Fi); остаётся скрытой в списке устройства
+                    ent_reg.async_update_entity(ent.entity_id, disabled_by=None)
+                    _LOGGER.info("%s enabled: the firmware version is read over Wi-Fi", ent.entity_id)
         if old != (self.device_id, tuple(sorted(self.entities.items()))):
             _LOGGER.debug("ESPHome device for %s: %s, %d mapped entities", self.mac, self.device_id, len(self.entities))
             self._subscribe()
@@ -210,6 +218,8 @@ class WifiChannel:
 
     @staticmethod
     def parse(key: str, state: str):
+        if key in TEXT_KEYS:
+            return state
         if key in ("occupancy", "led"):
             return state == "on"
         try:

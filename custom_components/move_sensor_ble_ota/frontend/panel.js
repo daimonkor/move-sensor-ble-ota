@@ -401,26 +401,48 @@ class MoveSensorBlePanel extends HTMLElement {
       return [fmt("signal_level") && `Signal ${fmt("signal_level")}`,
               mins !== null && (mins < 1 ? "seen just now" : `seen ${mins} min ago`)].filter(Boolean).join(" · ");
     }
-    if (id === "wifi") { const l = val("link"); return l && l.state === "wifi" ? "On" : "Off — the sensor talks over Bluetooth"; }
+    if (id === "wifi") return this._wifiState().title;
     if (id === "calibration") return fmt("setting_voltage_factor") ? `Voltage factor ${fmt("setting_voltage_factor")}` : "";
     if (id === "diagnostics") return [fmt("last_reset_reason") && `Last reset: ${fmt("last_reset_reason")}`, fmt("voltage")].filter(Boolean).join(" · ");
     return "";
   }
 
+  // Wi-Fi (service mode): "wifi" — Home Assistant reaches it; "away" — on, on a router Home Assistant
+  // can't reach (another network); "own_ap" — on, no router (only its own access point); "off".
+  _wifiState() {
+    const link = this._st("link");
+    const svc = link && link.state === "wifi" ? "wifi" : ((link && link.attributes && link.attributes.service) || "off");
+    const titles = {
+      wifi: "On",
+      away: "On — on another network, Home Assistant can't reach it",
+      own_ap: "On — not connected to a router (only its own Wi-Fi)",
+      off: "Off — the sensor talks over Bluetooth" };
+    const notes = {
+      away: "The Wi-Fi switch is on, but the sensor is on a network Home Assistant can't reach (for example a guest network). Join its own Wi-Fi from a phone and pick the home network in the Wi-Fi window.",
+      own_ap: "The Wi-Fi switch is on, but the sensor is not connected to any router. Join its own Wi-Fi from a phone and pick a network in the Wi-Fi window.",
+      off: "Wi-Fi is off and the sensor talks over Bluetooth. Turn on the Wi-Fi switch on the sensor (service mode) to change its network or update it faster." };
+    return { svc, title: titles[svc] || titles.off, note: notes[svc] || notes.off };
+  }
+
   _fillWifi() {
     const body = this._wifiBody;
     if (!body) return;
-    const link = this._st("link");
-    const on = link && link.state === "wifi";
-    this._wifiShown = on;
+    const ws = this._wifiState();
+    const on = ws.svc === "wifi";
+    this._wifiShown = ws.svc;
     body.innerHTML = "";
-    const wifi = (this._dev && this._dev.wifi) || [];
+    // 2026-11-19: только сущности с живым состоянием (прошивка 1.7.0 убрала часть Wi-Fi-сущностей;
+    // в реестре они остаются — в карточке было бы «Объект не найден»)
+    const wifi = ((this._dev && this._dev.wifi) || []).filter((e) => {
+      const s = this._hass && this._hass.states[e];
+      return s && !(s.attributes && s.attributes.restored);
+    });
     if (on && wifi.length) {
       body.appendChild(this._wide(this._card({ type: "entities",
         entities: wifi.map((e) => ({ entity: e, name: this._name(e) })) })));
     } else {
       body.appendChild(this._el("p", { class: "note", text: wifi.length
-        ? "Wi-Fi is off and the sensor talks over Bluetooth. Turn on the Wi-Fi switch on the sensor (service mode) to change its network or update it faster."
+        ? ws.note
         : "No ESPHome device found for this sensor." }));
     }
   }
@@ -437,9 +459,13 @@ class MoveSensorBlePanel extends HTMLElement {
       this._sync.className = "sync " + (s || "none");
     }
     if (this._wifiBody && this._wifiBody.isConnected) {
-      const link = this._st("link");
-      const on = !!(link && link.state === "wifi");
-      if (on !== this._wifiShown) this._fillWifi();
+      const ws = this._wifiState();
+      if (ws.svc !== this._wifiShown) {
+        this._fillWifi();
+        // заголовок раздела тоже (раньше обновлялся только при полной перерисовке)
+        const p = this._secPanels && this._secPanels.wifi;
+        if (p) { p.secondary = ws.title; p.setAttribute("secondary", ws.title); }
+      }
     }
   }
 

@@ -141,7 +141,7 @@ def bthome_parse(data: bytes) -> dict:
         if n is None or i + 1 + n > len(data):
             break
         if oid == BTHOME_WAKE_COUNT_ID:
-            out["wake"] = int.from_bytes(data[i + 1:i + 3], "little")
+            out["wake"] = int.from_bytes(data[i + 1:i + 3], "little") & WAKE_MASK
         elif oid == 0x01:
             out["battery"] = data[i + 1]
         elif oid == 0x00:
@@ -162,13 +162,24 @@ def bthome_parse(data: bytes) -> dict:
 # после данных BTHome. Данные: wake u16 LE, settings_rev u8 (0 = нет, появится в 1.15),
 # motion_count u8 (свежие срабатывания PIR, по кругу). BTHome этот блок не видит.
 CUSTOM_COMPANY_ID = 0xFFFF
+# 2026-11-19 (прошивка 1.7.0): два старших бита поля wake — флаги, сам счётчик 14 бит (по кругу):
+# bit15 — сервисный режим (Wi-Fi включён), bit14 — подключён к роутеру (к любой сети).
+# Нужны, когда HA не достаёт датчик по Wi-Fi (другая сеть / только своя точка): по одному
+# Bluetooth видно, что сервисный режим включён.
+WAKE_MASK = 0x3FFF
+FLAG_SERVICE = 0x8000
+FLAG_ROUTER = 0x4000
+SERVICE_FLAG_FRESH_S = 30.0   # пакет с флагами в сервисном режиме — раз в 5 с
+OWN_FLASH_WINDOW_S = 900.0    # 15 мин после своей прошивки новая сборка на датчике — своя
 
 
 def custom_parse(manufacturer_data: dict) -> dict:
     data = (manufacturer_data or {}).get(CUSTOM_COMPANY_ID)
     if not data or len(data) < 4:
         return {}
-    return {"wake": int.from_bytes(data[0:2], "little"), "settings_rev": data[2], "motion_count": data[3]}
+    raw = int.from_bytes(data[0:2], "little")
+    return {"wake": raw & WAKE_MASK, "settings_rev": data[2], "motion_count": data[3],
+            "service": bool(raw & FLAG_SERVICE), "router": bool(raw & FLAG_ROUTER)}
 
 
 # v1.15: данные датчика, которые показывает основное устройство (из любого канала)
@@ -209,6 +220,38 @@ def config_tree_hash(esphome_dir: str, device_yaml: str) -> str:
         except OSError:
             continue
     return h.hexdigest()[:12]
+
+
+def fw_fingerprint(esphome_dir: str, device_yaml: str) -> str:
+    """2026-11-19: отпечаток файлов прошивки — ТОТ ЖЕ, что считает components/bthome/__init__.py
+    при сборке (_tree_fingerprint) и прошивка отдаёт в версии («1.7.0 t1a2b3c4d v…»). Список и
+    формат должны совпадать. Блокирующая."""
+    rel = [device_yaml, "move_sensor_rtc.h"]
+    msb = os.path.join(esphome_dir, "move_sensor_ble")
+    if os.path.isdir(msb):
+        rel += sorted("move_sensor_ble/" + f for f in os.listdir(msb)
+                      if f.endswith(".yaml") and ".bak" not in f and not f.startswith("."))
+    rel.append("move_sensor_ble/site_bundle.js")
+    bt = os.path.join(esphome_dir, "components", "bthome")
+    if os.path.isdir(bt):
+        rel += sorted("components/bthome/" + f for f in os.listdir(bt)
+                      if f.endswith((".py", ".h", ".cpp")) and ".bak" not in f and not f.startswith("."))
+    h = hashlib.sha256()
+    for r in rel:
+        path = os.path.join(esphome_dir, r)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "rb") as fh:
+            h.update(r.encode() + b"\0" + fh.read())
+    return h.hexdigest()[:8]
+
+
+def version_fingerprint(version: str | None) -> str | None:
+    """Отпечаток из версии прошивки («1.7.0 t1a2b3c4d v…» -> «1a2b3c4d»); у старых прошивок нет."""
+    import re  # noqa: PLC0415
+
+    m = re.search(r"(?:^|\s)t([0-9a-f]{8})(?:\s|$)", version or "")
+    return m.group(1) if m else None
 
 
 def config_tree_mtime(esphome_dir: str, device_yaml: str) -> float:
@@ -671,6 +714,8 @@ class OtaManager:
         # v1.15: данные датчика независимо от канала: ключ -> {"v": значение, "ts": iso, "src": "ble"|"wifi"}
         self.data: dict = {}
         self.ble_rssi: int | None = None
+        self.ble_service: tuple[bool, bool, float] | None = None  # (service, router, monotonic)
+        self._svc_unsub = None   # таймер устаревания флага
         self.wifi = None                   # WifiChannel (wifi.py), если есть ESPHome-устройство
         self._wifi_echo: dict = {}         # ключ -> (значение, monotonic срок) — своя запись по Wi-Fi
         self._wifi_own_until = 0.0         # до этого момента рост номера правки — от своей записи по Wi-Fi
@@ -746,6 +791,7 @@ class OtaManager:
         self.config_hash: str | None = None
         self.config_mtime: float | None = None   # v1.15.4: когда последний раз правили файлы прошивки
         self.flashed_hash: str | None = None
+        self._own_flash_at: float = -1e9   # monotonic: последняя прошивка самой интеграцией
         self._build_hash: str | None = None
         self._ticks = 0
         # v1.16: копии файлов сборки (build / flashed) — для release notes прошивки
@@ -1281,6 +1327,9 @@ class OtaManager:
         self._ensure_worker()
 
     async def async_shutdown(self) -> None:
+        if self._svc_unsub is not None:
+            self._svc_unsub()
+            self._svc_unsub = None
         self._shutdown_job = self._job_snapshot()   # v1.15: продолжить после перезапуска HA
         self._save()
         self._ota = None
@@ -1364,6 +1413,8 @@ class OtaManager:
                 self._notify()
         mtime = await self.hass.async_add_executor_job(config_tree_mtime, ESPHOME_DIR, cfg)
         changed = h != self.config_hash or mtime != self.config_mtime
+        if await self._adopt_external_flash(cfg, h, mtime):
+            changed = True
         imgs = await self.hass.async_add_executor_job(firmware_stats, self.firmware_dir)   # v1.16.2
         await self.async_refresh_backups()   # v1.18
         if imgs != self.fw_images:
@@ -1561,6 +1612,39 @@ class OtaManager:
         d = self.data.get(key) or {}
         return {"source": d.get("src"), "updated": d.get("ts")}
 
+    def _fw_has_flags(self) -> bool:
+        """Флаги сервисного режима в поле wake — прошивка 1.7.0+."""
+        sv = fw_semver(self.firmware_version)
+        try:
+            return bool(sv) and tuple(int(x) for x in sv.split(".")) >= (1, 7, 0)
+        except ValueError:
+            return False
+
+    @callback
+    def _arm_service_expiry(self) -> None:
+        """Флаг устаревает через SERVICE_FLAG_FRESH_S без новых пакетов — тогда перерисовать
+        (иначе «On — on another network» висит до следующего пакета, ревью 2026-11-19)."""
+        if self._svc_unsub is not None:
+            self._svc_unsub()
+
+        @callback
+        def _expired(_now) -> None:
+            self._svc_unsub = None
+            self._notify()
+        self._svc_unsub = async_call_later(self.hass, SERVICE_FLAG_FRESH_S + 1, _expired)
+
+    @property
+    def service_state(self) -> str:
+        """Сервисный режим: wifi — HA на связи по Wi-Fi; away — Wi-Fi включён, датчик на роутере,
+        но HA его не достаёт (другая сеть); own_ap — Wi-Fi включён, роутера нет (только своя точка);
+        off — Wi-Fi выключен (или прошивка без флагов)."""
+        if self.wifi_live:
+            return "wifi"
+        s = self.ble_service
+        if s and s[0] and time.monotonic() - s[2] < SERVICE_FLAG_FRESH_S:
+            return "away" if s[1] else "own_ap"
+        return "off"
+
     @property
     def link(self) -> str | None:
         """Канал связи: wifi — ESPHome API подключён; ble — иначе (если датчик вообще слышен)."""
@@ -1663,6 +1747,7 @@ class OtaManager:
         _LOGGER.info("%s: Wi-Fi channel %s", self.name, "up" if live else "down")
         if live:
             self.hass.async_create_task(self._wifi_sync())
+            self._wifi_build_version(self.wifi.current("build_version") if self.wifi else None)
             if self._ota is not None:
                 self._adv_event.set()   # прошивка ждёт окно BLE — Wi-Fi появился, шить сразу
         else:
@@ -1670,8 +1755,23 @@ class OtaManager:
         self._notify()
 
     @callback
+    def _wifi_build_version(self, ver) -> None:
+        """2026-11-19: версия прошивки по Wi-Fi (Build Version) — то же, что INFO по BLE."""
+        if not ver or not fw_semver(ver) or ver == self.firmware_version:
+            return
+        _LOGGER.info("%s: firmware version over Wi-Fi: %s (was %s)", self.name, ver, self.firmware_version)
+        self.firmware_version = ver
+        self.firmware_seen = dt_util.now()
+        self._save()
+        self._notify()
+        self.hass.async_create_task(self.async_refresh_config_hash())
+
+    @callback
     def _on_wifi_state(self, key: str, value, first: bool) -> None:
         now = dt_util.utcnow()
+        if key == "build_version":
+            self._wifi_build_version(value)
+            return
         if key in DATA_KEYS:
             self._data_update(key, value, "wifi", now)
             if key == "occupancy":
@@ -1776,7 +1876,20 @@ class OtaManager:
         if data:
             # свой блок (v1.14.2): Wake count и счётчик срабатываний; у старой прошивки его нет —
             # Wake count остаётся из BTHome (0x3D)
-            parsed.update(custom_parse(service_info.manufacturer_data))
+            custom = custom_parse(service_info.manufacturer_data)
+            if custom and not self._fw_has_flags():
+                # прошивка до 1.7.0: поле wake — весь u16, флагов нет (ревью 2026-11-19)
+                raw = int.from_bytes(((service_info.manufacturer_data or {}).get(CUSTOM_COMPANY_ID) or b"\0\0")[0:2], "little")
+                custom["wake"] = raw
+                custom.pop("service", None)
+                custom.pop("router", None)
+            parsed.update(custom)
+            if "service" in custom:
+                prev_state = self.service_state
+                self.ble_service = (custom["service"], custom["router"], time.monotonic())
+                self._arm_service_expiry()
+                if self.service_state != prev_state:
+                    self._notify()
             self._mark_seen(service_info, parsed)
             rev = parsed.get("settings_rev")
             # прошивка до 1.15 шлёт 0 всегда — номер учитываем, только если прошивка его умеет
@@ -1787,7 +1900,7 @@ class OtaManager:
             prev, self._last_wake = self._last_wake, wake
             # Wake count живёт в RTC-памяти: после любой загрузки «не из сна» начинается с 1.
             # Уменьшился (и это не переполнение u16) -> перезагрузка -> прочитать DIAG.
-            if prev is not None and wake < prev and not (prev > 65000 and wake < 1000):
+            if prev is not None and wake < prev and not (prev > WAKE_MASK - 100 and wake < 100):
                 _LOGGER.info("%s: wake count %d -> %d, device rebooted", self.name, prev, wake)
                 self._diag_deferred = True
                 self._auth_unblock("device rebooted")
@@ -1855,10 +1968,11 @@ class OtaManager:
         if wake is not None:
             prev = self._stats_wake if self._stats_wake is not None else self.stats.get("last_wake")
             # счётчик пробуждений сбросился — датчик перезагрузился (питание, OTA, сбой)
-            rebooted = prev is not None and wake < prev
+            rebooted = prev is not None and wake < prev and not (prev > WAKE_MASK - 100 and wake < 100)
             if prev is None or wake != prev:
                 if prev is not None:
-                    delta = wake - prev if wake > prev else wake  # после перезагрузки счёт с 1
+                    # после перезагрузки счёт с 1; переход 14-битного счётчика через ноль — по модулю
+                    delta = wake if rebooted else (wake - prev) & WAKE_MASK
                     if 0 < delta < 5000:
                         self.stats["wakes"] += delta
                         self.stats["tx_wakes"] += 1
@@ -2270,7 +2384,54 @@ class OtaManager:
         except OtaError as err:
             self._set(ST_ERROR, error=f"после перезапуска HA: {err}", finished=dt_util.now())
 
+    async def _adopt_external_flash(self, cfg: str, h: str, mtime: float) -> bool:
+        """2026-11-19: на датчике сборка новее файлов прошивки, а «прошит» — другой хеш: датчик
+        прошили мимо интеграции (ESPHome Builder, USB) из текущих файлов. Принять её как прошитую
+        (хеш и копия файлов для «что нового»), иначе «Firmware» предлагает «new build». True — принята."""
+        if self._ota is not None or self.status == ST_FLASHING:
+            return False
+        dev_fp = version_fingerprint(self.firmware_version)
+        if dev_fp is not None:
+            # прошивка 1.7.0+ сама говорит, из каких файлов собрана — без догадок по времени
+            try:
+                cur_fp = await self.hass.async_add_executor_job(fw_fingerprint, ESPHOME_DIR, cfg)
+            except Exception:  # noqa: BLE001
+                return False
+            if dev_fp != cur_fp:
+                if self.flashed_hash == h:   # считали текущей, а на датчике собрано из других файлов
+                    self.flashed_hash = "older"
+                    self._changes_key = None
+                    self._save()
+                    return True
+                return False
+            if self.flashed_hash == h:
+                return False
+        else:
+            # старые прошивки: по времени сборки (не позже правки файлов, 5 с на разницу часов)
+            built = build_time(self.firmware_version)
+            if (built is None or self.flashed_hash == h or built + 5 < mtime
+                    or time.monotonic() - self._own_flash_at < OWN_FLASH_WINDOW_S):
+                return False
+
+        def job() -> None:
+            files = _config_tree_files(ESPHOME_DIR, cfg)
+            cl = os.path.join(ESPHOME_DIR, fwnotes.CHANGELOG_REL)
+            if os.path.isfile(cl):
+                files = [*files, cl]
+            fwnotes.snapshot(files, ESPHOME_DIR, os.path.join(self.snap_root, "flashed"), h)
+        try:
+            await self.hass.async_add_executor_job(job)
+        except Exception as err:  # noqa: BLE001 — без копии просто не будет «что нового»
+            _LOGGER.warning("%s: flashed snapshot failed: %s", self.name, err)
+        _LOGGER.info("%s: firmware %s was installed outside the integration from the current files — "
+                     "taken as flashed", self.name, self.firmware_version)
+        self.flashed_hash = h
+        self._changes_key = None
+        self._save()
+        return True
+
     def _flash_success(self, channel: str) -> None:
+        self._own_flash_at = time.monotonic()
         size = len(self._ota.image.data) if self._ota is not None else None
         self._ota = None
         # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
