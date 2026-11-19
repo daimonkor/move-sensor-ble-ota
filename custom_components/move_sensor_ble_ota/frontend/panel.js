@@ -458,6 +458,13 @@ class MoveSensorBlePanel extends HTMLElement {
       this._sync.textContent = txt;
       this._sync.className = "sync " + (s || "none");
     }
+    // Section headers (firmware version, Bluetooth "seen …", …) follow the entities without a re-render:
+    // after a flash the header kept the old version until the page was reopened.
+    for (const [id, p] of Object.entries(this._secPanels || {})) {
+      if (id === "wifi" || !p.isConnected) continue;
+      const sum = this._summary(id) || "";
+      if (p.secondary !== sum) { p.secondary = sum; p.setAttribute("secondary", sum); }
+    }
     if (this._wifiBody && this._wifiBody.isConnected) {
       const ws = this._wifiState();
       if (ws.svc !== this._wifiShown) {
