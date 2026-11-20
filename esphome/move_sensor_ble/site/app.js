@@ -21,6 +21,7 @@
     led: "switch/Motion tracking LED",
     // 2026-11-15: настройки, которые HA шлёт по BLE, + батарея в покое и IP (раньше на сайте не было)
     mwin: "number/Motion window", cwin: "number/Climate window",
+    mref: "number/Motion refresh interval",   // 1.8.0
     toff: "number/Temperature offset", hoff: "number/Humidity offset",
     rest: "sensor/Battery rest voltage", ip: "text_sensor/Wi-Fi IP", devid: "text_sensor/Device ID",
     pir: "binary_sensor/PIR raw", bo: "sensor/Brownout count", crash: "sensor/Crash count",
@@ -62,7 +63,7 @@
       svcbar: "The WiFi switch is on — the sensor does not sleep. On battery it drains faster: switch WiFi off after setup. On USB you can leave it on — the sensor then works over Wi-Fi.",
       motion: "Motion", temp: "Temperature", hum: "Humidity", bat: "Battery", batLow: "low battery", batNote: " V · LiPo 920 mAh", sig: "Signal",
       dev: "Device", dSvc: "Service mode", dClim: "Climate report", dToff: "Temperature offset", dHoff: "Humidity offset",
-      dLed: "Motion LED", dIp: "IP address", dBuild: "Build", dUpd: "Updated",
+      dLed: "Motion LED", dMref: "Motion refresh", dIp: "IP address", dBuild: "Build", dUpd: "Updated",
       dnote: "On battery, data and settings go over BLE (integration in HA); with WiFi on — also over Wi-Fi (ESPHome device in HA).",
       dbg: "Debug", dbgBadge: "service", pirRaw: "Raw PIR", pirSub: "SR602 output before Detect delay and Keep time",
       pLast: "Last PIR pulse", pCnt: "Pulses since opened", pMm: "Shortest / longest", pWhy: "Wake reason", pWakes: "Wake-ups",
@@ -102,7 +103,7 @@
       svcbar: "Увімкнено перемикач WiFi — датчик не спить. Від батареї вона сідає швидше: після налаштування вимкніть WiFi. Від USB можна залишити — тоді датчик працює по Wi-Fi.",
       motion: "Рух", temp: "Температура", hum: "Вологість", bat: "Батарея", batLow: "низький заряд", batNote: " В · LiPo 920 мА·год", sig: "Сигнал",
       dev: "Пристрій", dSvc: "Сервісний режим", dClim: "Звіт клімату", dToff: "Поправка температури", dHoff: "Поправка вологості",
-      dLed: "LED спрацювань", dIp: "IP у мережі", dBuild: "Збірка", dUpd: "Оновлено",
+      dLed: "LED спрацювань", dMref: "Повтор «зайнято»", dIp: "IP у мережі", dBuild: "Збірка", dUpd: "Оновлено",
       dnote: "Від батареї дані й налаштування йдуть по BLE (інтеграція в HA), з увімкненим WiFi — ще й по Wi-Fi (пристрій ESPHome в HA).",
       dbg: "Налагодження", dbgBadge: "сервіс", pirRaw: "Сирий PIR", pirSub: "вихід SR602 до Detect delay і Keep time",
       pLast: "Останній імпульс PIR", pCnt: "Імпульсів з відкриття", pMm: "Найкоротший / найдовший", pWhy: "Причина пробудження", pWakes: "Пробуджень",
@@ -142,7 +143,7 @@
       svcbar: "Включён переключатель WiFi — датчик не спит. От батареи она садится быстрее: после настройки выключите WiFi. От USB можно оставить — тогда датчик работает по Wi-Fi.",
       motion: "Движение", temp: "Температура", hum: "Влажность", bat: "Батарея", batLow: "низкий заряд", batNote: " В · LiPo 920 мА·ч", sig: "Сигнал",
       dev: "Устройство", dSvc: "Сервисный режим", dClim: "Отчёт климата", dToff: "Поправка температуры", dHoff: "Поправка влажности",
-      dLed: "LED срабатываний", dIp: "IP в сети", dBuild: "Сборка", dUpd: "Обновлено",
+      dLed: "LED срабатываний", dMref: "Повтор «занято»", dIp: "IP в сети", dBuild: "Сборка", dUpd: "Обновлено",
       dnote: "На батарее данные и настройки идут по BLE (интеграция в HA), с включённым WiFi — ещё и по Wi-Fi (устройство ESPHome в HA).",
       dbg: "Отладка", dbgBadge: "сервис", pirRaw: "PIR сырой", pirSub: "выход SR602 до Detect delay и Keep time",
       pLast: "Последний импульс PIR", pCnt: "Импульсов с открытия", pMm: "Самый короткий / длинный", pWhy: "Причина пробуждения", pWakes: "Пробуждений",
@@ -327,6 +328,8 @@
     txt("ms-d0", d0 === null ? "—" : t("volt", d0.toFixed(3)));
     txt("ms-vf", vf === null ? "—" : vf.toFixed(3));
     txt("ms-led", led === null ? "—" : led ? t("on") : t("off"));
+    var mref = num(K.mref);
+    txt("ms-mref", mref === null ? "—" : t("climEvery", Math.round(mref)));
     txt("ms-devid", str(K.devid) || "—");
     var mwin = num(K.mwin), cwin = num(K.cwin), toff = num(K.toff), hoff = num(K.hoff), rest = num(K.rest);
     var sgn = function (v, d) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d); };
