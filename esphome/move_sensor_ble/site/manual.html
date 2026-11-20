@@ -1,5 +1,5 @@
 <!-- Инструкция пользователя на сайте датчика (кнопка «?»), EN/UA/RU. Статья текущего языка — app.js showManLang().
-     Общий текст с артефактом «Move Sensor BLE — User manual»; меняешь одно — поправь и другое. -->
+     Единственный источник текста инструкции. -->
 <article lang="en"><h1>Move Sensor BLE — user manual</h1>
 <p class="lead">Battery motion sensor with temperature and humidity for Home Assistant. Sends data over Bluetooth (BTHome) and sleeps in between; Wi-Fi is used for setup and can also be a data channel when powered from USB.</p>
 <nav class="toc">
@@ -34,8 +34,8 @@
 
 <section id="en-3"><h2><span class="n">3</span>Adding to Home Assistant</h2>
 <ol class="steps">
-<li>Switch the sensor on (PWR). Home Assistant finds it automatically over Bluetooth (BTHome) — accept the new device in <i>Settings → Devices &amp; services</i>. A Bluetooth adapter or ESPHome Bluetooth proxy within reach is needed.</li>
-<li>Install the <b>Move Sensor BLE OTA</b> integration (Marketplace → add repository <code>daimonkor/move-sensor-ble-ota</code>) and add the sensor — pick it by its Device ID.</li>
+<li>Install the <b>Move Sensor BLE OTA</b> integration (Marketplace → add repository <code>daimonkor/move-sensor-ble-ota</code>) and restart Home Assistant.</li>
+<li>Switch the sensor on (PWR) and add the integration — pick the sensor by its Device ID. The integration reads the sensor's Bluetooth packets itself; a separate BTHome integration is not needed. A Bluetooth adapter or ESPHome Bluetooth proxy within reach is needed.</li>
 <li>Optional, for the Wi-Fi channel: turn WiFi on — Home Assistant discovers the ESPHome device <i>Move Sensor BLE &lt;ID&gt;</i>; add it.</li>
 </ol>
 <p>Main entities: <b>Occupancy</b>, <b>Temperature</b>, <b>Humidity</b>, <b>Battery</b>, <b>Voltage</b>, signal strength. The integration adds settings, firmware update, Device ID, Last seen, battery days left and statistics.</p>
@@ -60,11 +60,11 @@
 <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
 <tr><td>Detect delay</td><td>100 ms</td><td>How long motion must last to count. Raise it if there are false triggers.</td></tr>
 <tr><td>Keep time</td><td>30 s</td><td>How long "occupied" is held after motion stops (5–600 s).</td></tr>
-<tr><td>Climate report interval</td><td>30 min</td><td>How often temperature and humidity are sent (0 = off). More often = shorter battery life.</td></tr>
+<tr><td>Climate report interval</td><td>5 min</td><td>How often temperature and humidity are sent (0 = off). More often = shorter battery life.</td></tr>
 <tr><td>Temperature / Humidity offset</td><td>0</td><td>Correction if the sensor reads higher or lower than a reference thermometer. Humidity is recalculated automatically.</td></tr>
 <tr><td>Motion tracking LED</td><td>on</td><td>Flash on motion events.</td></tr>
 <tr><td>Motion refresh interval</td><td>2 min</td><td>While occupied and someone keeps moving, "occupied" is repeated at most this often (1–60 min).</td></tr>
-<tr><td>Motion / Climate window</td><td>1.0 / 2.0 s</td><td>How long the sensor transmits per event. Longer = more reliable delivery, shorter = longer battery life.</td></tr>
+<tr><td>Motion / Climate window</td><td>auto</td><td>How long the sensor transmits per event. Picked automatically by signal strength (Auto advertising window); longer = more reliable delivery, shorter = longer battery life.</td></tr>
 <tr><td>Voltage factor</td><td>calibrated</td><td>Battery voltage calibration; change only with a multimeter.</td></tr>
 </table>
 <div class="note">When the sensor works over Wi-Fi only (USB + WiFi on), change settings on the ESPHome device in Home Assistant or on the sensor web page.</div>
@@ -132,7 +132,7 @@
 
 <section id="en-11"><h2><span class="n">11</span>Firmware updates</h2>
 <ul>
-<li><b>Over Bluetooth (normal mode):</b> Home Assistant → Move Sensor BLE device → <b>Build &amp; flash firmware (BLE)</b>. The integration builds this sensor's firmware and flashes it at the next wake-up. Progress is shown in <i>OTA status</i>.</li>
+<li><b>Over Bluetooth (normal mode):</b> Home Assistant → <i>Settings → Updates</i> → <b>Move Sensor BLE firmware</b> → Install (it appears when the firmware files changed). The integration builds this sensor's firmware and flashes it at the next wake-up; progress is shown on the update card.</li>
 <li><b>Over Wi-Fi (WiFi on):</b> ESPHome Builder → <i>Move Sensor BLE &lt;ID&gt;</i> → Install → Wirelessly.</li>
 </ul>
 <p>If a new firmware fails right after start, the sensor rolls back to the previous one automatically.</p>
@@ -185,8 +185,8 @@
 
 <section id="uk-3"><h2><span class="n">3</span>Додавання в Home Assistant</h2>
 <ol class="steps">
-<li>Увімкніть датчик (PWR). Home Assistant сам знайде його по Bluetooth (BTHome) — підтвердіть новий пристрій у <i>Налаштування → Пристрої та служби</i>. Потрібен Bluetooth-адаптер або Bluetooth-проксі ESPHome поруч.</li>
-<li>Встановіть інтеграцію <b>Move Sensor BLE OTA</b> (Marketplace → додати репозиторій <code>daimonkor/move-sensor-ble-ota</code>) і додайте датчик — оберіть його за Device ID.</li>
+<li>Встановіть інтеграцію <b>Move Sensor BLE OTA</b> (Marketplace → додати репозиторій <code>daimonkor/move-sensor-ble-ota</code>) і перезапустіть Home Assistant.</li>
+<li>Увімкніть датчик (PWR) і додайте інтеграцію — оберіть датчик за Device ID. Інтеграція сама читає Bluetooth-пакети датчика, окрема інтеграція BTHome не потрібна. Потрібен Bluetooth-адаптер або Bluetooth-проксі ESPHome поруч.</li>
 <li>За бажанням, для каналу Wi-Fi: увімкніть WiFi — Home Assistant знайде пристрій ESPHome <i>Move Sensor BLE &lt;ID&gt;</i>; додайте його.</li>
 </ol>
 <p>Основні сутності: <b>Occupancy</b>, <b>Temperature</b>, <b>Humidity</b>, <b>Battery</b>, <b>Voltage</b>, рівень сигналу. Інтеграція додає налаштування, оновлення прошивки, Device ID, Last seen, прогноз днів роботи батареї та статистику.</p>
@@ -211,11 +211,11 @@
 <tr><th>Налаштування</th><th>За замовчуванням</th><th>Що робить</th></tr>
 <tr><td>Detect delay</td><td>100 мс</td><td>Скільки має тривати рух, щоб його зарахувати. Збільште, якщо є хибні спрацювання.</td></tr>
 <tr><td>Keep time</td><td>30 с</td><td>Скільки утримується «зайнято» після зникнення руху (5–600 с).</td></tr>
-<tr><td>Climate report interval</td><td>30 хв</td><td>Як часто надсилати температуру й вологість (0 = вимкнено). Частіше — менше працює батарея.</td></tr>
+<tr><td>Climate report interval</td><td>5 хв</td><td>Як часто надсилати температуру й вологість (0 = вимкнено). Частіше — менше працює батарея.</td></tr>
 <tr><td>Temperature / Humidity offset</td><td>0</td><td>Поправка, якщо датчик показує більше чи менше за еталонний термометр. Вологість перераховується автоматично.</td></tr>
 <tr><td>Motion tracking LED</td><td>увімк.</td><td>Спалахи на спрацювання.</td></tr>
 <tr><td>Motion refresh interval</td><td>2 хв</td><td>Поки «зайнято» і людина рухається, «зайнято» повторюється не частіше за цей інтервал (1–60 хв).</td></tr>
-<tr><td>Motion / Climate window</td><td>1,0 / 2,0 с</td><td>Скільки датчик передає на одну подію. Довше — надійніша доставка, коротше — довше працює батарея.</td></tr>
+<tr><td>Motion / Climate window</td><td>авто</td><td>Скільки датчик передає на одну подію. Підбирається автоматично за рівнем сигналу (Auto advertising window); довше — надійніша доставка, коротше — довше працює батарея.</td></tr>
 <tr><td>Voltage factor</td><td>відкалібровано</td><td>Калібрування напруги батареї; змінювати лише з мультиметром.</td></tr>
 </table>
 <div class="note">Якщо датчик працює лише по Wi-Fi (USB + WiFi увімкнено), налаштування змінюйте на пристрої ESPHome у Home Assistant або на сайті датчика.</div>
@@ -283,7 +283,7 @@
 
 <section id="uk-11"><h2><span class="n">11</span>Оновлення прошивки</h2>
 <ul>
-<li><b>По Bluetooth (звичайний режим):</b> Home Assistant → пристрій Move Sensor BLE → <b>Build &amp; flash firmware (BLE)</b>. Інтеграція збере прошивку саме цього датчика й залиє її при наступному пробудженні. Хід видно в <i>OTA status</i>.</li>
+<li><b>По Bluetooth (звичайний режим):</b> Home Assistant → <i>Налаштування → Оновлення</i> → <b>Move Sensor BLE firmware</b> → Встановити (з'являється, коли файли прошивки змінились). Інтеграція збере прошивку саме цього датчика й залиє її при наступному пробудженні; хід видно на картці оновлення.</li>
 <li><b>По Wi-Fi (WiFi увімкнено):</b> ESPHome Builder → <i>Move Sensor BLE &lt;ID&gt;</i> → Install → Wirelessly (у російському інтерфейсі «Установка» → «В сети»).</li>
 </ul>
 <p>Якщо нова прошивка падає одразу після запуску, датчик автоматично повертається до попередньої.</p>
@@ -336,8 +336,8 @@
 
 <section id="ru-3"><h2><span class="n">3</span>Добавление в Home Assistant</h2>
 <ol class="steps">
-<li>Включите датчик (PWR). Home Assistant сам найдёт его по Bluetooth (BTHome) — подтвердите новое устройство в <i>Настройки → Устройства и службы</i>. Нужен Bluetooth-адаптер или Bluetooth-прокси ESPHome рядом.</li>
-<li>Установите интеграцию <b>Move Sensor BLE OTA</b> (Marketplace → добавить репозиторий <code>daimonkor/move-sensor-ble-ota</code>) и добавьте датчик — выберите его по Device ID.</li>
+<li>Установите интеграцию <b>Move Sensor BLE OTA</b> (Marketplace → добавить репозиторий <code>daimonkor/move-sensor-ble-ota</code>) и перезапустите Home Assistant.</li>
+<li>Включите датчик (PWR) и добавьте интеграцию — выберите датчик по Device ID. Интеграция сама читает Bluetooth-пакеты датчика, отдельная интеграция BTHome не нужна. Нужен Bluetooth-адаптер или Bluetooth-прокси ESPHome рядом.</li>
 <li>По желанию, для канала Wi-Fi: включите WiFi — Home Assistant найдёт устройство ESPHome <i>Move Sensor BLE &lt;ID&gt;</i>; добавьте его.</li>
 </ol>
 <p>Основные сущности: <b>Occupancy</b>, <b>Temperature</b>, <b>Humidity</b>, <b>Battery</b>, <b>Voltage</b>, уровень сигнала. Интеграция добавляет настройки, обновление прошивки, Device ID, Last seen, прогноз дней работы батареи и статистику.</p>
@@ -362,11 +362,11 @@
 <tr><th>Настройка</th><th>По умолчанию</th><th>Что делает</th></tr>
 <tr><td>Detect delay</td><td>100 мс</td><td>Сколько должно длиться движение, чтобы его засчитать. Увеличьте при ложных срабатываниях.</td></tr>
 <tr><td>Keep time</td><td>30 с</td><td>Сколько держится «занято» после пропадания движения (5–600 с).</td></tr>
-<tr><td>Climate report interval</td><td>30 мин</td><td>Как часто отправлять температуру и влажность (0 = выключено). Чаще — меньше работает батарея.</td></tr>
+<tr><td>Climate report interval</td><td>5 мин</td><td>Как часто отправлять температуру и влажность (0 = выключено). Чаще — меньше работает батарея.</td></tr>
 <tr><td>Temperature / Humidity offset</td><td>0</td><td>Поправка, если датчик показывает больше или меньше эталонного термометра. Влажность пересчитывается автоматически.</td></tr>
 <tr><td>Motion tracking LED</td><td>вкл.</td><td>Вспышки на срабатывания.</td></tr>
 <tr><td>Motion refresh interval</td><td>2 мин</td><td>Пока «занято» и человек двигается, «занято» повторяется не чаще этого интервала (1–60 мин).</td></tr>
-<tr><td>Motion / Climate window</td><td>1,0 / 2,0 с</td><td>Сколько датчик передаёт на одно событие. Дольше — надёжнее доставка, короче — дольше работает батарея.</td></tr>
+<tr><td>Motion / Climate window</td><td>авто</td><td>Сколько датчик передаёт на одно событие. Подбирается автоматически по уровню сигнала (Auto advertising window); дольше — надёжнее доставка, короче — дольше работает батарея.</td></tr>
 <tr><td>Voltage factor</td><td>откалиброван</td><td>Калибровка напряжения батареи; менять только с мультиметром.</td></tr>
 </table>
 <div class="note">Если датчик работает только по Wi-Fi (USB + WiFi включён), настройки меняйте на устройстве ESPHome в Home Assistant или на сайте датчика.</div>
@@ -434,7 +434,7 @@
 
 <section id="ru-11"><h2><span class="n">11</span>Обновление прошивки</h2>
 <ul>
-<li><b>По Bluetooth (обычный режим):</b> Home Assistant → устройство Move Sensor BLE → <b>Build &amp; flash firmware (BLE)</b>. Интеграция соберёт прошивку именно этого датчика и зальёт её при следующем пробуждении. Ход виден в <i>OTA status</i>.</li>
+<li><b>По Bluetooth (обычный режим):</b> Home Assistant → <i>Настройки → Обновления</i> → <b>Move Sensor BLE firmware</b> → Установить (появляется, когда файлы прошивки изменились). Интеграция соберёт прошивку именно этого датчика и зальёт её при следующем пробуждении; ход виден на карточке обновления.</li>
 <li><b>По Wi-Fi (WiFi включён):</b> ESPHome Builder → <i>Move Sensor BLE &lt;ID&gt;</i> → Установка → В сети.</li>
 </ul>
 <p>Если новая прошивка падает сразу после запуска, датчик автоматически возвращается к предыдущей.</p>
