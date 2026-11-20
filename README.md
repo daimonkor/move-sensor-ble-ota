@@ -26,6 +26,7 @@ The same pages open inside Home Assistant: integration page → **Documentation*
 
 The buttons above → **Marketplace** (HA 2026.11+) or HACS → **Download** → restart → **Add integration** → pick the sensor.
 Manually: Settings → Marketplace → **Add from link** → `https://github.com/daimonkor/move-sensor-ble-ota`, type *Integration*.
+The BTHome integration is not needed — the sensor is found by its BLE advertising.
 Updates come as GitHub releases under **Settings → Updates**.
 
 ## Video
@@ -61,7 +62,7 @@ Advanced на стандартных карточках Home Assistant и уве
 Українською: [daimonkor.github.io/move-sensor-ble-ota/index.uk.html](https://daimonkor.github.io/move-sensor-ble-ota/index.uk.html).
 
 **Установка**: кнопки вверху → **Marketplace** (HA 2026.11+) или HACS → **Скачать** → перезапуск → **Добавить интеграцию** →
-выбрать датчик. Обновления — GitHub-релизы, приходят в **Настройки → Обновления**. Видео — выше.
+выбрать датчик. Интеграция BTHome не нужна. Обновления — GitHub-релизы, приходят в **Настройки → Обновления**. Видео — выше.
 
 **Работа с репозиторием**: интеграция — источник здесь (правка → `version` в `manifest.json` и значок в `docs/index*.html` →
 push → релиз `vX.Y.Z`); прошивка — рабочая копия в `/config/esphome`, перед коммитом `./sync_from_ha.sh`. Документация —
