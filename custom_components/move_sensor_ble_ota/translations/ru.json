@@ -293,6 +293,9 @@
       },
       "setting_battery_low": {
         "name": "Battery low level"
+      },
+      "setting_motion_refresh": {
+        "name": "Motion refresh interval"
       }
     },
     "switch": {
