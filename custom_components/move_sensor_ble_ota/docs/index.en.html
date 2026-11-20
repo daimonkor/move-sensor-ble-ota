@@ -306,7 +306,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     Entities, settings and statistics are kept.</div></div>
   <h3 style="margin-top:22px">Video</h3>
   <div class="grid g2">
-    <div class="card"><b>Clean install</b><small style="color:var(--muted);display:block;margin:4px 0 10px">README button → Marketplace → Download → setup → the sensor answers at its first wake-up (≈30 s)</small>
+    <div class="card"><b>Clean install</b><small style="color:var(--muted);display:block;margin:4px 0 10px">README button → Marketplace → Download → setup → sensor and area → panel with settings</small>
       <video src="media/install.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
     <div class="card"><b>Update</b><small style="color:var(--muted);display:block;margin:4px 0 10px">New GitHub release → Settings → Updates → Update → restart HA</small>
       <video src="media/update.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
@@ -320,7 +320,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card">
       <ol class="steps">
         <li>Settings → Devices &amp; services → <b>Add integration</b> → <b>Move Sensor BLE OTA</b>.</li>
-        <li><b>Bluetooth address</b> — pick the sensor from the list of BTHome devices HA currently hears, or enter it manually.</li>
+        <li><b>Bluetooth address</b> — pick the sensor from the list of discovered ones HA currently hears, or enter it manually.</li>
         <li><b>OTA key</b> — leave empty: <code>move_sensor_ble_ota_key</code> is taken from <code>/config/esphome/secrets.yaml</code>.
             If your ESPHome configs live elsewhere, enter the same key as in the firmware.</li>
         <li><b>Firmware folder</b> — <code>/config/esphome/ota</code> by default.</li>
@@ -331,7 +331,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card">
       <b>After adding</b>
       <ul style="margin:8px 0 0;padding-left:18px">
-        <li>The "… (BLE)" entities appear on the same device page as the BTHome sensor.</li>
+        <li>All sensor entities appear on one <b>Move Sensor BLE</b> device and in the sidebar panel.</li>
         <li>On the first wake-up the integration reads the settings and version: <span class="chip c-gray">Not read yet</span> → <span class="chip c-gray">Nothing pending</span>.</li>
         <li>To change the key or folder: integration page → <b>Configure → "Options"</b>.</li>
         <li>Documentation — the "Documentation" button (integration page) and "Visit" (device page).</li>
@@ -439,13 +439,13 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
         <li>New HA: on first start choose "Restore from backup".</li>
         <li>Everything moves: the integration folder, the entry with address and key, saved settings
             (<code>.storage/move_sensor_ble_ota.*</code>), firmware in <code>/config/esphome/ota</code>, <code>secrets.yaml</code>.</li>
-        <li>Check that the ESPHome Bluetooth proxy is connected to the new HA and the BTHome sensor is visible.</li>
+        <li>Check that the ESPHome Bluetooth proxy is connected to the new HA and the sensor is visible.</li>
       </ol>
     </div>
     <div class="card">
       <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--amber)"><use href="#i-box"/></svg>From scratch, without a backup</b>
       <ol class="steps" style="margin-top:10px">
-        <li>Connect the Bluetooth proxy to the new HA (ESPHome integration) and add the sensor to <b>BTHome</b>.</li>
+        <li>Connect the Bluetooth proxy to the new HA (ESPHome integration). The BTHome integration is not needed.</li>
         <li>Install the integration — from Marketplace or manually (see "Install").</li>
         <li><b>Key:</b> copy the <code>move_sensor_ble_ota_key</code> line to <code>/config/esphome/secrets.yaml</code> of the new HA
             or enter it when adding. Without it the sensor refuses ("not authorized").</li>
@@ -461,7 +461,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
 <!-- ENTITIES -->
 <section id="entities">
   <h2><span class="ic bg-teal"><svg class="i"><use href="#i-layers"/></svg></span>Entities</h2>
-  <p class="lead">v1.15: one <b>Move Sensor BLE</b> device — sensor data and settings regardless of the channel (BLE or Wi-Fi). Copies on the ESPHome and BTHome devices are hidden (not disabled). <b>Move Sensor BLE</b> panel in the sidebar.</p>
+  <p class="lead">v1.15: one <b>Move Sensor BLE</b> device — sensor data and settings regardless of the channel (BLE or Wi-Fi). Copies on the ESPHome device and on BTHome (if added) are hidden (not disabled). <b>Move Sensor BLE</b> panel in the sidebar.</p>
 
   <h3>Sensor data (v1.15)</h3>
   <div class="grid g3">

@@ -305,7 +305,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     Сутності, налаштування й статистика зберігаються.</div></div>
   <h3 style="margin-top:22px">Відео</h3>
   <div class="grid g2">
-    <div class="card"><b>Встановлення з нуля</b><small style="color:var(--muted);display:block;margin:4px 0 10px">Кнопка в README → Marketplace → Встановити → майстер → датчик відповів у перше вікно (≈30 с)</small>
+    <div class="card"><b>Встановлення з нуля</b><small style="color:var(--muted);display:block;margin:4px 0 10px">Кнопка в README → Marketplace → Встановити → майстер → датчик і зона → панель з налаштуваннями</small>
       <video src="media/install.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
     <div class="card"><b>Оновлення</b><small style="color:var(--muted);display:block;margin:4px 0 10px">Новий реліз на GitHub → Налаштування → Оновлення → Оновити → перезапуск HA</small>
       <video src="media/update.mp4" controls muted playsinline preload="metadata" style="width:100%;border-radius:10px"></video></div>
@@ -319,7 +319,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card">
       <ol class="steps">
         <li>Налаштування → Пристрої та служби → <b>Додати інтеграцію</b> → <b>Move Sensor BLE OTA</b>.</li>
-        <li><b>Bluetooth-адреса</b> — вибрати датчик зі списку BTHome-пристроїв (їх зараз чує HA) або вписати вручну.</li>
+        <li><b>Bluetooth-адреса</b> — вибрати датчик зі списку знайдених (їх зараз чує HA) або вписати вручну.</li>
         <li><b>Ключ OTA</b> — залишити порожнім: візьметься <code>move_sensor_ble_ota_key</code> з <code>/config/esphome/secrets.yaml</code>.
             Якщо конфіги ESPHome лежать в іншому місці — вписати той самий ключ, що в прошивці.</li>
         <li><b>Тека прошивок</b> — за замовчуванням <code>/config/esphome/ota</code>.</li>
@@ -330,7 +330,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card">
       <b>Після додавання</b>
       <ul style="margin:8px 0 0;padding-left:18px">
-        <li>Сутності «… (BLE)» з’являться на сторінці того самого пристрою, що й BTHome-датчик.</li>
+        <li>Усі сутності датчика з’являться на одному пристрої <b>Move Sensor BLE</b> і на панелі в меню.</li>
         <li>Під час першого пробудження інтеграція прочитає налаштування та версію: <span class="chip c-gray">Not read yet</span> → <span class="chip c-gray">Nothing pending</span>.</li>
         <li>Змінити ключ або теку: сторінка інтеграції → <b>Налаштувати → «Параметри»</b>.</li>
         <li>Документація — кнопки «Документація» (сторінка інтеграції) і «Відвідати» (сторінка пристрою).</li>
@@ -438,13 +438,13 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
         <li>Новий HA: під час першого запуску «Відновити з резервної копії».</li>
         <li>Переїде все: тека інтеграції, запис з адресою та ключем, збережені налаштування
             (<code>.storage/move_sensor_ble_ota.*</code>), прошивки в <code>/config/esphome/ota</code>, <code>secrets.yaml</code>.</li>
-        <li>Перевірити, що Bluetooth-проксі ESPHome підключений до нового HA і BTHome-датчик видно.</li>
+        <li>Перевірити, що Bluetooth-проксі ESPHome підключений до нового HA і датчик видно.</li>
       </ol>
     </div>
     <div class="card">
       <b style="display:flex;gap:8px;align-items:center"><svg class="i" style="color:var(--amber)"><use href="#i-box"/></svg>Начисто, без резервної копії</b>
       <ol class="steps" style="margin-top:10px">
-        <li>Підключити до нового HA Bluetooth-проксі (інтеграція ESPHome) і додати датчик у <b>BTHome</b>.</li>
+        <li>Підключити до нового HA Bluetooth-проксі (інтеграція ESPHome). Інтеграція BTHome не потрібна.</li>
         <li>Встановити інтеграцію — з Marketplace або вручну (розділ «Встановлення»).</li>
         <li><b>Ключ:</b> перенести рядок <code>move_sensor_ble_ota_key</code> у <code>/config/esphome/secrets.yaml</code> нового HA
             або вписати його під час додавання. Без нього датчик не пустить («немає авторизації»).</li>
@@ -460,7 +460,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
 <!-- СУЩНОСТИ -->
 <section id="entities">
   <h2><span class="ic bg-teal"><svg class="i"><use href="#i-layers"/></svg></span>Сутності</h2>
-  <p class="lead">v1.15: один пристрій <b>Move Sensor BLE</b> — дані й налаштування датчика незалежно від каналу (BLE або Wi-Fi). Копії в ESPHome- і BTHome-пристрої приховані (не вимкнені). Панель <b>Move Sensor BLE</b> у боковому меню.</p>
+  <p class="lead">v1.15: один пристрій <b>Move Sensor BLE</b> — дані й налаштування датчика незалежно від каналу (BLE або Wi-Fi). Копії в ESPHome-пристрої та BTHome (якщо його додано) приховані (не вимкнені). Панель <b>Move Sensor BLE</b> у боковому меню.</p>
 
   <h3>Дані датчика (v1.15)</h3>
   <div class="grid g3">
