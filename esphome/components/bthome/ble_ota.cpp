@@ -654,6 +654,9 @@ void BleOta::handle_command_() {
     // 20 байт, ровно минимальный MTU) не трогаем. Запрос SET: [0x16, маска, ёмкость u16 LE, порог u8],
     // маска: 0x01 ёмкость, 0x02 порог. Ответ GET/SET: [cmd|0x80, статус, ёмкость u16 LE, порог u8,
     // номер правки] — 6 байт. Нет настройки -> 0xFFFF / 0xFF.
+    // 1.8.0: хвост Motion refresh interval (мин, u16 LE): запрос [.., refresh u16] (7 байт), маска 0x04;
+    // ответ 8 байт [.., номер правки, refresh u16]. Старая интеграция читает первые 6 — хвост ей не мешает;
+    // старая прошивка на 7-байтный запрос отвечает 6 байтами — интеграция видит «не поддерживается».
     case CMD_GET_BATTERY:
     case CMD_SET_BATTERY: {
       r[0] = c[0] | 0x80;
@@ -674,6 +677,8 @@ void BleOta::handle_command_() {
           num_set(this->bat_capacity_, (uint16_t) (c[2] | (c[3] << 8)), 1.0f, "battery capacity, mAh");
         if ((mask & 0x02) && c[4] != 0xFF)
           num_set(this->bat_low_, c[4], 1.0f, "battery low level, %");
+        if ((mask & 0x04) && len >= 7)
+          num_set(this->motion_refresh_, (uint16_t) (c[5] | (c[6] << 8)), 1.0f, "motion refresh interval, min");
       }
       const uint16_t cap = num_u16(this->bat_capacity_, 1.0f);
       const uint16_t low = num_u16(this->bat_low_, 1.0f);
@@ -681,7 +686,10 @@ void BleOta::handle_command_() {
       r[3] = cap >> 8;
       r[4] = low > 0xFE ? 0xFF : (uint8_t) low;
       r[5] = this->rev_commit();
-      this->reply_(r, 6);
+      const uint16_t mr = num_u16(this->motion_refresh_, 1.0f);
+      r[6] = mr & 0xFF;
+      r[7] = mr >> 8;
+      this->reply_(r, 8);
       break;
     }
 #endif

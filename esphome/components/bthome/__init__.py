@@ -60,6 +60,8 @@ OTA_SETTINGS = {
     # 1.6.0: батарея (li_battery) — отдельная команда 0x15/0x16, старый пакет настроек не меняется
     "bat_capacity": ("number", "set_bat_capacity"),
     "bat_low": ("number", "set_bat_low"),
+    # 1.8.0: повтор «занято» при движении, мин — хвост команды 0x15/0x16
+    "motion_refresh": ("number", "set_motion_refresh"),
 }
 
 # Configuration constants

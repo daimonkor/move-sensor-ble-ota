@@ -111,6 +111,8 @@ class BleOta : public Component {
   // 1.6.0: батарея — команды 0x15 (прочитать) / 0x16 (записать), 6 байт ответа, влезает в любой MTU
   void set_bat_capacity(number::Number *n) { this->bat_capacity_ = n; }
   void set_bat_low(number::Number *n) { this->bat_low_ = n; }
+  // 1.8.0: Motion refresh interval (мин) — хвост команды 0x15/0x16, маска 0x04
+  void set_motion_refresh(number::Number *n) { this->motion_refresh_ = n; }
 #endif
 
   // занят: есть подключение, идёт приём или ждём перезагрузку — спать нельзя
@@ -165,6 +167,7 @@ class BleOta : public Component {
   number::Number *hum_offset_{nullptr};
   number::Number *bat_capacity_{nullptr};
   number::Number *bat_low_{nullptr};
+  number::Number *motion_refresh_{nullptr};
 #endif
 
   BTHome *parent_{nullptr};
