@@ -43,6 +43,7 @@ from .const import (
     CMD_GET_BATTERY,
     CMD_SET_BATTERY,
     BATTERY_KEYS,
+    MOTION_REFRESH_KEY,
     CMD_HELLO,
     CMD_INFO,
     CMD_DIAG,
@@ -118,7 +119,8 @@ SETTINGS_MASK = {"detect_delay": 0x01, "keep_time": 0x02, "climate_interval": 0x
                  "motion_window": 0x20, "climate_window": 0x40,
                  "temp_offset": 0x80, "hum_offset": 0x80}  # поправки — общий бит, отсутствующая = 0x7FFF
 # v1.19: батарея — своя команда (0x15/0x16) и своя маска; старый пакет настроек (20 байт) не меняется
-BATTERY_MASK = {"battery_capacity": 0x01, "battery_low": 0x02}
+BATTERY_MASK = {"battery_capacity": 0x01, "battery_low": 0x02,
+                "motion_refresh": 0x04}   # v1.22: хвост u16 (мин), прошивка 1.8.0+
 SETTING_KEYS = set(SETTINGS_MASK) | set(BATTERY_MASK)
 
 
@@ -636,7 +638,8 @@ def pack_settings(values: dict) -> bytes:
 
 
 def pack_battery(values: dict) -> bytes:
-    """[маска, ёмкость u16 LE, порог u8] для CMD_SET_BATTERY; нет значения — 0xFFFF / 0xFF."""
+    """[маска, ёмкость u16 LE, порог u8, refresh u16 LE] для CMD_SET_BATTERY; нет значения — 0xFFFF / 0xFF.
+    v1.22: хвост Motion refresh interval — прошивка до 1.8.0 его не читает (берёт первые 4 байта)."""
     mask = 0
     for k in values:
         mask |= BATTERY_MASK.get(k, 0)
@@ -646,11 +649,12 @@ def pack_battery(values: dict) -> bytes:
         "<HB",
         0xFFFF if cap is None else max(0, min(0xFFFE, int(round(float(cap))))),
         0xFF if low is None else max(0, min(0xFE, int(round(float(low))))),
-    )
+    ) + struct.pack("<H", 0xFFFF if values.get("motion_refresh") is None
+                    else max(0, min(0xFFFE, int(round(float(values["motion_refresh"]))))))
 
 
 def unpack_battery(rsp: bytes) -> tuple[dict, int | None]:
-    """Ответ CMD_GET/SET_BATTERY: [cmd|0x80, статус, ёмкость u16, порог u8, номер правки]."""
+    """Ответ CMD_GET/SET_BATTERY: [cmd|0x80, статус, ёмкость u16, порог u8, номер правки, refresh u16 (1.8.0+)]."""
     out: dict = {}
     if len(rsp) < 5:
         return out, None
@@ -659,6 +663,10 @@ def unpack_battery(rsp: bytes) -> tuple[dict, int | None]:
         out["battery_capacity"] = cap
     if low != 0xFF:
         out["battery_low"] = low
+    if len(rsp) >= 8:   # v1.22: прошивка 1.8.0+
+        mr = struct.unpack_from("<H", rsp, 6)[0]
+        if mr != 0xFFFF:
+            out["motion_refresh"] = mr
     return out, (rsp[5] if len(rsp) >= 6 else None)
 
 
@@ -926,7 +934,8 @@ class OtaManager:
     def pending(self) -> dict:
         return {k: v for k, v in self.desired.items()
                 if not same_value(k, v, self.applied.get(k))
-                and not (k in BATTERY_MASK and self.battery_unsupported)}
+                and not (k in BATTERY_MASK and self.battery_unsupported)
+                and not (k == MOTION_REFRESH_KEY and not self.motion_refresh_supported)}
 
     def value(self, key: str):
         """Значение для сущности: заданное (если ждёт применения), иначе подтверждённое датчиком."""
@@ -989,6 +998,21 @@ class OtaManager:
     def window_supported(self) -> bool:
         """Прошивка умеет окна (прочитаны с датчика)."""
         return "motion_window" in self.applied
+
+    @property
+    def motion_refresh_supported(self) -> bool:
+        """v1.22: прошивка 1.8.0+ отдаёт Motion refresh interval (прочитано с датчика)."""
+        return MOTION_REFRESH_KEY in self.applied
+
+    def motion_refresh_min(self) -> float:
+        """Интервал повтора «занято» на датчике, мин (старая прошивка — зашитые 2 мин)."""
+        v = self.applied.get(MOTION_REFRESH_KEY)
+        return float(v) if v else 2.0
+
+    @property
+    def stuck_threshold_effective(self) -> float:
+        """Порог PIR stuck, мин: не меньше двух интервалов повтора — иначе ложная тревога при редком повторе."""
+        return max(float(self.stuck_threshold_min), 2 * self.motion_refresh_min())
 
     @property
     def battery_supported(self) -> bool:
@@ -2045,7 +2069,7 @@ class OtaManager:
         ref = self.occupied_since
         if self.motion_count is not None and self.last_motion is not None and self.last_motion > ref:
             ref = self.last_motion
-        return (dt_util.utcnow() - ref).total_seconds() >= self.stuck_threshold_min * 60
+        return (dt_util.utcnow() - ref).total_seconds() >= self.stuck_threshold_effective * 60
 
     async def async_set_stuck_threshold(self, minutes: int) -> None:
         self.stuck_threshold_min = int(minutes)
@@ -2159,7 +2183,7 @@ class OtaManager:
         self._set_issue("not_reporting", silent and not empty, ir.IssueSeverity.ERROR, last=when,
                         pct=round(pct) if pct is not None else "?")
         # молчит — «занято» осталось от последней посылки, это не залипание датчика
-        self._set_issue("pir_stuck", self.pir_stuck and not silent, minutes=self.stuck_threshold_min)
+        self._set_issue("pir_stuck", self.pir_stuck and not silent, minutes=round(self.stuck_threshold_effective))
 
     def _check_missed_climate(self) -> None:
         """Нет пакета дольше 1,8 x Climate report interval (+1 мин) при «пусто» — климат-пакет потерян:

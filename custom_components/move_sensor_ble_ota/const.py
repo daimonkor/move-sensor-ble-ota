@@ -117,8 +117,11 @@ SETTINGS = {
     # v1.19 / прошивка 1.6.0: батарея (li_battery) — отдельной BLE-командой 0x15/0x16
     "battery_capacity": ("Battery capacity", 100, 5000, 10, "mAh", "mdi:battery-plus-variant"),
     "battery_low": ("Battery low level", 5, 50, 1, "%", "mdi:battery-low"),
+    # v1.22 / прошивка 1.8.0: пока «занято» и есть движение — пакет не чаще раза в N мин (было зашито 2)
+    "motion_refresh": ("Motion refresh interval", 1, 60, 1, "min", "mdi:motion-sensor"),
 }
 BATTERY_KEYS = ("battery_capacity", "battery_low")
+MOTION_REFRESH_KEY = "motion_refresh"   # v1.22: хвост команды 0x15/0x16 (прошивка 1.8.0+)
 WINDOW_KEYS = ("motion_window", "climate_window")
 OFFSET_KEYS = ("temp_offset", "hum_offset")
 FLOAT_KEYS = ("voltage_factor", "temp_offset", "hum_offset")

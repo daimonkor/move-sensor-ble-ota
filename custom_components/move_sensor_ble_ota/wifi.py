@@ -48,6 +48,7 @@ SETTING_MAP = {
     "number/Humidity offset": "hum_offset",
     "number/Battery capacity": "battery_capacity",     # v1.19, прошивка 1.6.0
     "number/Battery low level": "battery_low",
+    "number/Motion refresh interval": "motion_refresh",   # v1.22, прошивка 1.8.0
     "switch/Motion tracking LED": "led",
 }
 # остаются на виду в ESPHome-устройстве (Wi-Fi и сервисный режим); остальное — копии, скрываются

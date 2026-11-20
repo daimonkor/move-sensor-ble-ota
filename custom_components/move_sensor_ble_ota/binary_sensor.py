@@ -57,6 +57,6 @@ class PirStuckSensor(OtaEntity, BinarySensorEntity):
         return {
             "occupied_since": since.isoformat() if since else None,
             "occupied_min": round((dt_util.utcnow() - since).total_seconds() / 60, 1) if since else 0,
-            "threshold_min": self.mgr.stuck_threshold_min,
+            "threshold_min": round(self.mgr.stuck_threshold_effective),
             "last_motion": self.mgr.last_motion.isoformat() if self.mgr.last_motion else None,
         }

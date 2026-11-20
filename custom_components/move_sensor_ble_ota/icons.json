@@ -60,6 +60,9 @@
       },
       "setting_battery_low": {
         "default": "mdi:battery-low"
+      },
+      "setting_motion_refresh": {
+        "default": "mdi:motion-sensor"
       }
     },
     "sensor": {
