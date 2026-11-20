@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.7.9"
+  fw_version: "1.8.1"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -406,6 +406,7 @@ bthome:
       climate_window: climate_window
       temp_offset: temp_offset
       hum_offset: hum_offset
+      motion_refresh: motion_refresh  # 1.8.0: команда 0x15/0x16 (хвост), пакет настроек 0x10/0x11 не меняется
       bat_capacity: bat_capacity      # 1.6.0: команда 0x15/0x16, пакет рекламы BTHome не меняется
       bat_low: bat_low_level
   trigger_based: true        # HA не помечает спящее устройство как unavailable
@@ -855,6 +856,25 @@ number:
     set_action:
       - lambda: "if (ms::boot_done && ms::setting_changed(x, id(climate_interval).state)) ms::rev_pending = true;"
 
+  # 1.8.0: пока «занято» и человек шевелится — пакет «занято» не чаще раза в N мин (было зашито 2 мин).
+  # Само пробуждение от PIR есть всегда; настройка решает только, слать ли пакет (окно Motion window).
+  # Реже — меньше расход, но HA позже видит «Last motion», и порог PIR stuck должен быть больше интервала.
+  - platform: template
+    id: motion_refresh
+    name: "Motion refresh interval"
+    icon: mdi:motion-sensor
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 1
+    max_value: 60
+    step: 1
+    initial_value: 2
+    optimistic: true
+    restore_value: true
+    mode: box
+    set_action:
+      - lambda: "if (ms::boot_done && ms::setting_changed(x, id(motion_refresh).state)) ms::rev_pending = true;"
+
   # Окна рекламы после пакета (2026-11-14), мс: сколько не спим, чтобы прокси услышал пакет
   # и интеграция успела подключиться (OTA/настройки). Пакет «движение/пусто» — Motion window,
   # климат и остальное — Climate window. Интеграция HA подбирает их сама по RSSI (Auto advertising
@@ -1169,8 +1189,8 @@ script:
                         ESP_LOGI("ms", "motion confirmed -> ON (fresh=%d, motion #%u)", fresh, (unsigned) ms::motion_count);
                         id(send_state).execute(true, true);
                       } else if (fresh && !id(tx_pending) &&
-                                 ms::now_ms() - ms::motion_tx_ms >= ms::MOTION_REFRESH_MS) {
-                        // «занято» держится, человек шевелится: пакет не чаще раза в 2 мин,
+                                 ms::now_ms() - ms::motion_tx_ms >= ms::motion_refresh_ms(id(motion_refresh).state)) {
+                        // «занято» держится, человек шевелится: пакет не чаще Motion refresh interval (1.8.0, по умолчанию 2 мин),
                         // без мигания, окно — Motion window (2026-11-16)
                         ESP_LOGI("ms", "motion again (motion #%u), keep time restarted -> refresh sent",
                                  (unsigned) ms::motion_count);
