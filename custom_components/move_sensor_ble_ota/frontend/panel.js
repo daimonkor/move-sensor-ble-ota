@@ -16,7 +16,7 @@ const TABS = [
 // keys used by the layout; anything else the integration adds lands in Advanced › Diagnostics
 const SHEETS = {
   motion: { entity: "occupancy", title: "Motion", info: ["last_motion", "pir_stuck"],
-            settings: ["setting_keep_time", "setting_led", "setting_detect_delay"] },
+            settings: ["setting_keep_time", "setting_led", "setting_detect_delay", "setting_motion_refresh"] },
   temp: { entity: "temperature", title: "Temperature", info: [],
           settings: ["setting_climate_interval", "setting_temp_offset"] },
   hum: { entity: "humidity", title: "Humidity", info: [],
@@ -26,7 +26,7 @@ const SHEETS = {
 };
 
 const GROUPS = [
-  { title: "Motion", rows: ["setting_keep_time", "setting_led"], more: ["setting_detect_delay"] },
+  { title: "Motion", rows: ["setting_keep_time", "setting_led"], more: ["setting_detect_delay", "setting_motion_refresh"] },
   { title: "Temperature & humidity", rows: ["setting_climate_interval"], more: ["setting_temp_offset", "setting_hum_offset"] },
   { title: "Battery", rows: ["setting_battery_capacity", "setting_battery_low"], more: [] },
 ];
