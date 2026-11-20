@@ -118,3 +118,25 @@ def test_fingerprint_tracks_build_inputs_only(tree):
         after = fp(tree, DEVICE_YAML)
         assert after != before, rel
         assert after == _bthome_fp(tree, DEVICE_YAML), rel
+
+
+# ---------------- battery command 0x15/0x16 + Motion refresh tail (fw 1.8.0) ----------------
+import struct  # noqa: E402
+
+BAT_NS = _load(OTA, {"pack_battery", "unpack_battery", "BATTERY_MASK"}, {"struct": struct})
+
+
+def test_pack_battery_refresh_tail():
+    p = BAT_NS["pack_battery"]({"motion_refresh": 5})
+    assert p[0] == 0x04 and len(p) == 6                      # mask + cap + low + refresh
+    assert p[1:3] == b"\xff\xff" and p[3] == 0xFF and p[4:6] == (5).to_bytes(2, "little")
+    p = BAT_NS["pack_battery"]({"battery_capacity": 920, "battery_low": 10})
+    assert p[0] == 0x03 and p[4:6] == b"\xff\xff"            # old firmware reads only p[0:4]
+
+
+def test_unpack_battery_old_and_new_firmware():
+    old = bytes([0x95, 0, 0x98, 0x03, 10, 25])               # 1.6-1.7: 6 bytes
+    assert BAT_NS["unpack_battery"](old) == ({"battery_capacity": 920, "battery_low": 10}, 25)
+    new = old + (2).to_bytes(2, "little")                    # 1.8.0: + refresh
+    vals, rev = BAT_NS["unpack_battery"](new)
+    assert vals["motion_refresh"] == 2 and rev == 25
