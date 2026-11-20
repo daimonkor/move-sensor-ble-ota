@@ -497,7 +497,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>
       <div><b>Wakes since midnight<span class="kind t-violet">sensor</span></b><small>Пробудження за добу: усього, з пакетом і тихі (без радіо)</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-hourglass"/></svg></span>
-      <div><b>Last motion<span class="kind t-blue">sensor</span></b><small>Останнє свіже спрацювання PIR (новий підйом після LOW). Поки «зайнято», датчик надсилає його не частіше разу на 2 хв</small></div></div>
+      <div><b>Last motion<span class="kind t-blue">sensor</span></b><small>Останнє свіже спрацювання PIR (новий підйом після LOW). Поки «зайнято», датчик надсилає його не частіше разу на <i>Motion refresh interval</i> (за замовчуванням 2 хв)</small></div></div>
     <div class="card ent"><span class="ico t-red"><svg class="i"><use href="#i-alert"/></svg></span>
       <div><b>PIR stuck<span class="kind t-red">binary</span></b><small>«Зайнято», і свіжих спрацювань немає довше порогу <i>PIR stuck after</i> (людина ворушиться поруч — не проблема; у прошивки до 2026-11-16 — просто «зайнято» довше порогу): обрив дроту PIR, тепло/сонце в лінзі, просідання живлення</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-tag"/></svg></span>
@@ -527,7 +527,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
       <div><b>Voltage factor (BLE)<span class="kind t-slate">number</span></b><small>Множник дільника батареї (калібрування за тестером)</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
-      <div><b>Battery capacity · Battery low level (BLE)<span class="kind t-slate">number</span></b><small>Ємність банки, мА·год, і поріг «низького» заряду, % (знімається на 5 % вище). Прошивка 1.6.0+: по BLE окремою командою — 6 байт, пакет реклами BTHome не змінюється; у сервісному режимі — на сайті датчика та в ESPHome. Заряд рахує бібліотека <a href="https://github.com/daimonkor/esphome-li-battery">li_battery</a></small></div></div>
+      <div><b>Battery capacity · Battery low level (BLE)<span class="kind t-slate">number</span></b><small>Ємність банки, мА·год, і поріг «низького» заряду, % (знімається на 5 % вище). Прошивка 1.6.0+: по BLE окремою командою — 6 байт (8 з прошивки 1.8.0: + Motion refresh interval), пакет реклами BTHome не змінюється; у сервісному режимі — на сайті датчика та в ESPHome. Заряд рахує бібліотека <a href="https://github.com/daimonkor/esphome-li-battery">li_battery</a></small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
       <div><b>Motion refresh interval (BLE)<span class="kind t-slate">number</span></b><small>Поки «зайнято» і є свіжі спрацювання PIR — пакет «зайнято» не частіше разу на N хв (за замовчуванням 2, раніше було зашито в прошивці). Пробудження від PIR є завжди — налаштування вирішує лише, чи надсилати пакет. Рідше — трохи менша витрата, але «Last motion» оновлюється рідше; поріг PIR stuck сам не менший за 2 × інтервал. Прошивка 1.8.0+: хвіст команди батареї (0x15/0x16)</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-divide"/></svg></span>
