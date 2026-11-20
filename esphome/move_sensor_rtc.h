@@ -61,7 +61,12 @@ static inline void keep_start(int keep_s) { off_deadline_ms = now_ms() + (int64_
 static RTC_DATA_ATTR uint8_t motion_count = 0;      // счётчик свежих срабатываний (по кругу)
 static RTC_DATA_ATTR bool pir_low_seen = false;     // PIR был в LOW после последнего засчитанного фронта
 static RTC_DATA_ATTR int64_t motion_tx_ms = 0;      // когда последний раз ушёл пакет с «занято»
-static constexpr int64_t MOTION_REFRESH_MS = 120000;
+static constexpr int64_t MOTION_REFRESH_MS = 120000;   // по умолчанию (настройка «Motion refresh interval», 1.8.0)
+// 1.8.0: интервал повтора из настройки (минуты); нет значения / вне 1..60 — по умолчанию 2 мин
+static inline int64_t motion_refresh_ms(float minutes) {
+  if (std::isnan(minutes) || minutes < 1.0f || minutes > 60.0f) return MOTION_REFRESH_MS;
+  return (int64_t) (minutes * 60000.0f);
+}
 // засчитать срабатывание; true — оно свежее (был LOW с прошлого раза)
 // ---- Номер правки настроек (v1.15, 2026-11-16). Растёт на каждую РЕАЛЬНУЮ правку настройки с любой
 // стороны (сайт датчика, ESPHome API, BLE от HA): одна запись = +1 (несколько полей в одной BLE-записи —
