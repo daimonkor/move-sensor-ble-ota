@@ -300,9 +300,11 @@ class MoveSensorBlePanel extends HTMLElement {
       const cfg = { type: "tile", entity: id, name: sh.title, tap_action: open, icon_tap_action: open,
                     hold_action: { action: "more-info" } };
       if (this._narrow) { cfg.vertical = true; cfg.content_layout = "vertical"; }
-      if (key === "motion") cfg.state_content = this._narrow ? "state" : ["state", "last_changed"];
+      // "Detected · 2 hours ago" shows a stuck PIR at a glance; on a phone the motion tile takes the whole
+      // row so the time is not cut off by the ellipsis of a half-width tile
+      if (key === "motion") cfg.state_content = ["state", "last_changed"];
       else cfg.features = [{ type: "trend-graph", hours_to_show: 24 }];
-      const wrap = this._el("div", { class: "tilewrap" });
+      const wrap = this._el("div", { class: key === "motion" ? "tilewrap full" : "tilewrap" });
       const tile = this._card(cfg);
       if (cfg.features) this._edgeToEdge(tile);
       wrap.appendChild(tile);
@@ -655,6 +657,7 @@ const STYLE = `
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @media (max-width: 600px) {
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); }
+    .tilewrap.full { grid-column: 1 / -1; }
     .tab { flex: 1 1 0; padding: 0 var(--ha-space-2, 8px); }
     .tabs { padding: 0; }
     .content { padding: var(--ha-space-3, 12px); }
