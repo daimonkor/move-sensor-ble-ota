@@ -75,6 +75,7 @@ class MoveSensorBlePanel extends HTMLElement {
   }
 
   connectedCallback() {
+    this._tick = setInterval(() => this._fillSince(), 15000);   // the relative time moves on without a state change
     window.addEventListener("hashchange", this._onHash);
     window.addEventListener("keydown", this._onKey);
     if (window.visualViewport) {
@@ -84,6 +85,7 @@ class MoveSensorBlePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    clearInterval(this._tick);
     window.removeEventListener("hashchange", this._onHash);
     window.removeEventListener("keydown", this._onKey);
     if (window.visualViewport) {
@@ -300,14 +302,19 @@ class MoveSensorBlePanel extends HTMLElement {
       const cfg = { type: "tile", entity: id, name: sh.title, tap_action: open, icon_tap_action: open,
                     hold_action: { action: "more-info" } };
       if (this._narrow) { cfg.vertical = true; cfg.content_layout = "vertical"; }
-      // "Detected · 2 hours ago" shows a stuck PIR at a glance; on a phone the motion tile takes the whole
-      // row so the time is not cut off by the ellipsis of a half-width tile
-      if (key === "motion") cfg.state_content = ["state", "last_changed"];
+      // "Detected · 2 hours ago" shows a stuck PIR at a glance. A half-width phone tile cuts that line
+      // with an ellipsis, so there the time goes under the state, where the other tiles have their graph
+      if (key === "motion") cfg.state_content = this._narrow ? "state" : ["state", "last_changed"];
       else cfg.features = [{ type: "trend-graph", hours_to_show: 24 }];
-      const wrap = this._el("div", { class: key === "motion" ? "tilewrap full" : "tilewrap" });
+      const wrap = this._el("div", { class: "tilewrap" });
       const tile = this._card(cfg);
       if (cfg.features) this._edgeToEdge(tile);
       wrap.appendChild(tile);
+      if (key === "motion" && this._narrow) {
+        this._since = this._el("div", { class: "since", "aria-hidden": "true" },
+          [this._el("ha-icon", { icon: "mdi:clock-outline" }), this._el("span")]);
+        wrap.appendChild(this._since);
+      }
       wrap.appendChild(this._el("button", {
         class: "cog", "aria-label": `${sh.title}: history and settings`, title: "History and settings",
         onclick: () => this._openSheet(key),
@@ -450,8 +457,28 @@ class MoveSensorBlePanel extends HTMLElement {
   }
 
   // ---------- live bits (no re-render) ----------
+  // phone Motion tile: how long the current state has lasted («12 минут назад»), in the HA language
+  _fillSince() {
+    if (!this._since || !this._since.isConnected) return;
+    const st = this._st("occupancy");
+    const t = st ? Date.parse(st.last_changed) : NaN;
+    let txt = "";
+    if (!isNaN(t)) {
+      const sec = Math.max(0, (Date.now() - t) / 1000);
+      const lang = (this._hass.locale && this._hass.locale.language) || this._hass.language || "en";
+      const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "always" });
+      txt = sec < 60 ? rtf.format(-Math.floor(sec), "second")
+        : sec < 3600 ? rtf.format(-Math.floor(sec / 60), "minute")
+        : sec < 86400 ? rtf.format(-Math.floor(sec / 3600), "hour")
+        : rtf.format(-Math.floor(sec / 86400), "day");
+    }
+    const span = this._since.querySelector("span");
+    if (span.textContent !== txt) span.textContent = txt;
+  }
+
   _refreshLive() {
     if (this._attention && this._attention.isConnected) this._fillAttention();
+    this._fillSince();
     if (this._sync && this._sync.isConnected) {
       const st = this._st("settings_status");
       const s = st ? st.state : "";
@@ -609,6 +636,10 @@ const STYLE = `
   .note { color: var(--secondary-text-color); font-size: 13px; margin: 0; }
   .tiles { display: grid; gap: var(--ha-space-3, 12px); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .tilewrap { position: relative; }
+  .tiles .tilewrap > :first-child { height: 100%; }   /* the Motion tile has no graph: same height as its row */
+  .since { position: absolute; inset-inline: 0; bottom: 16px; display: flex; align-items: center; justify-content: center;
+           gap: 4px; color: var(--secondary-text-color); font-size: 12px; line-height: 16px; pointer-events: none; }
+  .since ha-icon { --mdc-icon-size: 16px; }
   .cog { position: absolute; top: 8px; inset-inline-end: 8px; width: 40px; height: 40px; border-radius: 20px; border: 0;
          background: transparent; color: var(--secondary-text-color); cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .cog:hover { background: var(--secondary-background-color); color: var(--primary-color); }
@@ -657,7 +688,6 @@ const STYLE = `
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @media (max-width: 600px) {
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); }
-    .tilewrap.full { grid-column: 1 / -1; }
     .tab { flex: 1 1 0; padding: 0 var(--ha-space-2, 8px); }
     .tabs { padding: 0; }
     .content { padding: var(--ha-space-3, 12px); }
