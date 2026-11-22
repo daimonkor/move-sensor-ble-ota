@@ -358,7 +358,8 @@ class LastMotionSensor(OtaEntity, SensorEntity):
 
 
 class BatteryDaysLeftSensor(OtaEntity, SensorEntity):
-    """Прогноз: сколько суток до разряда по тренду Battery % с последней зарядки."""
+    """Прогноз: сколько суток до разряда — по тренду Battery % с последней зарядки, а пока тренда
+    нет — по оценке расхода из статистики пробуждений (attribute method: trend / estimate)."""
 
     _attr_native_unit_of_measurement = "d"
     _attr_device_class = SensorDeviceClass.DURATION

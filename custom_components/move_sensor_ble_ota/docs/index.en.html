@@ -186,7 +186,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.22.2</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.23.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -492,7 +492,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-timer"/></svg></span>
       <div><b>Last seen<span class="kind t-green">sensor</span></b><small>Last BTHome packet. Normal — at least every Climate report interval; longer than two intervals means a flat battery, a fault or no link. Attributes: packet id, Wake count, battery, RSSI, proxy</small></div></div>
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
-      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Days until empty, from the Battery % trend since the last charge; needs ≥ 1 day of data</small></div></div>
+      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Days until empty, from the Battery % trend since the last charge (needs ≥ 1 day and a ≥ 2 % drop); until then an estimate from wake statistics (attribute <code>method</code>: trend / estimate)</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
       <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>How many times it was "occupied" today; yesterday in attributes</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>

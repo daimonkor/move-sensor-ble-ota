@@ -2038,12 +2038,62 @@ class OtaManager:
     def silent_wakes(self) -> int:
         return max(0, self.stats.get("wakes", 0) - self.stats.get("tx_wakes", 0))
 
+    # Оценка расхода по статистике пробуждений (1.23.0): пока по тренду % считать нечего
+    # (меньше суток или падение < 2 %), Days left = остаток мА·ч / расход в сутки.
+    # Константы — оценка для XIAO ESP32-C3 + SR602 + делитель 2×1 МОм + BMS, не замер.
+    EST_SLEEP_UA = 60.0        # сон: плата ~44 мкА + SR602 ~12 + делитель ~2 + BMS ~3
+    EST_ACTIVE_MA = 35.0       # среднее при отправке: ядро + реклама BLE (+9 dBm, 20–30 мс)
+    EST_BOOT_S = 0.25          # выход из глубокого сна до начала окна рекламы
+    EST_SILENT_MA = 25.0       # тихое пробуждение (фронт PIR, без радио)
+    EST_SILENT_S = 0.12
+
+    def battery_consumption_estimate(self) -> dict | None:
+        """Расход, мА·ч/сут, по статистике пробуждений: вчерашние полные сутки, иначе сегодня
+        с пересчётом на сутки (не раньше чем через 2 ч после полуночи)."""
+        today = dt_util.now().date().isoformat()
+        cur = self.stats if self.stats.get("date") == today else {}
+        y = (self.stats.get("yesterday") or {}) if cur else self.stats
+        if y.get("wakes"):
+            st, span_h, basis = y, 24.0, "yesterday"
+        else:
+            now = dt_util.now()
+            span_h = now.hour + now.minute / 60
+            if span_h < 2 or not cur.get("wakes"):
+                return None
+            st, basis = cur, "today"
+        tx = int(st.get("tx_wakes", 0))
+        silent = max(0, int(st.get("wakes", 0)) - tx)
+        mw = float(self.applied.get("motion_window") or 800) / 1000
+        cw = float(self.applied.get("climate_window") or 1500) / 1000
+        # движение: пакет «занято» и пакет «свободно» — окно движения; остальное — окно климата
+        n_mot = min(tx, 2 * int(st.get("motion_events", 0)))
+        n_cli = tx - n_mot
+        active_mas = self.EST_ACTIVE_MA * (n_mot * (self.EST_BOOT_S + mw) + n_cli * (self.EST_BOOT_S + cw))
+        silent_mas = self.EST_SILENT_MA * self.EST_SILENT_S * silent
+        k = 24.0 / span_h
+        wakes_mah = (active_mas + silent_mas) / 3600 * k
+        sleep_mah = self.EST_SLEEP_UA / 1000 * 24
+        return {"mah_per_day": round(wakes_mah + sleep_mah, 1), "basis": basis,
+                "tx_per_day": round(tx * k), "silent_per_day": round(silent * k)}
+
     def battery_forecast(self) -> dict:
-        """Прогноз по тренду % с последней зарядки (МНК). Нужно >= 1 сутки истории и падение >= 2 %."""
+        """Прогноз: по тренду % с последней зарядки (МНК, нужно >= 1 сутки и падение >= 2 %);
+        пока тренда нет — по оценке расхода из статистики пробуждений."""
         h = self.batt_hist
         info = {"samples": len(h), "since": dt_util.utc_from_timestamp(h[0][0]).isoformat() if h else None}
+        est = self.battery_consumption_estimate()
+        if est:
+            info["estimated_mah_per_day"] = est["mah_per_day"]
+
+        def fallback(note: str, extra: dict | None = None) -> dict:
+            rem = self.battery_remaining_mah()
+            if est and rem is not None and est["mah_per_day"] > 0:
+                return {**info, **(extra or {}), "days_left": round(rem / est["mah_per_day"], 1),
+                        "method": "estimate", "note": f"оценка по пробуждениям ({note})"}
+            return {**info, **(extra or {}), "days_left": None, "method": None, "note": note}
+
         if len(h) < 6:
-            return {**info, "days_left": None, "rate_pct_per_day": None, "note": "собираю данные"}
+            return fallback("собираю данные", {"rate_pct_per_day": None})
         t0 = h[0][0]
         xs = [(t - t0) / 86400 for t, _ in h]
         ys = [p for _, p in h]
@@ -2054,10 +2104,10 @@ class OtaManager:
         slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den if den else 0.0
         info["rate_pct_per_day"] = round(slope, 2)
         if span < 1.0 or (ys[0] - ys[-1]) < 2:
-            return {**info, "days_left": None, "note": f"мало данных: {span:.1f} сут, падение {ys[0] - ys[-1]} %"}
+            return fallback(f"мало данных: {span:.1f} сут, падение {ys[0] - ys[-1]} %")
         if slope >= -0.05:
-            return {**info, "days_left": None, "note": "разряд не заметен"}
-        return {**info, "days_left": round(ys[-1] / -slope, 1), "note": None}
+            return fallback("разряд не заметен")
+        return {**info, "days_left": round(ys[-1] / -slope, 1), "method": "trend", "note": None}
 
     @property
     def pir_stuck(self) -> bool:
