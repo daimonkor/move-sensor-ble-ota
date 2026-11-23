@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v6
       - name: Collect site
@@ -36,5 +36,14 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
+      # deploy-pages иногда не видит только что загруженный артефакт («No artifacts named github-pages»,
+      # 21.11 и 23.11): метаданные артефакта у GitHub доезжают с задержкой. Повтор через паузу.
       - id: deployment
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+      - name: Wait before retry
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5
