@@ -1,4 +1,4 @@
-// Move Sensor BLE — integration panel (v1.20).
+// Move Sensor BLE — integration panel (v1.20; texts localized to the HA language since v1.24).
 // Tabs Overview / Settings / Advanced built from Home Assistant's own cards (tile + card features,
 // heading badges, history graph, entities). No custom card libraries needed.
 //  * Overview: status badges, "Needs attention" (only when something is wrong), four tiles.
@@ -6,6 +6,111 @@
 //  * Settings: the everyday settings, rarely used ones under "Show more".
 //  * Advanced: firmware, Bluetooth, Wi-Fi (service mode), calibration, diagnostics — collapsed sections.
 // Entities come from the integration (panel.config.devices[].ids, keyed by unique_id suffix).
+
+// Panel texts follow the Home Assistant language (profile → Language). English strings are the keys;
+// a missing translation falls back to English. Entity names stay as they are (English).
+const I18N = {
+  ru: {
+    "Overview": "Обзор", "Settings": "Настройки", "Advanced": "Расширенные",
+    "Motion": "Движение", "Temperature": "Температура", "Humidity": "Влажность", "Battery": "Батарея",
+    "Temperature & humidity": "Температура и влажность",
+    "Firmware": "Прошивка", "Bluetooth": "Bluetooth", "Wi-Fi (service mode)": "Wi-Fi (сервисный режим)",
+    "Calibration": "Калибровка", "Diagnostics": "Диагностика",
+    "Days left": "Осталось дней", "Remaining": "Остаток", "Voltage": "Напряжение", "Last motion": "Последнее движение",
+    "PIR stuck": "PIR завис", "Reset Wi-Fi": "Сброс Wi-Fi",
+    "Blink LED": "Мигнуть LED", "Read": "Прочитать", "Reset": "Сбросить", "Press": "Нажать",
+    "Reset Wi-Fi on the sensor to the network built into its firmware?": "Сбросить Wi-Fi датчика на сеть, зашитую в прошивку?",
+    "Panel sections": "Разделы панели",
+    "No Move Sensor BLE sensors are set up.": "Датчики Move Sensor BLE не настроены.",
+    "{title}: history and settings": "{title}: история и настройки",
+    "History and settings": "История и настройки",
+    "Tap a card for its history and settings. Press and hold for the standard Home Assistant dialog.": "Нажмите на карточку — история и настройки. Удерживайте — стандартное окно Home Assistant.",
+    "Show more": "Показать ещё", "Show less": "Свернуть",
+    "Changes reach the sensor over Bluetooth on its next wake, or right away while Wi-Fi service mode is on.": "Изменения попадут в датчик по Bluetooth при следующем пробуждении, а в сервисном режиме Wi-Fi — сразу.",
+    "For tuning and troubleshooting. The sensor works fine with the defaults.": "Для тонкой настройки и поиска неисправностей. Датчик нормально работает с настройками по умолчанию.",
+    "Configure": "Настроить", "Open": "Открыть",
+    "{cur} installed · {latest} available": "установлена {cur} · доступна {latest}",
+    "{cur} · up to date": "{cur} · актуальная",
+    "Signal {v}": "Сигнал {v}", "seen just now": "на связи только что", "seen {n} min ago": "на связи {n} мин назад",
+    "Voltage factor {v}": "Коэффициент напряжения {v}", "Last reset: {v}": "Последний сброс: {v}",
+    "On": "Включён",
+    "On — on another network, Home Assistant can't reach it": "Включён — в другой сети, Home Assistant его не видит",
+    "On — not connected to a router (only its own Wi-Fi)": "Включён — не подключён к роутеру (только своя точка доступа)",
+    "Off — the sensor talks over Bluetooth": "Выключен — датчик работает по Bluetooth",
+    "The Wi-Fi switch is on, but the sensor is on a network Home Assistant can't reach (for example a guest network). Join its own Wi-Fi from a phone and pick the home network in the Wi-Fi window.": "Переключатель Wi-Fi включён, но датчик в сети, которую Home Assistant не видит (например, гостевой). Подключитесь с телефона к его собственной точке доступа и выберите домашнюю сеть в окне Wi-Fi.",
+    "The Wi-Fi switch is on, but the sensor is not connected to any router. Join its own Wi-Fi from a phone and pick a network in the Wi-Fi window.": "Переключатель Wi-Fi включён, но датчик не подключён ни к одному роутеру. Подключитесь с телефона к его собственной точке доступа и выберите сеть в окне Wi-Fi.",
+    "Wi-Fi is off and the sensor talks over Bluetooth. Turn on the Wi-Fi switch on the sensor (service mode) to change its network or update it faster.": "Wi-Fi выключен, датчик работает по Bluetooth. Включите переключатель Wi-Fi на датчике (сервисный режим), чтобы сменить сеть или быстрее обновить прошивку.",
+    "No ESPHome device found for this sensor.": "Для этого датчика не найдено устройство ESPHome.",
+    "All settings are applied.": "Все настройки применены.",
+    "Saved. The sensor picks the changes up on its next wake (motion wakes it).": "Сохранено. Датчик получит изменения при следующем пробуждении (движение его будит).",
+    "The sensor's settings haven't been read yet.": "Настройки датчика ещё не прочитаны.",
+    "The sensor didn't accept the last change. Try again.": "Датчик не принял последнее изменение. Попробуйте ещё раз.",
+    " About {n} days left.": " Осталось примерно {n} дн.",
+    "Battery is at {n} %. Charge it soon.{d}": "Заряд батареи {n} %. Скоро нужно зарядить.{d}",
+    "No data from the sensor for {n} minutes. Check the battery and that a Bluetooth proxy is in range.": "Нет данных от датчика {n} мин. Проверьте батарею и что Bluetooth-прокси в зоне досягаемости.",
+    "Motion has been “detected” for too long. The motion sensor may be stuck.": "Движение «обнаружено» слишком долго. Возможно, датчик движения завис.",
+    "Firmware {v} is available.": "Доступна прошивка {v}.",
+    "Open firmware": "Открыть прошивку",
+    "The sensor didn't accept the last settings change.": "Датчик не принял последнее изменение настроек.",
+    "Needs attention": "Требует внимания",
+    "Close": "Закрыть",
+    "Home Assistant history and statistics": "История и статистика Home Assistant",
+    "All settings": "Все настройки",
+  },
+  uk: {
+    "Overview": "Огляд", "Settings": "Налаштування", "Advanced": "Розширені",
+    "Motion": "Рух", "Temperature": "Температура", "Humidity": "Вологість", "Battery": "Батарея",
+    "Temperature & humidity": "Температура і вологість",
+    "Firmware": "Прошивка", "Bluetooth": "Bluetooth", "Wi-Fi (service mode)": "Wi-Fi (сервісний режим)",
+    "Calibration": "Калібрування", "Diagnostics": "Діагностика",
+    "Days left": "Залишилось днів", "Remaining": "Залишок", "Voltage": "Напруга", "Last motion": "Останній рух",
+    "PIR stuck": "PIR завис", "Reset Wi-Fi": "Скидання Wi-Fi",
+    "Blink LED": "Блимнути LED", "Read": "Прочитати", "Reset": "Скинути", "Press": "Натиснути",
+    "Reset Wi-Fi on the sensor to the network built into its firmware?": "Скинути Wi-Fi датчика на мережу, вшиту в прошивку?",
+    "Panel sections": "Розділи панелі",
+    "No Move Sensor BLE sensors are set up.": "Датчики Move Sensor BLE не налаштовані.",
+    "{title}: history and settings": "{title}: історія та налаштування",
+    "History and settings": "Історія та налаштування",
+    "Tap a card for its history and settings. Press and hold for the standard Home Assistant dialog.": "Натисніть на картку — історія та налаштування. Утримуйте — стандартне вікно Home Assistant.",
+    "Show more": "Показати більше", "Show less": "Згорнути",
+    "Changes reach the sensor over Bluetooth on its next wake, or right away while Wi-Fi service mode is on.": "Зміни потраплять у датчик через Bluetooth під час наступного пробудження, а в сервісному режимі Wi-Fi — одразу.",
+    "For tuning and troubleshooting. The sensor works fine with the defaults.": "Для тонкого налаштування та пошуку несправностей. Датчик нормально працює з налаштуваннями за замовчуванням.",
+    "Configure": "Налаштувати", "Open": "Відкрити",
+    "{cur} installed · {latest} available": "встановлено {cur} · доступна {latest}",
+    "{cur} · up to date": "{cur} · актуальна",
+    "Signal {v}": "Сигнал {v}", "seen just now": "на зв'язку щойно", "seen {n} min ago": "на зв'язку {n} хв тому",
+    "Voltage factor {v}": "Коефіцієнт напруги {v}", "Last reset: {v}": "Останнє скидання: {v}",
+    "On": "Увімкнено",
+    "On — on another network, Home Assistant can't reach it": "Увімкнено — в іншій мережі, Home Assistant його не бачить",
+    "On — not connected to a router (only its own Wi-Fi)": "Увімкнено — не підключено до роутера (лише власна точка доступу)",
+    "Off — the sensor talks over Bluetooth": "Вимкнено — датчик працює через Bluetooth",
+    "The Wi-Fi switch is on, but the sensor is on a network Home Assistant can't reach (for example a guest network). Join its own Wi-Fi from a phone and pick the home network in the Wi-Fi window.": "Перемикач Wi-Fi увімкнено, але датчик у мережі, яку Home Assistant не бачить (наприклад, гостьовій). Підключіться з телефона до його власної точки доступу й виберіть домашню мережу у вікні Wi-Fi.",
+    "The Wi-Fi switch is on, but the sensor is not connected to any router. Join its own Wi-Fi from a phone and pick a network in the Wi-Fi window.": "Перемикач Wi-Fi увімкнено, але датчик не підключений до жодного роутера. Підключіться з телефона до його власної точки доступу й виберіть мережу у вікні Wi-Fi.",
+    "Wi-Fi is off and the sensor talks over Bluetooth. Turn on the Wi-Fi switch on the sensor (service mode) to change its network or update it faster.": "Wi-Fi вимкнено, датчик працює через Bluetooth. Увімкніть перемикач Wi-Fi на датчику (сервісний режим), щоб змінити мережу або швидше оновити прошивку.",
+    "No ESPHome device found for this sensor.": "Для цього датчика не знайдено пристрій ESPHome.",
+    "All settings are applied.": "Усі налаштування застосовано.",
+    "Saved. The sensor picks the changes up on its next wake (motion wakes it).": "Збережено. Датчик отримає зміни під час наступного пробудження (рух його будить).",
+    "The sensor's settings haven't been read yet.": "Налаштування датчика ще не прочитані.",
+    "The sensor didn't accept the last change. Try again.": "Датчик не прийняв останню зміну. Спробуйте ще раз.",
+    " About {n} days left.": " Залишилось приблизно {n} дн.",
+    "Battery is at {n} %. Charge it soon.{d}": "Заряд батареї {n} %. Незабаром потрібно зарядити.{d}",
+    "No data from the sensor for {n} minutes. Check the battery and that a Bluetooth proxy is in range.": "Немає даних від датчика {n} хв. Перевірте батарею та чи Bluetooth-проксі в зоні досяжності.",
+    "Motion has been “detected” for too long. The motion sensor may be stuck.": "Рух «виявлено» занадто довго. Можливо, датчик руху завис.",
+    "Firmware {v} is available.": "Доступна прошивка {v}.",
+    "Open firmware": "Відкрити прошивку",
+    "The sensor didn't accept the last settings change.": "Датчик не прийняв останню зміну налаштувань.",
+    "Needs attention": "Потребує уваги",
+    "Close": "Закрити",
+    "Home Assistant history and statistics": "Історія та статистика Home Assistant",
+    "All settings": "Усі налаштування",
+  },
+};
+let LANG = "en";
+const langOf = (hass) => String((hass && ((hass.locale && hass.locale.language) || hass.language)) || "en").toLowerCase().split(/[-_]/)[0];
+function tr(text, vars) {
+  const s = (I18N[LANG] && I18N[LANG][text]) || text;
+  return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : s;
+}
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -97,7 +202,10 @@ class MoveSensorBlePanel extends HTMLElement {
   set hass(hass) {
     const first = !this._hass;
     this._hass = hass;
-    if (first && this._config) { this._render(); return; }
+    const lang = langOf(hass);
+    const langChanged = lang !== LANG;
+    LANG = lang;
+    if ((first || langChanged) && this._config) { this._render(); return; }
     for (const c of this._cards) c.hass = hass;
     if (this._menu) this._menu.hass = hass;
     this._refreshLive();
@@ -198,9 +306,9 @@ class MoveSensorBlePanel extends HTMLElement {
     const name = this._name(id);
     if (domain === "button") {
       const action = { action: "perform-action", perform_action: "button.press", target: { entity_id: id } };
-      if (DANGER[key]) action.confirmation = { text: DANGER[key] };
+      if (DANGER[key]) action.confirmation = { text: tr(DANGER[key]) };
       // a button row says what happens («Blink LED») — a tile would show the last press time instead
-      return { type: "entities", entities: [{ type: "button", entity: id, name: SHORT[key] || name, action_name: ACTION_NAMES[key] || "Press",
+      return { type: "entities", entities: [{ type: "button", entity: id, name: SHORT[key] ? tr(SHORT[key]) : name, action_name: tr(ACTION_NAMES[key] || "Press"),
                                               tap_action: action }] };
     }
     if (domain === "number" || domain === "switch") return this._settingCard(key);
@@ -257,11 +365,11 @@ class MoveSensorBlePanel extends HTMLElement {
       head.appendChild(this._el("div", { class: "title", text: "Move Sensor BLE" }));
       root.appendChild(head);
 
-      const tabs = this._el("div", { class: "tabs", role: "tablist", "aria-label": "Panel sections" });
+      const tabs = this._el("div", { class: "tabs", role: "tablist", "aria-label": tr("Panel sections") });
       for (const t of TABS) {
         tabs.appendChild(this._el("button", {
           role: "tab", "aria-selected": t.id === this._tab ? "true" : "false", class: t.id === this._tab ? "tab on" : "tab",
-          text: t.label, onclick: () => { location.hash = t.id; },
+          text: tr(t.label), onclick: () => { location.hash = t.id; },
         }));
       }
       root.appendChild(tabs);
@@ -269,7 +377,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const main = this._el("div", { class: "content" });
       root.appendChild(main);
       if (!this._dev) {
-        main.appendChild(this._el("p", { class: "note", text: "No Move Sensor BLE sensors are set up." }));
+        main.appendChild(this._el("p", { class: "note", text: tr("No Move Sensor BLE sensors are set up.") }));
         return;
       }
       if (this._tab === "overview") this._overview(main);
@@ -299,7 +407,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const id = this._id(sh.entity);
       if (!id) continue;
       const open = { action: "fire-dom-event", msb_sheet: key };
-      const cfg = { type: "tile", entity: id, name: sh.title, tap_action: open, icon_tap_action: open,
+      const cfg = { type: "tile", entity: id, name: tr(sh.title), tap_action: open, icon_tap_action: open,
                     hold_action: { action: "more-info" } };
       if (this._narrow) { cfg.vertical = true; cfg.content_layout = "vertical"; }
       // "Detected · 2 hours ago" shows a stuck PIR at a glance. A half-width phone tile cuts that line
@@ -316,7 +424,7 @@ class MoveSensorBlePanel extends HTMLElement {
         wrap.appendChild(this._since);
       }
       wrap.appendChild(this._el("button", {
-        class: "cog", "aria-label": `${sh.title}: history and settings`, title: "History and settings",
+        class: "cog", "aria-label": tr("{title}: history and settings", { title: tr(sh.title) }), title: tr("History and settings"),
         onclick: () => this._openSheet(key),
       }, [this._el("ha-icon", { icon: "mdi:cog-outline" })]));
       grid.appendChild(wrap);
@@ -327,7 +435,7 @@ class MoveSensorBlePanel extends HTMLElement {
     });
     main.appendChild(grid);
     main.appendChild(this._el("p", { class: "note",
-      text: "Tap a card for its history and settings. Press and hold for the standard Home Assistant dialog." }));
+      text: tr("Tap a card for its history and settings. Press and hold for the standard Home Assistant dialog.") }));
   }
 
   _settings(main) {
@@ -335,14 +443,14 @@ class MoveSensorBlePanel extends HTMLElement {
     main.appendChild(this._sync);
     const cols = this._el("div", { class: "groups" });
     for (const g of GROUPS) {
-      const col = this._el("section", { class: "group", "aria-label": g.title });
-      col.appendChild(this._el("h2", { text: g.title }));
+      const col = this._el("section", { class: "group", "aria-label": tr(g.title) });
+      col.appendChild(this._el("h2", { text: tr(g.title) }));
       for (const k of g.rows) { const c = this._settingCard(k); if (c) col.appendChild(this._card(c)); }
       const more = g.more.filter((k) => this._id(k));
       if (more.length) {
         const open = !!this._more[g.title];
         col.appendChild(this._el("button", {
-          class: "textbtn", "aria-expanded": open ? "true" : "false", text: open ? "Show less" : "Show more",
+          class: "textbtn", "aria-expanded": open ? "true" : "false", text: open ? tr("Show less") : tr("Show more"),
           onclick: () => { this._more[g.title] = !open; this._render(); },
         }));
         if (open) for (const k of more) col.appendChild(this._card(this._settingCard(k)));
@@ -351,20 +459,20 @@ class MoveSensorBlePanel extends HTMLElement {
     }
     main.appendChild(cols);
     main.appendChild(this._el("p", { class: "note",
-      text: "Changes reach the sensor over Bluetooth on its next wake, or right away while Wi-Fi service mode is on." }));
+      text: tr("Changes reach the sensor over Bluetooth on its next wake, or right away while Wi-Fi service mode is on.") }));
   }
 
   _advanced(main) {
-    main.appendChild(this._el("p", { class: "note", text: "For tuning and troubleshooting. The sensor works fine with the defaults." }));
+    main.appendChild(this._el("p", { class: "note", text: tr("For tuning and troubleshooting. The sensor works fine with the defaults.") }));
     const ids = (this._dev && this._dev.ids) || {};
     const extra = Object.keys(ids).filter((k) => !LAYOUT_KEYS.has(k)).sort();
     for (const sec of SECTIONS) {
       const panel = document.createElement("ha-expansion-panel");
       panel.outlined = true;
-      panel.header = sec.title;
+      panel.header = tr(sec.title);
       panel.leftChevron = false;
       panel.expanded = !!this._open[sec.id];
-      panel.setAttribute("header", sec.title);
+      panel.setAttribute("header", tr(sec.title));
       const sum = this._summary(sec.id);
       if (sum) { panel.secondary = sum; panel.setAttribute("secondary", sum); }
       panel.addEventListener("expanded-changed", (e) => { this._open[sec.id] = e.detail.expanded; });
@@ -372,7 +480,7 @@ class MoveSensorBlePanel extends HTMLElement {
       panel.appendChild(icon);
       const body = this._el("div", { class: "secgrid" });
       if (sec.id === "firmware") {
-        const rows = (this._dev.firmware || []).map((r) => (typeof r === "string" ? { entity: r, name: "Firmware" } : r));
+        const rows = (this._dev.firmware || []).map((r) => (typeof r === "string" ? { entity: r, name: tr("Firmware") } : r));
         if (rows.length) body.appendChild(this._wide(this._card({ type: "entities", entities: rows, state_color: true })));
       } else if (sec.id === "wifi") {
         this._wifiBody = body;
@@ -382,7 +490,7 @@ class MoveSensorBlePanel extends HTMLElement {
         for (const k of keys) { const c = this._infoCard(k); if (c) body.appendChild(this._card(c)); }
         if (sec.id === "diagnostics") {
           body.appendChild(this._card({ type: "entities", entities: [{
-            type: "button", name: "Configure", icon: "mdi:cog", action_name: "Open",
+            type: "button", name: tr("Configure"), icon: "mdi:cog", action_name: tr("Open"),
             tap_action: { action: "navigate", navigation_path: this._dev.configure } }] }));
         }
       }
@@ -402,17 +510,17 @@ class MoveSensorBlePanel extends HTMLElement {
       const fw = val("firmware");
       if (!fw) return "";
       const cur = fw.attributes.installed_version || "";
-      return fw.state === "on" ? `${cur} installed · ${fw.attributes.latest_version || ""} available` : `${cur} · up to date`;
+      return fw.state === "on" ? tr("{cur} installed · {latest} available", { cur, latest: fw.attributes.latest_version || "" }) : tr("{cur} · up to date", { cur });
     }
     if (id === "bluetooth") {
       const seen = val("last_seen");
       const mins = seen && !isNaN(Date.parse(seen.state)) ? Math.round((Date.now() - Date.parse(seen.state)) / 60000) : null;
-      return [fmt("signal_level") && `Signal ${fmt("signal_level")}`,
-              mins !== null && (mins < 1 ? "seen just now" : `seen ${mins} min ago`)].filter(Boolean).join(" · ");
+      return [fmt("signal_level") && tr("Signal {v}", { v: fmt("signal_level") }),
+              mins !== null && (mins < 1 ? tr("seen just now") : tr("seen {n} min ago", { n: mins }))].filter(Boolean).join(" · ");
     }
     if (id === "wifi") return this._wifiState().title;
-    if (id === "calibration") return fmt("setting_voltage_factor") ? `Voltage factor ${fmt("setting_voltage_factor")}` : "";
-    if (id === "diagnostics") return [fmt("last_reset_reason") && `Last reset: ${fmt("last_reset_reason")}`, fmt("voltage")].filter(Boolean).join(" · ");
+    if (id === "calibration") return fmt("setting_voltage_factor") ? tr("Voltage factor {v}", { v: fmt("setting_voltage_factor") }) : "";
+    if (id === "diagnostics") return [fmt("last_reset_reason") && tr("Last reset: {v}", { v: fmt("last_reset_reason") }), fmt("voltage")].filter(Boolean).join(" · ");
     return "";
   }
 
@@ -430,7 +538,7 @@ class MoveSensorBlePanel extends HTMLElement {
       away: "The Wi-Fi switch is on, but the sensor is on a network Home Assistant can't reach (for example a guest network). Join its own Wi-Fi from a phone and pick the home network in the Wi-Fi window.",
       own_ap: "The Wi-Fi switch is on, but the sensor is not connected to any router. Join its own Wi-Fi from a phone and pick a network in the Wi-Fi window.",
       off: "Wi-Fi is off and the sensor talks over Bluetooth. Turn on the Wi-Fi switch on the sensor (service mode) to change its network or update it faster." };
-    return { svc, title: titles[svc] || titles.off, note: notes[svc] || notes.off };
+    return { svc, title: tr(titles[svc] || titles.off), note: tr(notes[svc] || notes.off) };
   }
 
   _fillWifi() {
@@ -452,7 +560,7 @@ class MoveSensorBlePanel extends HTMLElement {
     } else {
       body.appendChild(this._el("p", { class: "note", text: wifi.length
         ? ws.note
-        : "No ESPHome device found for this sensor." }));
+        : tr("No ESPHome device found for this sensor.") }));
     }
   }
 
@@ -484,7 +592,7 @@ class MoveSensorBlePanel extends HTMLElement {
       const s = st ? st.state : "";
       const txt = { in_sync: "All settings are applied.", waiting: "Saved. The sensor picks the changes up on its next wake (motion wakes it).",
                     not_read: "The sensor's settings haven't been read yet.", error: "The sensor didn't accept the last change. Try again." }[s] || "";
-      this._sync.textContent = txt;
+      this._sync.textContent = txt ? tr(txt) : "";
       this._sync.className = "sync " + (s || "none");
     }
     // Section headers (firmware version, Bluetooth "seen …", …) follow the entities without a re-render:
@@ -512,8 +620,8 @@ class MoveSensorBlePanel extends HTMLElement {
     const lowLevel = low && !isNaN(parseFloat(low.state)) ? parseFloat(low.state) : 10;
     if (bat && !isNaN(parseFloat(bat.state)) && parseFloat(bat.state) <= lowLevel) {
       const days = this._st("battery_days_left");
-      const d = days && !isNaN(parseFloat(days.state)) ? ` About ${Math.round(parseFloat(days.state))} days left.` : "";
-      items.push({ icon: "mdi:battery-alert-variant-outline", text: `Battery is at ${Math.round(parseFloat(bat.state))} %. Charge it soon.${d}` });
+      const d = days && !isNaN(parseFloat(days.state)) ? tr(" About {n} days left.", { n: Math.round(parseFloat(days.state)) }) : "";
+      items.push({ icon: "mdi:battery-alert-variant-outline", text: tr("Battery is at {n} %. Charge it soon.{d}", { n: Math.round(parseFloat(bat.state)), d }) });
     }
     // same rule as the integration's Repairs notice (ota.py silent_limit_min)
     const seen = this._st("last_seen");
@@ -525,17 +633,17 @@ class MoveSensorBlePanel extends HTMLElement {
     if (limit !== null && seen && seen.state && !isNaN(Date.parse(seen.state))) {
       const mins = (Date.now() - Date.parse(seen.state)) / 60000;
       silent = mins > limit;
-      if (silent) items.push({ icon: "mdi:bluetooth-off", text: `No data from the sensor for ${Math.round(mins)} minutes. Check the battery and that a Bluetooth proxy is in range.` });
+      if (silent) items.push({ icon: "mdi:bluetooth-off", text: tr("No data from the sensor for {n} minutes. Check the battery and that a Bluetooth proxy is in range.", { n: Math.round(mins) }) });
     }
     const stuck = this._st("pir_stuck");
-    if (!silent && stuck && stuck.state === "on") items.push({ icon: "mdi:motion-sensor-off", text: "Motion has been “detected” for too long. The motion sensor may be stuck." });
+    if (!silent && stuck && stuck.state === "on") items.push({ icon: "mdi:motion-sensor-off", text: tr("Motion has been “detected” for too long. The motion sensor may be stuck.") });
     const fw = this._st("firmware");
     if (fw && fw.state === "on") {
-      items.push({ icon: "mdi:package-up", text: `Firmware ${fw.attributes.latest_version || ""} is available.`.replace("  ", " "),
-                   action: "Open firmware", go: () => { this._open.firmware = true; location.hash = "advanced"; } });
+      items.push({ icon: "mdi:package-up", text: tr("Firmware {v} is available.", { v: fw.attributes.latest_version || "" }).replace("  ", " "),
+                   action: tr("Open firmware"), go: () => { this._open.firmware = true; location.hash = "advanced"; } });
     }
     const st = this._st("settings_status");
-    if (st && st.state === "error") items.push({ icon: "mdi:cog-off-outline", text: "The sensor didn't accept the last settings change." });
+    if (st && st.state === "error") items.push({ icon: "mdi:cog-off-outline", text: tr("The sensor didn't accept the last settings change.") });
     const key = JSON.stringify(items.map((i) => i.text));
     if (key === this._attKey) return;
     this._attKey = key;
@@ -543,7 +651,7 @@ class MoveSensorBlePanel extends HTMLElement {
     box.innerHTML = "";
     if (!items.length) { box.hidden = true; return; }
     box.hidden = false;
-    box.appendChild(this._el("div", { class: "atthead", text: "Needs attention" }));
+    box.appendChild(this._el("div", { class: "atthead", text: tr("Needs attention") }));
     for (const it of items) {
       box.appendChild(this._el("div", { class: "attrow" }, [
         this._el("ha-icon", { icon: it.icon }),
@@ -578,25 +686,25 @@ class MoveSensorBlePanel extends HTMLElement {
     const id = sh && this._id(sh.entity);
     if (!id) { this._sheet = null; return; }
     const scrim = this._el("div", { class: "scrim", onclick: (e) => { if (e.target === scrim) this._closeSheet(); } });
-    const dlg = this._el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": sh.title });
+    const dlg = this._el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": tr(sh.title) });
     dlg.appendChild(this._el("div", { class: "grip", "aria-hidden": "true" }));
-    const close = this._el("button", { class: "iconbtn", "aria-label": "Close", onclick: () => this._closeSheet() },
+    const close = this._el("button", { class: "iconbtn", "aria-label": tr("Close"), onclick: () => this._closeSheet() },
                            [this._el("ha-icon", { icon: "mdi:close" })]);
     dlg.appendChild(this._el("div", { class: "sheethead" }, [
       close,
-      this._el("div", { class: "sheettitle", text: sh.title }),
-      this._el("button", { class: "iconbtn", "aria-label": "Home Assistant history and statistics", title: "Home Assistant history and statistics",
+      this._el("div", { class: "sheettitle", text: tr(sh.title) }),
+      this._el("button", { class: "iconbtn", "aria-label": tr("Home Assistant history and statistics"), title: tr("Home Assistant history and statistics"),
                            onclick: () => this._moreInfo(id) }, [this._el("ha-icon", { icon: "mdi:chart-line" })]),
-      this._el("button", { class: "textbtn", text: "All settings", onclick: () => { this._closeSheet(); location.hash = "settings"; } }),
+      this._el("button", { class: "textbtn", text: tr("All settings"), onclick: () => { this._closeSheet(); location.hash = "settings"; } }),
     ]));
     const body = this._el("div", { class: "sheetbody" });
-    body.appendChild(this._card({ type: "tile", entity: id, name: sh.title, tap_action: { action: "more-info" },
+    body.appendChild(this._card({ type: "tile", entity: id, name: tr(sh.title), tap_action: { action: "more-info" },
                                   state_content: ["state", "last_changed"] }));
-    body.appendChild(this._card({ type: "history-graph", hours_to_show: 24, entities: [{ entity: id, name: sh.title }] }));
+    body.appendChild(this._card({ type: "history-graph", hours_to_show: 24, entities: [{ entity: id, name: tr(sh.title) }] }));
     const info = sh.info.map((k) => this._id(k)).filter(Boolean);
     if (info.length) body.appendChild(this._card({ type: "glance", show_name: true, show_state: true,
-      entities: sh.info.filter((k) => this._id(k)).map((k) => ({ entity: this._id(k), name: SHORT[k] || this._name(this._id(k)) })) }));
-    body.appendChild(this._el("h3", { text: "Settings" }));
+      entities: sh.info.filter((k) => this._id(k)).map((k) => ({ entity: this._id(k), name: SHORT[k] ? tr(SHORT[k]) : this._name(this._id(k)) })) }));
+    body.appendChild(this._el("h3", { text: tr("Settings") }));
     for (const k of sh.settings) { const c = this._settingCard(k); if (c) body.appendChild(this._card(c)); }
     this._sheetBody = body;
     dlg.appendChild(body);
