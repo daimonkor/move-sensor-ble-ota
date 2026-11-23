@@ -16,7 +16,8 @@ const I18N = {
     "Temperature & humidity": "Температура и влажность",
     "Firmware": "Прошивка", "Bluetooth": "Bluetooth", "Wi-Fi (service mode)": "Wi-Fi (сервисный режим)",
     "Calibration": "Калибровка", "Diagnostics": "Диагностика",
-    "Days left": "Осталось дней", "Remaining": "Остаток", "Voltage": "Напряжение", "Last motion": "Последнее движение",
+    "Days left": "Осталось дней", "Remaining": "Остаток", "Voltage": "Напряжение", "Charging": "Заряжается",
+    "Voltage {v} V is near full: the sensor is probably on the charger.": "Напряжение {v} В близко к максимуму: датчик, похоже, на зарядке.", "Last motion": "Последнее движение",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Сброс Wi-Fi",
     "Blink LED": "Мигнуть LED", "Read": "Прочитать", "Reset": "Сбросить", "Press": "Нажать",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Сбросить Wi-Fi датчика на сеть, зашитую в прошивку?",
@@ -63,7 +64,8 @@ const I18N = {
     "Temperature & humidity": "Температура і вологість",
     "Firmware": "Прошивка", "Bluetooth": "Bluetooth", "Wi-Fi (service mode)": "Wi-Fi (сервісний режим)",
     "Calibration": "Калібрування", "Diagnostics": "Діагностика",
-    "Days left": "Залишилось днів", "Remaining": "Залишок", "Voltage": "Напруга", "Last motion": "Останній рух",
+    "Days left": "Залишилось днів", "Remaining": "Залишок", "Voltage": "Напруга", "Charging": "Заряджається",
+    "Voltage {v} V is near full: the sensor is probably on the charger.": "Напруга {v} В близька до максимуму: датчик, схоже, на зарядці.", "Last motion": "Останній рух",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Скидання Wi-Fi",
     "Blink LED": "Блимнути LED", "Read": "Прочитати", "Reset": "Скинути", "Press": "Натиснути",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Скинути Wi-Fi датчика на мережу, вшиту в прошивку?",
@@ -111,6 +113,11 @@ function tr(text, vars) {
   const s = (I18N[LANG] && I18N[LANG][text]) || text;
   return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : s;
 }
+
+// Charging guess: the sensor has no charge-status pin, so a voltage near the LiPo maximum (4.20 V)
+// means it is most likely on the charger. History: on the charger 4.17–4.21 V, right after unplugging it
+// rests at 4.15 V for hours — so the line sits between them.
+const CHARGE_V = 4.165;
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -242,6 +249,12 @@ class MoveSensorBlePanel extends HTMLElement {
   _st(key) {
     const id = this._id(key);
     return id && this._hass ? this._hass.states[id] : undefined;
+  }
+
+  _charging() {
+    const v = this._st("voltage");
+    const x = v ? parseFloat(v.state) : NaN;
+    return !isNaN(x) && x >= CHARGE_V;
   }
 
   // «Move Sensor BLE Keep time» -> «Keep time»
@@ -414,10 +427,18 @@ class MoveSensorBlePanel extends HTMLElement {
       // with an ellipsis, so there the time goes under the state, where the other tiles have their graph
       if (key === "motion") cfg.state_content = this._narrow ? "state" : ["state", "last_changed"];
       else cfg.features = [{ type: "trend-graph", hours_to_show: 24 }];
+      const chg = key === "bat" && this._charging();
+      if (chg) { cfg.icon = "mdi:battery-charging"; cfg.color = "green"; }
       const wrap = this._el("div", { class: "tilewrap" });
       const tile = this._card(cfg);
       if (cfg.features) this._edgeToEdge(tile);
       wrap.appendChild(tile);
+      if (chg) {
+        const v = this._st("voltage");
+        wrap.appendChild(this._el("div", { class: "chg" + (this._narrow ? " narrow" : ""), role: "status",
+          title: tr("Voltage {v} V is near full: the sensor is probably on the charger.", { v: v.state }) },
+          [this._el("ha-icon", { icon: "mdi:lightning-bolt" }), this._narrow ? null : this._el("span", { text: tr("Charging") })]));
+      }
       if (key === "motion" && this._narrow) {
         this._since = this._el("div", { class: "since", "aria-hidden": "true" },
           [this._el("ha-icon", { icon: "mdi:clock-outline" }), this._el("span")]);
@@ -585,6 +606,13 @@ class MoveSensorBlePanel extends HTMLElement {
   }
 
   _refreshLive() {
+    // charging guess flipped: rebuild the Overview so the Battery tile gets / loses its mark
+    const chg = this._charging();
+    if (this._chgShown === undefined) this._chgShown = chg;
+    else if (chg !== this._chgShown) {
+      this._chgShown = chg;
+      if (this._tab === "overview" && !this._sheet) { this._render(); return; }
+    }
     if (this._attention && this._attention.isConnected) this._fillAttention();
     this._fillSince();
     if (this._sync && this._sync.isConnected) {
@@ -618,7 +646,7 @@ class MoveSensorBlePanel extends HTMLElement {
     const bat = this._st("battery");
     const low = this._st("setting_battery_low");
     const lowLevel = low && !isNaN(parseFloat(low.state)) ? parseFloat(low.state) : 10;
-    if (bat && !isNaN(parseFloat(bat.state)) && parseFloat(bat.state) <= lowLevel) {
+    if (bat && !isNaN(parseFloat(bat.state)) && parseFloat(bat.state) <= lowLevel && !this._charging()) {
       const days = this._st("battery_days_left");
       const d = days && !isNaN(parseFloat(days.state)) ? tr(" About {n} days left.", { n: Math.round(parseFloat(days.state)) }) : "";
       items.push({ icon: "mdi:battery-alert-variant-outline", text: tr("Battery is at {n} %. Charge it soon.{d}", { n: Math.round(parseFloat(bat.state)), d }) });
@@ -700,6 +728,8 @@ class MoveSensorBlePanel extends HTMLElement {
     const body = this._el("div", { class: "sheetbody" });
     body.appendChild(this._card({ type: "tile", entity: id, name: tr(sh.title), tap_action: { action: "more-info" },
                                   state_content: ["state", "last_changed"] }));
+    if (this._sheet === "bat" && this._charging()) body.appendChild(this._el("p", { class: "chgnote",
+      text: tr("Voltage {v} V is near full: the sensor is probably on the charger.", { v: this._st("voltage").state }) }));
     body.appendChild(this._card({ type: "history-graph", hours_to_show: 24, entities: [{ entity: id, name: tr(sh.title) }] }));
     const info = sh.info.map((k) => this._id(k)).filter(Boolean);
     if (info.length) body.appendChild(this._card({ type: "glance", show_name: true, show_state: true,
@@ -751,6 +781,12 @@ const STYLE = `
   .cog { position: absolute; top: 8px; inset-inline-end: 8px; width: 40px; height: 40px; border-radius: 20px; border: 0;
          background: transparent; color: var(--secondary-text-color); cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .cog:hover { background: var(--secondary-background-color); color: var(--primary-color); }
+  .chg { position: absolute; top: 12px; inset-inline-end: 52px; display: flex; align-items: center; gap: 2px;
+         height: 24px; padding: 0 8px 0 4px; border-radius: 12px; font-size: 12px; font-weight: 500; pointer-events: none;
+         color: var(--success-color, #43a047); background: rgba(var(--rgb-success-color, 67, 160, 71), 0.15); }
+  .chg.narrow { padding: 0 4px; inset-inline-end: 48px; }
+  .chg ha-icon { --mdc-icon-size: 16px; }
+  .chgnote { margin: 0; color: var(--success-color, #43a047); font-size: 13px; }
   .attention[hidden] { display: none; }
   .attention { border-radius: var(--ha-card-border-radius, 12px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
                background: rgba(var(--rgb-warning-color, 255, 166, 0), 0.12); border: 1px solid rgba(var(--rgb-warning-color, 255, 166, 0), 0.4);

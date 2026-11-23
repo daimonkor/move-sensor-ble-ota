@@ -1023,6 +1023,18 @@ class OtaManager:
         """v1.19: прошивка 1.6.0+ отвечает на команду батареи (прочитано с датчика)."""
         return "battery_capacity" in self.applied
 
+    # Признака зарядки у датчика нет (пина статуса зарядника нет): напряжение у максимума LiPo
+    # (4.20 В) — скорее всего на зарядке. Тот же порог в панели (frontend/panel.js CHARGE_V).
+    CHARGE_V = 4.165
+
+    @property
+    def charging(self) -> bool:
+        v = self.data_value("voltage")
+        try:
+            return v is not None and float(v) >= self.CHARGE_V
+        except (TypeError, ValueError):
+            return False
+
     def battery_remaining_mah(self) -> float | None:
         """Остаток, мА·ч = ёмкость × процент — так же, как li_battery на датчике (remaining)."""
         cap = self.applied.get("battery_capacity")
@@ -2028,9 +2040,13 @@ class OtaManager:
             if self.motion_count is not None and mc != self.motion_count:
                 self.last_motion = now
             self.motion_count = mc
-        # история батареи: не чаще раза в 30 мин; рост > 5 % — зарядили, история заново
+        # история батареи: не чаще раза в 30 мин; рост > 5 % — зарядили, история заново.
+        # На зарядке (напряжение у максимума) % растёт и врёт — историю сбрасываем и не пишем,
+        # новый тренд начнётся с первого пакета после снятия с зарядки.
         pct = parsed.get("battery")
-        if pct is not None:
+        if pct is not None and self.charging:
+            self.batt_hist = []
+        elif pct is not None:
             ts = now.timestamp()
             if self.batt_hist and pct > self.batt_hist[-1][1] + 5:
                 self.batt_hist = []
@@ -2096,6 +2112,9 @@ class OtaManager:
                         "method": "estimate", "note": f"оценка по пробуждениям ({note})"}
             return {**info, **(extra or {}), "days_left": None, "method": None, "note": note}
 
+        if self.charging:
+            return {**info, "days_left": None, "method": "charging", "rate_pct_per_day": None,
+                    "note": "на зарядке — прогноз после снятия с зарядки"}
         if len(h) < 6:
             return fallback("собираю данные", {"rate_pct_per_day": None})
         t0 = h[0][0]
@@ -2219,7 +2238,9 @@ class OtaManager:
         low = float(low) if low is not None else 10.0
         if pct is not None:
             days = (self.battery_forecast() or {}).get("days_left")
-            if pct <= low:
+            if self.charging:
+                self._set_issue("battery_low", False)
+            elif pct <= low:
                 self._set_issue("battery_low", True, pct=round(pct), level=round(low),
                                 days=f"{round(days)}" if days is not None else "?")
             elif pct >= low + 5:
