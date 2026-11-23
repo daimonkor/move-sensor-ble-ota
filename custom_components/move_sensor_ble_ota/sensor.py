@@ -234,7 +234,11 @@ class DataSensor(OtaEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return self.mgr.data_info(self.key)
+        info = self.mgr.data_info(self.key)
+        if self.key == "battery":
+            # v1.26: флаг зарядки от датчика (прошивка 1.9.0+, li_battery) — панель показывает «Заряжается»
+            info.update(self.mgr.charge_info())
+        return info
 
 
 class LinkSensor(OtaEntity, SensorEntity):

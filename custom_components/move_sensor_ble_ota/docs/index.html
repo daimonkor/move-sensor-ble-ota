@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.25.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.26.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -409,7 +409,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <h2><span class="ic bg-sky"><svg class="i"><use href="#i-layers"/></svg></span>Панель (v1.20)</h2>
   <p class="lead">Панель <b>Move Sensor BLE</b> в боковом меню — три таба, только стандартные карточки Home Assistant (tile с элементами управления, значки, график истории). Ничего доустанавливать не нужно.</p>
   <p class="lead">С v1.24 тексты панели (табы, заголовки, подсказки, «Требует внимания») идут на языке Home Assistant (Профиль › Язык): русский, украинский, для остальных — английский. Имена сущностей остаются английскими.</p>
-  <p class="lead">С v1.25: если напряжение батареи ≥ 4.17 В (близко к максимуму LiPo 4.20 В), датчик, скорее всего, на зарядке — карточка Battery становится зелёной с иконкой зарядки и меткой «Заряжается», предупреждение о низком заряде не показывается. Отдельного признака зарядки у датчика нет, это оценка по напряжению.</p>
+  <p class="lead">С v1.26 (прошивка 1.9.0+): зарядку определяет сам датчик — библиотека <code>li_battery</code> (<code>charge_detect</code>) по скачку напряжения покоя вверх или напряжению у максимума, пока оно не пойдёт вниз, — и шлёт флаг битом 7 последнего байта своего блока рекламы (отдельное поле BTHome не влезает: пакет 31 из 31 байта). На зарядке карточка Battery зелёная с иконкой зарядки и меткой «Заряжается», предупреждение о низком заряде скрыто; атрибут <code>charging</code> у сущности Battery.</p>
   <table>
     <tr><th>Таб</th><th>Что там</th></tr>
     <tr><td><b>Overview</b></td><td>Значки: связь, сигнал, когда был на связи, статус настроек. «Needs attention» появляется, только если что-то не так (батарея садится, нет данных, движение залипло, новая прошивка, настройки не приняты). Четыре карточки: Motion, Temperature, Humidity, Battery. <b>Нажатие</b> на карточку (или шестерёнку) — шторка с историей за сутки и настройками этой величины; на телефоне она выезжает снизу и поднимается над клавиатурой. <b>Долгое нажатие</b> — стандартное окно Home Assistant (полная история, статистика); его же открывает иконка графика в шторке.</td></tr>
@@ -493,7 +493,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-timer"/></svg></span>
       <div><b>Last seen<span class="kind t-green">sensor</span></b><small>Последний пакет BTHome. Норма — не реже Climate report interval; дольше двух интервалов — разряд, сбой или нет связи. В атрибутах — packet id, Wake count, батарея, RSSI, прокси</small></div></div>
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
-      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Прогноз суток до разряда по тренду Battery % с последней зарядки (нужно ≥ 1 сутки и падение ≥ 2 %); до этого — оценка по статистике пробуждений (атрибут <code>method</code>: trend / estimate). С v1.25 на зарядке (напряжение ≥ 4.17 В) прогноз не считается (<code>method: charging</code>), история % сбрасывается — новый тренд начинается после снятия с зарядки</small></div></div>
+      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Прогноз суток до разряда по тренду Battery % с последней зарядки (нужно ≥ 1 сутки и падение ≥ 2 %); до этого — оценка по статистике пробуждений (атрибут <code>method</code>: trend / estimate). С v1.26 на зарядке (флаг датчика) прогноз не считается (<code>method: charging</code>), история % сбрасывается — новый тренд начинается после снятия с зарядки</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
       <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>Сколько раз за сутки было «занято»; вчера — в атрибутах</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>

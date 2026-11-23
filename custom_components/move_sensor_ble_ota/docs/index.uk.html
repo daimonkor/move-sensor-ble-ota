@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по повітрю та віддалені налаштування для батарейного датчика руху — по Bluetooth,
          через Bluetooth-проксі ESPHome. Датчик спить, Wi-Fi не потрібен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.25.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.26.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -409,7 +409,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <h2><span class="ic bg-sky"><svg class="i"><use href="#i-layers"/></svg></span>Панель (v1.20)</h2>
   <p class="lead">Панель <b>Move Sensor BLE</b> у бічному меню — три таби, лише стандартні картки Home Assistant (tile з елементами керування, значки, графік історії). Нічого доінсталювати не треба.</p>
   <p class="lead">З v1.24 тексти панелі (таби, заголовки, підказки, «Потребує уваги») йдуть мовою Home Assistant (Профіль › Мова): російська, українська, для решти — англійська. Імена сутностей лишаються англійськими.</p>
-  <p class="lead">З v1.25: якщо напруга батареї ≥ 4.17 В (близько до максимуму LiPo 4.20 В), датчик, найімовірніше, на зарядці — картка Battery стає зеленою з іконкою заряджання та міткою «Заряджається», попередження про низький заряд не показується. Окремої ознаки зарядки в датчика немає, це оцінка за напругою.</p>
+  <p class="lead">З v1.26 (прошивка 1.9.0+): заряджання визначає сам датчик — бібліотека <code>li_battery</code> (<code>charge_detect</code>) за стрибком напруги спокою вгору або напругою біля максимуму, доки вона не піде вниз, — і шле прапорець бітом 7 останнього байта свого блоку реклами (окреме поле BTHome не влазить: пакет 31 з 31 байта). На зарядці картка Battery зелена з іконкою заряджання та міткою «Заряджається», попередження про низький заряд приховане; атрибут <code>charging</code> у сутності Battery.</p>
   <table>
     <tr><th>Таб</th><th>Що там</th></tr>
     <tr><td><b>Overview</b></td><td>Значки: зв'язок, сигнал, коли був на зв'язку, статус налаштувань. «Needs attention» з'являється, лише коли щось не так (батарея сідає, немає даних, рух залип, нова прошивка, налаштування не прийнято). Чотири картки: Motion, Temperature, Humidity, Battery. <b>Натискання</b> на картку (або шестерню) — шторка з історією за добу й налаштуваннями цієї величини; на телефоні вона виїжджає знизу й піднімається над клавіатурою. <b>Довге натискання</b> — стандартне вікно Home Assistant (повна історія, статистика); його ж відкриває іконка графіка в шторці.</td></tr>
@@ -493,7 +493,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-timer"/></svg></span>
       <div><b>Last seen<span class="kind t-green">sensor</span></b><small>Останній пакет BTHome. Норма — не рідше Climate report interval; довше двох інтервалів — розряд, збій або немає зв’язку. В атрибутах — packet id, Wake count, батарея, RSSI, проксі</small></div></div>
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
-      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Прогноз діб до розряду за трендом Battery % з останнього заряджання (потрібно ≥ 1 доби й падіння ≥ 2 %); до того — оцінка за статистикою пробуджень (атрибут <code>method</code>: trend / estimate). З v1.25 на зарядці (напруга ≥ 4.17 В) прогноз не рахується (<code>method: charging</code>), історія % скидається — новий тренд починається після зняття з зарядки</small></div></div>
+      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Прогноз діб до розряду за трендом Battery % з останнього заряджання (потрібно ≥ 1 доби й падіння ≥ 2 %); до того — оцінка за статистикою пробуджень (атрибут <code>method</code>: trend / estimate). З v1.26 на зарядці (прапорець датчика) прогноз не рахується (<code>method: charging</code>), історія % скидається — новий тренд починається після зняття з зарядки</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
       <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>Скільки разів за добу було «зайнято»; учора — в атрибутах</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>

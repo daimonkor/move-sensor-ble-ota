@@ -40,7 +40,7 @@ def _load(path: str, names: set[str], extra: dict | None = None) -> dict:
     return ns
 
 
-OTA_NS = _load(OTA, {"custom_parse", "fw_fingerprint", "version_fingerprint", "fw_semver",
+OTA_NS = _load(OTA, {"custom_parse", "FLAG_CHARGING", "MOTION_MASK_190", "fw_fingerprint", "version_fingerprint", "fw_semver",
                      "CUSTOM_COMPANY_ID", "WAKE_MASK", "FLAG_SERVICE", "FLAG_ROUTER"})
 
 
@@ -57,11 +57,21 @@ def _md(wake: int, rev: int = 0, motion: int = 0) -> dict:
 
 def test_custom_parse_flags_and_mask():
     p = OTA_NS["custom_parse"](_md(0x8000 | 0x4000 | 1234, 7, 3))
-    assert p == {"wake": 1234, "settings_rev": 7, "motion_count": 3, "service": True, "router": True}
+    assert p == {"wake": 1234, "settings_rev": 7, "motion_count": 3, "service": True, "router": True,
+                 "charging_bit": False}
     p = OTA_NS["custom_parse"](_md(0x8000 | 5))
     assert p["service"] is True and p["router"] is False and p["wake"] == 5
     p = OTA_NS["custom_parse"](_md(0x3FFF))
     assert p["service"] is False and p["router"] is False and p["wake"] == 0x3FFF
+
+
+def test_custom_parse_charging_bit():
+    # firmware 1.9.0: bit 7 of the last byte = charging (li_battery), motion count is 7 bits
+    p = OTA_NS["custom_parse"](_md(42, 5, 0x80 | 17))
+    assert p["charging_bit"] is True
+    assert p["motion_count"] & OTA_NS["MOTION_MASK_190"] == 17
+    p = OTA_NS["custom_parse"](_md(42, 5, 0x7F))
+    assert p["charging_bit"] is False and p["motion_count"] == 0x7F
 
 
 def test_custom_parse_missing_or_short():

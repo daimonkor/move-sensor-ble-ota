@@ -186,7 +186,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.25.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.26.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -410,7 +410,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <h2><span class="ic bg-sky"><svg class="i"><use href="#i-layers"/></svg></span>Panel (v1.20)</h2>
   <p class="lead">The <b>Move Sensor BLE</b> panel in the sidebar has three tabs and uses only Home Assistant's own cards (tile cards with controls, badges, history graph) — nothing extra to install.</p>
   <p class="lead">Since v1.24 the panel texts (tabs, headings, hints, «Needs attention») follow the Home Assistant language (Profile › Language): Russian and Ukrainian, English for everything else. Entity names stay in English.</p>
-  <p class="lead">Since v1.25: when the battery voltage is ≥ 4.17 V (close to the LiPo maximum of 4.20 V) the sensor is most likely on the charger — the Battery card turns green with a charging icon and a «Charging» label, and the low-battery warning is hidden. The sensor has no charge-status signal; this is a guess from the voltage.</p>
+  <p class="lead">Since v1.26 (firmware 1.9.0+): the sensor itself tells when it is charging — the <code>li_battery</code> library (<code>charge_detect</code>) goes by a jump of the rest voltage or a near-full voltage until it falls again — and sends the flag as bit 7 of the last byte of its own advertising block (a separate BTHome field does not fit: the packet is 31 of 31 bytes). While charging the Battery card turns green with a charging icon and a «Charging» label, and the low-battery warning is hidden; Battery has a <code>charging</code> attribute.</p>
   <table>
     <tr><th>Tab</th><th>What is there</th></tr>
     <tr><td><b>Overview</b></td><td>Badges: link, signal, last seen, settings status. «Needs attention» shows up only when something is wrong (low battery, no data, motion stuck, new firmware, settings not accepted). Four cards: Motion, Temperature, Humidity, Battery. <b>Tap</b> a card (or its gear) — a sheet with the 24 h history and the settings of that value; on a phone it slides up from the bottom and moves above the keyboard. <b>Press and hold</b> — Home Assistant's own dialog (full history, statistics); the chart icon in the sheet opens it too.</td></tr>
@@ -494,7 +494,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
     <div class="card ent"><span class="ico t-green"><svg class="i"><use href="#i-timer"/></svg></span>
       <div><b>Last seen<span class="kind t-green">sensor</span></b><small>Last BTHome packet. Normal — at least every Climate report interval; longer than two intervals means a flat battery, a fault or no link. Attributes: packet id, Wake count, battery, RSSI, proxy</small></div></div>
     <div class="card ent"><span class="ico t-amber"><svg class="i"><use href="#i-battery"/></svg></span>
-      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Days until empty, from the Battery % trend since the last charge (needs ≥ 1 day and a ≥ 2 % drop); until then an estimate from wake statistics (attribute <code>method</code>: trend / estimate). Since v1.25, while charging (voltage ≥ 4.17 V) there is no forecast (<code>method: charging</code>) and the % history is reset — a new trend starts once it is off the charger</small></div></div>
+      <div><b>Battery days left<span class="kind t-amber">sensor</span></b><small>Days until empty, from the Battery % trend since the last charge (needs ≥ 1 day and a ≥ 2 % drop); until then an estimate from wake statistics (attribute <code>method</code>: trend / estimate). Since v1.26, while charging (the sensor's flag) there is no forecast (<code>method: charging</code>) and the % history is reset — a new trend starts once it is off the charger</small></div></div>
     <div class="card ent"><span class="ico t-blue"><svg class="i"><use href="#i-wave"/></svg></span>
       <div><b>Motion events today<span class="kind t-blue">sensor</span></b><small>How many times it was "occupied" today; yesterday in attributes</small></div></div>
     <div class="card ent"><span class="ico t-violet"><svg class="i"><use href="#i-moon"/></svg></span>

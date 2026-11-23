@@ -171,6 +171,11 @@ CUSTOM_COMPANY_ID = 0xFFFF
 WAKE_MASK = 0x3FFF
 FLAG_SERVICE = 0x8000
 FLAG_ROUTER = 0x4000
+# 2026-11-24 (прошивка 1.9.0): бит 7 байта motion_count — «заряжается» (li_battery charge_detect на
+# датчике), счётчик движений 7 бит. У старой прошивки этот бит — часть счётчика.
+FLAG_CHARGING = 0x80
+MOTION_MASK_190 = 0x7F
+CHARGING_FW = (1, 9, 0)
 SERVICE_FLAG_FRESH_S = 30.0   # пакет с флагами в сервисном режиме — раз в 5 с
 OWN_FLASH_WINDOW_S = 900.0    # 15 мин после своей прошивки новая сборка на датчике — своя
 
@@ -181,7 +186,8 @@ def custom_parse(manufacturer_data: dict) -> dict:
         return {}
     raw = int.from_bytes(data[0:2], "little")
     return {"wake": raw & WAKE_MASK, "settings_rev": data[2], "motion_count": data[3],
-            "service": bool(raw & FLAG_SERVICE), "router": bool(raw & FLAG_ROUTER)}
+            "service": bool(raw & FLAG_SERVICE), "router": bool(raw & FLAG_ROUTER),
+            "charging_bit": bool(data[3] & FLAG_CHARGING)}
 
 
 # v1.15: данные датчика, которые показывает основное устройство (из любого канала)
@@ -779,6 +785,7 @@ class OtaManager:
         # --- свежие срабатывания PIR (прошивка со своим блоком, v1.14.2): Last motion
         self.last_motion: datetime | None = None
         self.motion_count: int | None = None      # последний виденный счётчик из своего блока
+        self.charging_flag: bool = False          # v1.26: бит «заряжается» из последнего пакета
         # --- авто-окно рекламы (2026-11-14): по RSSI и пропущенным климат-пакетам
         self.auto_window: bool = True
         self.rssi_hist: list[int] = []            # RSSI последних пакетов (новый packet id)
@@ -855,6 +862,7 @@ class OtaManager:
         ts_lm = data.get("last_motion")
         self.last_motion = dt_util.parse_datetime(ts_lm) if ts_lm else None
         self.motion_count = data.get("motion_count")
+        self.charging_flag = bool(data.get("charging"))
         aw = data.get("auto_window") or {}
         self.auto_window = aw.get("on", True)
         self.rssi_hist = aw.get("rssi") or []
@@ -923,6 +931,7 @@ class OtaManager:
                 "stuck_threshold_min": self.stuck_threshold_min,
                 "last_motion": self.last_motion.isoformat() if self.last_motion else None,
                 "motion_count": self.motion_count,
+                "charging": self.charging_flag,
                 "auto_window": {
                     "on": self.auto_window,
                     "rssi": self.rssi_hist,
@@ -1023,17 +1032,19 @@ class OtaManager:
         """v1.19: прошивка 1.6.0+ отвечает на команду батареи (прочитано с датчика)."""
         return "battery_capacity" in self.applied
 
-    # Признака зарядки у датчика нет (пина статуса зарядника нет): напряжение у максимума LiPo
-    # (4.20 В) — скорее всего на зарядке. Тот же порог в панели (frontend/panel.js CHARGE_V).
-    CHARGE_V = 4.165
+    @property
+    def charging_supported(self) -> bool:
+        """v1.26: прошивка 1.9.0+ сама шлёт флаг зарядки (li_battery charge_detect)."""
+        sv = fw_semver(self.firmware_version)
+        return bool(sv) and tuple(int(x) for x in sv.split(".")) >= CHARGING_FW
 
     @property
     def charging(self) -> bool:
-        v = self.data_value("voltage")
-        try:
-            return v is not None and float(v) >= self.CHARGE_V
-        except (TypeError, ValueError):
-            return False
+        """v1.26: на зарядке — флаг из пакета датчика (последний принятый). Интеграция не угадывает."""
+        return bool(self.charging_flag) and self.charging_supported
+
+    def charge_info(self) -> dict:
+        return {"charging": self.charging}
 
     def battery_remaining_mah(self) -> float | None:
         """Остаток, мА·ч = ёмкость × процент — так же, как li_battery на датчике (remaining)."""
@@ -2036,12 +2047,22 @@ class OtaManager:
             self.occupied = occ
         # свежее срабатывание PIR: счётчик из своего блока изменился (v1.14.2)
         mc = parsed.get("motion_count")
+        if mc is not None and self.charging_supported:
+            # 1.9.0: старший бит — «заряжается», счётчик 7 бит
+            was = self.charging
+            self.charging_flag = bool(parsed.get("charging_bit"))
+            mc &= MOTION_MASK_190
+            if self.charging != was:
+                _LOGGER.info("%s: charging %s", self.name, "started" if self.charging else "ended")
         if mc is not None:
-            if self.motion_count is not None and mc != self.motion_count:
+            prev_mc = self.motion_count
+            if prev_mc is not None and self.charging_supported:
+                prev_mc &= MOTION_MASK_190   # сохранённый до 1.9.0 счётчик был 8-битным
+            if prev_mc is not None and mc != prev_mc:
                 self.last_motion = now
             self.motion_count = mc
         # история батареи: не чаще раза в 30 мин; рост > 5 % — зарядили, история заново.
-        # На зарядке (напряжение у максимума) % растёт и врёт — историю сбрасываем и не пишем,
+        # На зарядке (флаг датчика) % растёт и врёт — историю сбрасываем и не пишем,
         # новый тренд начнётся с первого пакета после снятия с зарядки.
         pct = parsed.get("battery")
         if pct is not None and self.charging:

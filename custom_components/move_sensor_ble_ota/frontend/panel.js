@@ -17,7 +17,7 @@ const I18N = {
     "Firmware": "Прошивка", "Bluetooth": "Bluetooth", "Wi-Fi (service mode)": "Wi-Fi (сервисный режим)",
     "Calibration": "Калибровка", "Diagnostics": "Диагностика",
     "Days left": "Осталось дней", "Remaining": "Остаток", "Voltage": "Напряжение", "Charging": "Заряжается",
-    "Voltage {v} V is near full: the sensor is probably on the charger.": "Напряжение {v} В близко к максимуму: датчик, похоже, на зарядке.", "Last motion": "Последнее движение",
+    "On the charger. Days left comes back once it is unplugged.": "На зарядке. Прогноз «Осталось дней» вернётся после снятия с зарядки.", "Last motion": "Последнее движение",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Сброс Wi-Fi",
     "Blink LED": "Мигнуть LED", "Read": "Прочитать", "Reset": "Сбросить", "Press": "Нажать",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Сбросить Wi-Fi датчика на сеть, зашитую в прошивку?",
@@ -65,7 +65,7 @@ const I18N = {
     "Firmware": "Прошивка", "Bluetooth": "Bluetooth", "Wi-Fi (service mode)": "Wi-Fi (сервісний режим)",
     "Calibration": "Калібрування", "Diagnostics": "Діагностика",
     "Days left": "Залишилось днів", "Remaining": "Залишок", "Voltage": "Напруга", "Charging": "Заряджається",
-    "Voltage {v} V is near full: the sensor is probably on the charger.": "Напруга {v} В близька до максимуму: датчик, схоже, на зарядці.", "Last motion": "Останній рух",
+    "On the charger. Days left comes back once it is unplugged.": "На зарядці. Прогноз «Залишилось днів» повернеться після зняття з зарядки.", "Last motion": "Останній рух",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Скидання Wi-Fi",
     "Blink LED": "Блимнути LED", "Read": "Прочитати", "Reset": "Скинути", "Press": "Натиснути",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Скинути Wi-Fi датчика на мережу, вшиту в прошивку?",
@@ -113,11 +113,6 @@ function tr(text, vars) {
   const s = (I18N[LANG] && I18N[LANG][text]) || text;
   return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : s;
 }
-
-// Charging guess: the sensor has no charge-status pin, so a voltage near the LiPo maximum (4.20 V)
-// means it is most likely on the charger. History: on the charger 4.17–4.21 V, right after unplugging it
-// rests at 4.15 V for hours — so the line sits between them.
-const CHARGE_V = 4.165;
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -251,10 +246,10 @@ class MoveSensorBlePanel extends HTMLElement {
     return id && this._hass ? this._hass.states[id] : undefined;
   }
 
+  // charging comes from the sensor itself (firmware 1.9.0+, li_battery), as the Battery attribute
   _charging() {
-    const v = this._st("voltage");
-    const x = v ? parseFloat(v.state) : NaN;
-    return !isNaN(x) && x >= CHARGE_V;
+    const b = this._st("battery");
+    return !!(b && b.attributes && b.attributes.charging === true);
   }
 
   // «Move Sensor BLE Keep time» -> «Keep time»
@@ -434,9 +429,8 @@ class MoveSensorBlePanel extends HTMLElement {
       if (cfg.features) this._edgeToEdge(tile);
       wrap.appendChild(tile);
       if (chg) {
-        const v = this._st("voltage");
         wrap.appendChild(this._el("div", { class: "chg" + (this._narrow ? " narrow" : ""), role: "status",
-          title: tr("Voltage {v} V is near full: the sensor is probably on the charger.", { v: v.state }) },
+          title: tr("On the charger. Days left comes back once it is unplugged.") },
           [this._el("ha-icon", { icon: "mdi:lightning-bolt" }), this._narrow ? null : this._el("span", { text: tr("Charging") })]));
       }
       if (key === "motion" && this._narrow) {
@@ -729,7 +723,7 @@ class MoveSensorBlePanel extends HTMLElement {
     body.appendChild(this._card({ type: "tile", entity: id, name: tr(sh.title), tap_action: { action: "more-info" },
                                   state_content: ["state", "last_changed"] }));
     if (this._sheet === "bat" && this._charging()) body.appendChild(this._el("p", { class: "chgnote",
-      text: tr("Voltage {v} V is near full: the sensor is probably on the charger.", { v: this._st("voltage").state }) }));
+      text: tr("On the charger. Days left comes back once it is unplugged.") }));
     body.appendChild(this._card({ type: "history-graph", hours_to_show: 24, entities: [{ entity: id, name: tr(sh.title) }] }));
     const info = sh.info.map((k) => this._id(k)).filter(Boolean);
     if (info.length) body.appendChild(this._card({ type: "glance", show_name: true, show_state: true,
