@@ -403,6 +403,9 @@ class MoveSensorBlePanel extends HTMLElement {
     const badges = ["link", "signal_level", "last_seen", "settings_status"]
       .map((k) => this._id(k)).filter(Boolean)
       .map((e) => ({ type: "entity", entity: e, show_name: true, show_state: true, show_icon: true, name: this._name(e) }));
+    // v1.26.1: on the charger — a badge next to the link / signal ones («Charging 92 %»)
+    if (this._charging() && this._id("battery")) badges.unshift({ type: "entity", entity: this._id("battery"),
+      show_name: true, show_state: true, show_icon: true, name: tr("Charging"), icon: "mdi:battery-charging", color: "green" });
     // on a phone the name is already in the toolbar — keep the row for the badges
     main.appendChild(this._card(this._narrow ? { type: "heading", heading: "", badges }
       : { type: "heading", heading: this._dev.title, heading_style: "title", icon: "mdi:motion-sensor", badges }));
