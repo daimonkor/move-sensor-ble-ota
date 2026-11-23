@@ -870,6 +870,10 @@ class OtaManager:
         ts_ls = data.get("last_seen")
         self.last_seen = dt_util.parse_datetime(ts_ls) if ts_ls else None
         self.last_seen_info = data.get("last_seen_info") or {}
+        # сигнал последнего пакета переживает рестарт HA — иначе до следующего пакета панель показывает «—»
+        r = self.last_seen_info.get("rssi")
+        if self.ble_rssi is None and isinstance(r, (int, float)) and r > -127:
+            self.ble_rssi = int(r)
         # пассивно слушаем рекламу BTHome: сброс Wake count = датчик перезагрузился -> прочитать DIAG
         self._unsub_passive = bluetooth.async_register_callback(
             self.hass,
