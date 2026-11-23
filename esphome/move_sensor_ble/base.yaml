@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.8.3"
+  fw_version: "1.9.0"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -185,7 +185,7 @@ external_components:
       path: components
     components: [bthome]
   # 1.5.0: батарея — библиотека li_battery (github.com/daimonkor/esphome-li-battery), версия по тегу
-  - source: github://daimonkor/esphome-li-battery@v1.1.0   # 1.8.3: v1.1.0 (voltage_for_percent с током; для датчика без изменений)
+  - source: github://daimonkor/esphome-li-battery@v1.2.0   # 1.9.0: v1.2.0 — зарядка по напряжению (charge_detect) и скорость разряда
     components: [li_battery]
   # 1.7.0: своя точка доступа — библиотека ap_portal (github.com/daimonkor/esphome-ap-portal):
   # точка рядом с роутером в сервисном режиме, DNS, окно «Войти в сеть», попап «Wi-Fi роутера».
@@ -375,6 +375,9 @@ li_battery:
   chemistry: lipo
   capacity: bat_capacity          # 1.6.0: настройка (мА·ч) — сайт / ESPHome и по BLE из HA
   restore: rtc
+  # 1.9.0: на зарядке ли (пина статуса зарядника нет) — по напряжению покоя: скачок вверх
+  # или >= 4.165 В, пока не пойдёт вниз. Флаг уходит в HA битом 7 байта motion_count своего блока.
+  charge_detect: true
   low: bat_low_level              # 1.6.0: настройка (%), снимается на 5 % выше
   critical: 3.50                  # защита банки — только в прошивке
   resume: 3.65
@@ -436,7 +439,7 @@ bthome:
     # + 8 байт свой блок (Manufacturer Specific Data 0xFFFF, set_custom_data) = 31 из 31.
     # Battery low убран 2026-11-16 (дублирует Battery %). Wake count с 2026-11-16 (v1.14.2) —
     # в своём блоке: wake uint16 LE, settings_rev uint8 (0 = ещё нет, будет в 1.15),
-    # motion_count uint8 (свежие срабатывания PIR). BTHome-сущность «Count» в HA застынет.
+    # motion_count uint8 (свежие срабатывания PIR, 7 бит; бит 7 — «заряжается», 1.9.0). BTHome-сущность «Count» в HA застынет.
     # Счётчики сбросов (brownout/panic/watchdog) в BTHome НЕ идут — их читает интеграция
     # move_sensor_ble_ota командой DIAG (components/bthome/ble_ota.*), 2026-11-14.
   binary_sensors:
@@ -1283,7 +1286,10 @@ script:
           uint16_t w = ms::wake_count & 0x3FFF;
           if (id(service_mode)) w |= 0x8000;
           if (id(service_mode) && wifi::global_wifi_component->is_connected()) w |= 0x4000;
-          const uint8_t cd[4] = {(uint8_t) (w & 0xFF), (uint8_t) (w >> 8), ms::settings_rev, ms::motion_count};
+          // 1.9.0: бит 7 последнего байта — «заряжается» (li_battery charge_detect), счётчик движений
+          // 7 бит (по кругу 0-127). Отдельное поле BTHome battery_charging не влезает (31 из 31 байта).
+          const uint8_t mc = (uint8_t) ((ms::motion_count & 0x7F) | (id(bat).is_charging() ? 0x80 : 0));
+          const uint8_t cd[4] = {(uint8_t) (w & 0xFF), (uint8_t) (w >> 8), ms::settings_rev, mc};
           id(bth).set_custom_data(0xFFFF, cd, sizeof(cd));
 
   # Публикация состояния: один BTHome-пакет со всем сразу
