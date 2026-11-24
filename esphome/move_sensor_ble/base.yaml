@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.9.1"
+  fw_version: "1.9.2"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -185,7 +185,7 @@ external_components:
       path: components
     components: [bthome]
   # 1.5.0: батарея — библиотека li_battery (github.com/daimonkor/esphome-li-battery), версия по тегу
-  - source: github://daimonkor/esphome-li-battery@v1.2.1   # 1.9.1: v1.2.1 — зарядка снимается, когда замеры 10 мин не доходят до верха (4.195 В); 1.9.0: charge_detect
+  - source: github://daimonkor/esphome-li-battery@v1.3.0   # 1.9.2: v1.3.0 — после полной зарядки 100 % держится 6 ч и плавно сходится к кривой, «зарядка» больше не включается сама после снятия; 1.9.1: v1.2.1 — зарядка снимается, когда замеры 10 мин не доходят до верха (4.195 В); 1.9.0: charge_detect
     components: [li_battery]
   # 1.7.0: своя точка доступа — библиотека ap_portal (github.com/daimonkor/esphome-ap-portal):
   # точка рядом с роутером в сервисном режиме, DNS, окно «Войти в сеть», попап «Wi-Fi роутера».
