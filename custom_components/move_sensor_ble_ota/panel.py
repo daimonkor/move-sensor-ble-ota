@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 
@@ -24,6 +25,19 @@ PANEL_URL = "move-sensor-ble-panel"
 PANEL_COMPONENT = "move-sensor-ble-panel"
 STATIC_URL = f"/{DOMAIN}_static"
 _STATIC_DONE = f"{DOMAIN}_panel_static"
+REPO_URL = "https://github.com/daimonkor/move-sensor-ble-ota"
+
+
+def _read_version() -> str:
+    """v1.28: версия интеграции из manifest.json — на панель (вкладка «О дополнении») и в ?v= у panel.js."""
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as f:
+            return str(json.load(f).get("version") or "?")
+    except (OSError, ValueError):
+        return "?"
+
+
+VERSION = _read_version()
 
 
 def _remove_own(hass: HomeAssistant) -> None:
@@ -112,7 +126,8 @@ def _config(hass: HomeAssistant) -> dict:
             "wifi": wifi_ids, "configure": f"/config/integrations/integration/{DOMAIN}",
             "strip": sorted(strip, key=len, reverse=True),
         })
-    return {"devices": devices}
+    return {"devices": devices, "version": VERSION, "repo": REPO_URL,
+            "docs": "/move_sensor_ble_ota/docs/"}
 
 
 async def async_update_panel(hass: HomeAssistant) -> None:
@@ -140,7 +155,7 @@ async def async_update_panel(hass: HomeAssistant) -> None:
         webcomponent_name=PANEL_COMPONENT,
         sidebar_title="Move Sensor BLE",
         sidebar_icon="mdi:motion-sensor",
-        module_url=f"{STATIC_URL}/panel.js?v=1.27.1",
+        module_url=f"{STATIC_URL}/panel.js?v={VERSION}",
         config=_config(hass),
         require_admin=False,
     )

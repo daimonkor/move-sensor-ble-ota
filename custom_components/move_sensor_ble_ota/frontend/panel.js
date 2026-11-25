@@ -52,6 +52,14 @@ const I18N = {
     "Motion has been “detected” for too long. The motion sensor may be stuck.": "Движение «обнаружено» слишком долго. Возможно, датчик движения завис.",
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Открыть прошивку",
+    "About": "О дополнении", "Version {v} is available.": "Доступна версия {v}.", "Open update": "Открыть обновление",
+    "This is the latest version.": "Установлена последняя версия.",
+    "Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.": "Интеграция Home Assistant для датчика движения Move Sensor BLE: данные и настройки по Bluetooth или Wi-Fi, обновление прошивки по Bluetooth через Bluetooth-прокси ESPHome.",
+    "Versions": "Версии", "Integration": "Интеграция", "Sensor firmware": "Прошивка датчика", "Built with": "Собрана в",
+    "ESPHome Builder": "ESPHome Builder", "{cur} (available {latest})": "{cur} (доступна {latest})", "Home Assistant": "Home Assistant",
+    "Links": "Ссылки", "Documentation": "Документация", "What's new (releases)": "Что нового (релизы)", "Firmware changelog": "Изменения прошивки",
+    "Source code (GitHub)": "Исходный код (GitHub)", "Integration settings": "Настройки интеграции", "Loading…": "Загрузка…",
+    "What's new in v{v}": "Что нового в v{v}", "Release notes could not be loaded — see the releases page.": "Не удалось загрузить описание выпуска — смотрите страницу релизов.",
     "New ESPHome {now} is installed (new esp32 platform). The sensor runs firmware built with ESPHome {was}{idf}.": "Установлен новый ESPHome {now} (новая платформа esp32). Прошивка датчика собрана в ESPHome {was}{idf}.",
     "Update rebuilds the firmware and flashes it, settings stay.": "«Обновить» пересоберёт прошивку и прошьёт датчик, настройки сохранятся.",
     "Over Wi-Fi right away — the sensor is in service mode.": "Прошивка по Wi-Fi сразу — датчик в сервисном режиме.",
@@ -106,6 +114,14 @@ const I18N = {
     "Motion has been “detected” for too long. The motion sensor may be stuck.": "Рух «виявлено» занадто довго. Можливо, датчик руху завис.",
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Відкрити прошивку",
+    "About": "Про доповнення", "Version {v} is available.": "Доступна версія {v}.", "Open update": "Відкрити оновлення",
+    "This is the latest version.": "Встановлено останню версію.",
+    "Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.": "Інтеграція Home Assistant для датчика руху Move Sensor BLE: дані й налаштування через Bluetooth або Wi-Fi, оновлення прошивки через Bluetooth за допомогою Bluetooth-проксі ESPHome.",
+    "Versions": "Версії", "Integration": "Інтеграція", "Sensor firmware": "Прошивка датчика", "Built with": "Зібрано в",
+    "ESPHome Builder": "ESPHome Builder", "{cur} (available {latest})": "{cur} (доступна {latest})", "Home Assistant": "Home Assistant",
+    "Links": "Посилання", "Documentation": "Документація", "What's new (releases)": "Що нового (релізи)", "Firmware changelog": "Зміни прошивки",
+    "Source code (GitHub)": "Вихідний код (GitHub)", "Integration settings": "Налаштування інтеграції", "Loading…": "Завантаження…",
+    "What's new in v{v}": "Що нового у v{v}", "Release notes could not be loaded — see the releases page.": "Не вдалося завантажити опис випуску — дивіться сторінку релізів.",
     "New ESPHome {now} is installed (new esp32 platform). The sensor runs firmware built with ESPHome {was}{idf}.": "Встановлено новий ESPHome {now} (нова платформа esp32). Прошивку датчика зібрано в ESPHome {was}{idf}.",
     "Update rebuilds the firmware and flashes it, settings stay.": "«Оновити» перезбере прошивку й прошиє датчик, налаштування збережуться.",
     "Over Wi-Fi right away — the sensor is in service mode.": "Прошивка через Wi-Fi одразу — датчик у сервісному режимі.",
@@ -130,6 +146,7 @@ const TABS = [
   { id: "overview", label: "Overview" },
   { id: "settings", label: "Settings" },
   { id: "advanced", label: "Advanced" },
+  { id: "about", label: "About" },
 ];
 
 // keys used by the layout; anything else the integration adds lands in Advanced › Diagnostics
@@ -383,6 +400,12 @@ class MoveSensorBlePanel extends HTMLElement {
       this._menu.narrow = this._narrow;
       head.appendChild(this._menu);
       head.appendChild(this._el("div", { class: "title", text: "Move Sensor BLE" }));
+      // v1.28: версия интеграции в шапке; нажатие — вкладка «О дополнении»
+      if (this._config && this._config.version) {
+        this._verBtn = this._el("button", { class: "ver", title: tr("About"), onclick: () => { location.hash = "about"; } });
+        head.appendChild(this._verBtn);
+        this._fillVer();
+      }
       root.appendChild(head);
 
       const tabs = this._el("div", { class: "tabs", role: "tablist", "aria-label": tr("Panel sections") });
@@ -396,6 +419,7 @@ class MoveSensorBlePanel extends HTMLElement {
 
       const main = this._el("div", { class: "content" });
       root.appendChild(main);
+      if (this._tab === "about") { this._about(main); return; }
       if (!this._dev) {
         main.appendChild(this._el("p", { class: "note", text: tr("No Move Sensor BLE sensors are set up.") }));
         return;
@@ -628,6 +652,7 @@ class MoveSensorBlePanel extends HTMLElement {
     }
     if (this._attention && this._attention.isConnected) this._fillAttention();
     if (this._fwNote && this._fwNote.isConnected) this._fillFwNote();
+    this._fillVer();
     this._fillSince();
     if (this._sync && this._sync.isConnected) {
       const st = this._st("settings_status");
@@ -706,6 +731,109 @@ class MoveSensorBlePanel extends HTMLElement {
         it.action ? this._el("button", { class: "textbtn", text: it.action, onclick: it.go }) : null,
       ]));
     }
+  }
+
+  // ---------- v1.28: «About» — the integration itself ----------
+  // Marketplace update entity of the integration (not our firmware one): its latest version, if newer
+  _addonEntity() {
+    const st = (this._hass && this._hass.states) || {};
+    const own = new Set(Object.values((this._dev && this._dev.ids) || {}));
+    if (st["update.move_sensor_ble_ota"]) return st["update.move_sensor_ble_ota"];
+    return Object.values(st).find((s) => s.entity_id.startsWith("update.") && !own.has(s.entity_id)
+      && /^Move Sensor BLE OTA/i.test((s.attributes && s.attributes.friendly_name) || "")) || null;
+  }
+
+  _fillVer() {
+    const b = this._verBtn;
+    if (!b || !this._config || !this._config.version) return;
+    const upd = this._addonUpdate();
+    const text = upd ? `v${this._config.version} → v${upd}` : `v${this._config.version}`;
+    if (b.textContent !== text) { b.textContent = text; b.className = upd ? "ver upd" : "ver"; }
+  }
+
+  _addonUpdate() {
+    const e = this._addonEntity();
+    if (!e || e.state !== "on") return null;
+    return String(e.attributes.latest_version || "").replace(/^v/, "") || null;
+  }
+
+  _docsUrl() {
+    const base = (this._config && this._config.docs) || "/move_sensor_ble_ota/docs/";
+    return base + (LANG === "ru" ? "index.html" : LANG === "uk" ? "index.uk.html" : "index.en.html");
+  }
+
+  _about(main) {
+    const cfg = this._config || {};
+    const ver = cfg.version || "?";
+    const repo = cfg.repo || "https://github.com/daimonkor/move-sensor-ble-ota";
+    const card = (children) => { const c = document.createElement("ha-card"); const b = this._el("div", { class: "aboutcard" }, children); c.appendChild(b); return c; };
+    const link = (text, href, icon, internal) => this._el("a", internal ? { class: "alink", href } : { class: "alink", href, target: "_blank", rel: "noreferrer" },
+      [this._el("ha-icon", { icon }), this._el("span", { text })]);
+
+    // header: name, version, update
+    const upd = this._addonUpdate();
+    const ae = this._addonEntity();
+    main.appendChild(card([
+      this._el("div", { class: "abouthead" }, [
+        this._el("ha-icon", { icon: "mdi:motion-sensor", class: "bigicon" }),
+        this._el("div", {}, [
+          this._el("div", { class: "aname", text: "Move Sensor BLE OTA" }),
+          this._el("div", { class: "note", text: tr("Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.") }),
+        ]),
+        this._el("span", { class: upd ? "vbadge upd" : "vbadge", text: `v${ver}` }),
+      ]),
+      upd ? this._el("div", { class: "attrow" }, [
+        this._el("ha-icon", { icon: "mdi:package-up" }),
+        this._el("span", { text: tr("Version {v} is available.", { v: upd }) }),
+        ae ? this._el("button", { class: "textbtn", text: tr("Open update"), onclick: () => this._moreInfo(ae.entity_id) }) : null,
+      ]) : this._el("div", { class: "note", text: tr("This is the latest version.") }),
+    ]));
+
+    // versions of everything involved
+    const fw = this._st("firmware");
+    const a = (fw && fw.attributes) || {};
+    const rows = [
+      [tr("Integration"), `v${ver}`],
+      [tr("Sensor firmware"), a.installed_version || "—"],
+      [tr("Built with"), a.esphome_flashed ? `ESPHome ${a.esphome_flashed}${a.esp_idf_flashed ? ` · ESP-IDF ${a.esp_idf_flashed}` : ""}` : "—"],
+      [tr("ESPHome Builder"), a.esphome_builder ? (a.esphome_builder_latest && a.esphome_builder_latest !== a.esphome_builder
+        ? tr("{cur} (available {latest})", { cur: a.esphome_builder, latest: a.esphome_builder_latest }) : a.esphome_builder) : "—"],
+      [tr("Home Assistant"), (this._hass.config && this._hass.config.version) || "—"],
+    ];
+    main.appendChild(card([
+      this._el("h2", { class: "ah2", text: tr("Versions") }),
+      this._el("div", { class: "vtable" }, rows.flatMap(([k, v]) => [this._el("div", { class: "vk", text: k }), this._el("div", { class: "vv", text: v })])),
+    ]));
+
+    // links
+    main.appendChild(card([
+      this._el("h2", { class: "ah2", text: tr("Links") }),
+      this._el("div", { class: "links" }, [
+        link(tr("Documentation"), this._docsUrl(), "mdi:book-open-variant"),
+        link(tr("What's new (releases)"), `${repo}/releases`, "mdi:tag-text-outline"),
+        link(tr("Firmware changelog"), `${repo}/blob/main/esphome/move_sensor_ble/CHANGELOG.md`, "mdi:chip"),
+        link(tr("Source code (GitHub)"), repo, "mdi:github"),
+        link(tr("Integration settings"), (this._dev && this._dev.configure) || "/config/integrations/integration/move_sensor_ble_ota", "mdi:cog", true),
+      ]),
+    ]));
+
+    // release notes of the installed version (GitHub API, public, CORS-friendly); offline — only the link stays
+    const notes = this._el("div", { class: "note", text: tr("Loading…") });
+    main.appendChild(card([this._el("h2", { class: "ah2", text: tr("What's new in v{v}", { v: ver }) }), notes]));
+    const api = repo.replace("https://github.com/", "https://api.github.com/repos/");
+    fetch(`${api}/releases/tags/v${ver}`, { headers: { Accept: "application/vnd.github+json" } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then((js) => {
+        const md = document.createElement("ha-markdown");
+        md.content = js.body || "";
+        md.breaks = true;
+        notes.replaceWith(md);
+      })
+      .catch(() => { notes.textContent = tr("Release notes could not be loaded — see the releases page."); });
+  }
+
+  _moreInfo(entityId) {
+    this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId } }));
   }
 
   // ---------- v1.27: new ESPHome Builder / esp32 platform → rebuild and flash ----------
@@ -842,6 +970,24 @@ const STYLE = `
   .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--secondary-text-color); font: inherit;
          font-size: 14px; font-weight: 500; padding: 0 var(--ha-space-4, 16px); min-height: 48px; cursor: pointer; }
   .tab.on { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+  .ver { margin-inline-start: auto; background: none; border: 1px solid var(--divider-color); border-radius: 12px; color: var(--secondary-text-color);
+         font: inherit; font-size: 12px; font-weight: 500; padding: 2px 10px; cursor: pointer; }
+  .ver.upd, .vbadge.upd { color: var(--warning-color); border-color: var(--warning-color); }
+  .aboutcard { padding: var(--ha-space-4, 16px); display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); }
+  .abouthead { display: flex; align-items: flex-start; gap: var(--ha-space-3, 12px); }
+  .abouthead > div { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .bigicon { --mdc-icon-size: 40px; color: var(--primary-color); }
+  .aname { font-size: 20px; font-weight: 500; }
+  .vbadge { border: 1px solid var(--divider-color); border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .ah2 { font-size: 16px; font-weight: 500; margin: 0; }
+  .vtable { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--ha-space-4, 16px); font-size: 14px; }
+  .vk { color: var(--secondary-text-color); }
+  .vv { font-variant-numeric: tabular-nums; word-break: break-word; }
+  .links { display: grid; gap: var(--ha-space-1, 4px); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .alink { display: flex; align-items: center; gap: var(--ha-space-2, 8px); color: var(--primary-color); text-decoration: none;
+           min-height: 40px; padding: 0 var(--ha-space-2, 8px); border-radius: 8px; }
+  .alink:hover { background: var(--secondary-background-color); }
+  .alink ha-icon { color: var(--secondary-text-color); }
   .tab:focus-visible, button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
   .content { max-width: 1180px; margin: 0 auto; padding: var(--ha-space-4, 16px); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
   .note { color: var(--secondary-text-color); font-size: 13px; margin: 0; }
