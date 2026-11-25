@@ -52,6 +52,12 @@ const I18N = {
     "Motion has been “detected” for too long. The motion sensor may be stuck.": "Движение «обнаружено» слишком долго. Возможно, датчик движения завис.",
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Открыть прошивку",
+    "New ESPHome {now} is installed (new esp32 platform). The sensor runs firmware built with ESPHome {was}{idf}.": "Установлен новый ESPHome {now} (новая платформа esp32). Прошивка датчика собрана в ESPHome {was}{idf}.",
+    "Update rebuilds the firmware and flashes it, settings stay.": "«Обновить» пересоберёт прошивку и прошьёт датчик, настройки сохранятся.",
+    "Over Wi-Fi right away — the sensor is in service mode.": "Прошивка по Wi-Fi сразу — датчик в сервисном режиме.",
+    "Over Bluetooth on the next wake (motion in front of the sensor wakes it).": "Прошивка по Bluetooth при ближайшем пробуждении (движение перед датчиком будит его).",
+    "Update": "Обновить", "Tap again to confirm": "Нажмите ещё раз для подтверждения", "Building and flashing…": "Сборка и прошивка…",
+    "Error: {e}": "Ошибка: {e}",
     "The sensor didn't accept the last settings change.": "Датчик не принял последнее изменение настроек.",
     "Needs attention": "Требует внимания",
     "Close": "Закрыть",
@@ -100,6 +106,12 @@ const I18N = {
     "Motion has been “detected” for too long. The motion sensor may be stuck.": "Рух «виявлено» занадто довго. Можливо, датчик руху завис.",
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Відкрити прошивку",
+    "New ESPHome {now} is installed (new esp32 platform). The sensor runs firmware built with ESPHome {was}{idf}.": "Встановлено новий ESPHome {now} (нова платформа esp32). Прошивку датчика зібрано в ESPHome {was}{idf}.",
+    "Update rebuilds the firmware and flashes it, settings stay.": "«Оновити» перезбере прошивку й прошиє датчик, налаштування збережуться.",
+    "Over Wi-Fi right away — the sensor is in service mode.": "Прошивка через Wi-Fi одразу — датчик у сервісному режимі.",
+    "Over Bluetooth on the next wake (motion in front of the sensor wakes it).": "Прошивка через Bluetooth при найближчому пробудженні (рух перед датчиком будить його).",
+    "Update": "Оновити", "Tap again to confirm": "Натисніть ще раз для підтвердження", "Building and flashing…": "Збирання та прошивка…",
+    "Error: {e}": "Помилка: {e}",
     "The sensor didn't accept the last settings change.": "Датчик не прийняв останню зміну налаштувань.",
     "Needs attention": "Потребує уваги",
     "Close": "Закрити",
@@ -498,6 +510,10 @@ class MoveSensorBlePanel extends HTMLElement {
       panel.appendChild(icon);
       const body = this._el("div", { class: "secgrid" });
       if (sec.id === "firmware") {
+        this._fwNote = this._el("div", { class: "fwnote" });   // v1.27: новый ESPHome Builder → «Обновить»
+        body.appendChild(this._fwNote);
+        this._fwNoteKey = null;
+        this._fillFwNote();
         const rows = (this._dev.firmware || []).map((r) => (typeof r === "string" ? { entity: r, name: tr("Firmware") } : r));
         if (rows.length) body.appendChild(this._wide(this._card({ type: "entities", entities: rows, state_color: true })));
       } else if (sec.id === "wifi") {
@@ -611,6 +627,7 @@ class MoveSensorBlePanel extends HTMLElement {
       if (this._tab === "overview" && !this._sheet) { this._render(); return; }
     }
     if (this._attention && this._attention.isConnected) this._fillAttention();
+    if (this._fwNote && this._fwNote.isConnected) this._fillFwNote();
     this._fillSince();
     if (this._sync && this._sync.isConnected) {
       const st = this._st("settings_status");
@@ -663,13 +680,16 @@ class MoveSensorBlePanel extends HTMLElement {
     const stuck = this._st("pir_stuck");
     if (!silent && stuck && stuck.state === "on") items.push({ icon: "mdi:motion-sensor-off", text: tr("Motion has been “detected” for too long. The motion sensor may be stuck.") });
     const fw = this._st("firmware");
-    if (fw && fw.state === "on") {
+    const tcu = this._fwUpdateInfo();
+    if (tcu) {
+      items.push({ icon: "mdi:chip", text: tcu.text, sub: tcu.how, btn: tcu.busy ? null : "update" });
+    } else if (fw && fw.state === "on") {
       items.push({ icon: "mdi:package-up", text: tr("Firmware {v} is available.", { v: fw.attributes.latest_version || "" }).replace("  ", " "),
                    action: tr("Open firmware"), go: () => { this._open.firmware = true; location.hash = "advanced"; } });
     }
     const st = this._st("settings_status");
     if (st && st.state === "error") items.push({ icon: "mdi:cog-off-outline", text: tr("The sensor didn't accept the last settings change.") });
-    const key = JSON.stringify(items.map((i) => i.text));
+    const key = JSON.stringify(items.map((i) => [i.text, i.sub, i.btn]));
     if (key === this._attKey) return;
     this._attKey = key;
     const box = this._attention;
@@ -680,10 +700,66 @@ class MoveSensorBlePanel extends HTMLElement {
     for (const it of items) {
       box.appendChild(this._el("div", { class: "attrow" }, [
         this._el("ha-icon", { icon: it.icon }),
-        this._el("span", { text: it.text }),
+        it.sub ? this._el("span", {}, [this._el("div", { text: it.text }), this._el("div", { class: "attsub", text: it.sub })])
+               : this._el("span", { text: it.text }),
+        it.btn === "update" ? this._fwUpdateButton() : null,
         it.action ? this._el("button", { class: "textbtn", text: it.action, onclick: it.go }) : null,
       ]));
     }
+  }
+
+  // ---------- v1.27: new ESPHome Builder / esp32 platform → rebuild and flash ----------
+  _fwUpdateInfo() {
+    const fw = this._st("firmware");
+    const a = (fw && fw.attributes) || {};
+    if (!a.esphome_update) return null;
+    const link = this._st("link");
+    const wifi = !!(link && link.state === "wifi");   // service mode: integration flashes over Wi-Fi at once
+    const busy = !!a.in_progress;
+    return {
+      fw, wifi, busy,
+      text: tr("New ESPHome {now} is installed (new esp32 platform). The sensor runs firmware built with ESPHome {was}{idf}.",
+               { now: a.esphome_update, was: a.esphome_flashed || "?", idf: a.esp_idf_flashed ? ` (ESP-IDF ${a.esp_idf_flashed})` : "" }),
+      how: busy ? `${tr("Building and flashing…")} ${a.ota_status || ""}`.trim()
+                : `${tr(wifi ? "Over Wi-Fi right away — the sensor is in service mode." : "Over Bluetooth on the next wake (motion in front of the sensor wakes it).")} ${tr("Update rebuilds the firmware and flashes it, settings stay.")}`,
+    };
+  }
+
+  // two taps (no browser dialog): first arms, second starts update.install with a backup
+  _fwUpdateButton() {
+    const b = this._el("button", { class: "textbtn", text: tr("Update") });
+    let timer = null;
+    b.onclick = () => {
+      const info = this._fwUpdateInfo();
+      if (!info || info.busy) return;
+      if (!timer) {
+        b.textContent = tr("Tap again to confirm");
+        timer = setTimeout(() => { timer = null; b.textContent = tr("Update"); }, 6000);
+        return;
+      }
+      clearTimeout(timer); timer = null;
+      b.disabled = true;
+      b.textContent = tr("Building and flashing…");
+      this._hass.callService("update", "install", { entity_id: info.fw.entity_id, backup: true })
+        .catch((e) => { b.disabled = false; b.textContent = tr("Error: {e}", { e: (e && e.message) || e }); });
+    };
+    return b;
+  }
+
+  _fillFwNote() {
+    const box = this._fwNote;
+    const info = this._fwUpdateInfo();
+    const key = info ? JSON.stringify([info.text, info.how, info.busy]) : "";
+    if (key === this._fwNoteKey) return;
+    this._fwNoteKey = key;
+    box.innerHTML = "";
+    box.hidden = !info;
+    if (!info) return;
+    box.appendChild(this._el("div", { class: "attrow" }, [
+      this._el("ha-icon", { icon: "mdi:chip" }),
+      this._el("span", {}, [this._el("div", { text: info.text }), this._el("div", { class: "attsub", text: info.how })]),
+      info.busy ? null : this._fwUpdateButton(),
+    ]));
   }
 
   // ---------- sheet: our dialog (bottom sheet on phones) ----------
@@ -792,6 +868,10 @@ const STYLE = `
   .attrow { display: flex; align-items: center; gap: var(--ha-space-3, 12px); flex-wrap: wrap; }
   .attrow ha-icon { color: var(--warning-color); flex: none; }
   .attrow span { flex: 1 1 240px; }
+  .attsub { color: var(--secondary-text-color); font-size: 0.9em; margin-top: 2px; }
+  .fwnote { grid-column: 1 / -1; padding: var(--ha-space-3, 12px); border-radius: var(--ha-card-border-radius, 12px);
+            background: rgba(var(--rgb-warning-color, 255, 166, 0), 0.1); }
+  .fwnote[hidden] { display: none; }
   .groups { display: grid; gap: var(--ha-space-6, 24px) var(--ha-space-4, 16px); grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
   .group { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
   .group h2, .sheetbody h3 { font-size: 18px; font-weight: 500; margin: var(--ha-space-1, 4px) var(--ha-space-1, 4px) 0; }

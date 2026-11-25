@@ -13,6 +13,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import shutil
 import struct
 import time
@@ -355,6 +356,7 @@ class RetryLater(Exception):
 # Ключ проверяем заново раз в AUTH_KEY_CHECK_S (поле «Ключ OTA» может быть пустым — тогда
 # действующий ключ из secrets.yaml), а раз в AUTH_RETRY_H часов пробуем ещё раз и с тем же.
 AUTH_KEY_CHECK_S = 600
+BUILDER_CHECK_S = 30 * 60   # v1.27: версию аддона ESPHome спрашиваем у Supervisor раз в 30 мин
 AUTH_RETRY_H = 6
 
 
@@ -410,6 +412,57 @@ def load_firmware(path: str) -> FirmwareImage:
         project = desc[48:80].split(b"\0", 1)[0].decode(errors="replace")
     elf_sha = desc[144:148].hex() if len(desc) >= 148 and desc[0:4] == b"\x32\x54\xcd\xab" else None
     return FirmwareImage(path, data, zlib.crc32(data) & 0xFFFFFFFF, project, version, from_factory, elf_sha)
+
+
+# v1.27: чем собран образ — версия ESPHome («2026.11.0 (config hash 0x…» в строке лога) и ESP-IDF
+# (esp_app_desc_t.idf_ver). Нужна, чтобы предложить пересборку, когда в HA обновили ESPHome Builder.
+_ESPHOME_VER_RE = re.compile(rb"(\d{4}\.\d{1,2}\.\d+(?:-dev\d*|b\d+)?) \(config hash 0x")
+
+
+def image_toolchain(data: bytes) -> dict:
+    out: dict = {}
+    desc = data[32 : 32 + 256]
+    if len(desc) >= 148 and desc[0:4] == b"\x32\x54\xcd\xab":
+        idf = desc[112:144].split(b"\0", 1)[0].decode(errors="replace").strip()
+        if idf:
+            out["idf"] = idf
+        out["sha"] = desc[144:148].hex()
+    m = _ESPHOME_VER_RE.search(data)
+    if m:
+        out["esphome"] = m.group(1).decode()
+    return out
+
+
+def find_toolchain(directory: str, sha: str) -> dict | None:
+    """Образ с этим app_elf_sha (хвост версии на датчике) в папке прошивок или в backup/ (executor)."""
+    for d in (directory, os.path.join(directory, "backup")):
+        try:
+            names = sorted(os.listdir(d), reverse=True)
+        except OSError:
+            continue
+        for n in names:
+            if not n.endswith(".bin"):
+                continue
+            try:
+                with open(os.path.join(d, n), "rb") as f:
+                    head = f.read(32 + 256)
+                    if head[32:36] != b"\x32\x54\xcd\xab" or head[32 + 144 : 32 + 148].hex() != sha:
+                        continue
+                    f.seek(0)
+                    tc = image_toolchain(f.read())
+            except OSError:
+                continue
+            if tc.get("esphome") or tc.get("idf"):
+                return tc
+    return None
+
+
+def version_key(v: str | None) -> tuple:
+    """«2026.11.1» -> (2026, 11, 1); -dev/бета ниже релиза той же версии."""
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)(.*)", (v or "").strip())
+    if not m:
+        return ()
+    return (int(m[1]), int(m[2]), int(m[3]), 0 if m[4] else 1)
 
 
 def prune_firmware(directory: str, keep: int, protect: set[str] | None = None) -> list[str]:
@@ -821,6 +874,10 @@ class OtaManager:
         self.fw_current_section: list[dict] = []   # верхний раздел CHANGELOG прошитой копии
         self.backups: list[dict] = []              # v1.18: резервные копии прошивки (свежие первыми)
         self._rollback: dict | None = None         # v1.18: идёт откат на эту копию
+        # v1.27: чем собрана прошивка на датчике ({"esphome", "idf", "sha"}) и версия аддона ESPHome Builder
+        self.toolchain: dict | None = None
+        self.builder_info: dict = {}
+        self._builder_checked: float = -1e9
 
     # ================= загрузка / сохранение =================
     async def async_load(self) -> None:
@@ -832,6 +889,7 @@ class OtaManager:
         self.applied = data.get("applied", {})
         self.target = data.get("target") or dict(self.applied)   # миграция со старых версий
         self.flashed_hash = data.get("flashed_hash")
+        self.toolchain = data.get("toolchain") if isinstance(data.get("toolchain"), dict) else None
         self.last_flash = data.get("last_flash") if isinstance(data.get("last_flash"), dict) else None
         ts_k = data.get("key_ok_at")
         self.key_ok_at = dt_util.parse_datetime(ts_k) if ts_k else None
@@ -909,6 +967,7 @@ class OtaManager:
                 "target": self.target,
                 "rev": {"seen": self.rev_seen, "own": self.rev_own, "capable": self.rev_capable},
                 "flashed_hash": self.flashed_hash,
+                "toolchain": self.toolchain,
                 "last_flash": self.last_flash,
                 "key_ok_at": self.key_ok_at.isoformat() if self.key_ok_at else None,
                 # v1.15: задание прошивки переживает перезапуск HA (файл + срок ожидания окна)
@@ -1336,6 +1395,7 @@ class OtaManager:
             else:
                 self.last_flash = {"at": now.isoformat(), "channel": None, "seconds": 0, "speed_kbs": None,
                                    "bytes": len(image.data), "result": "already_on_sensor"}
+            self.toolchain = image_toolchain(image.data) or self.toolchain
             self.error = None
             self._set(ST_SUCCESS, progress=100, started=now, finished=now)
             self._save()
@@ -1466,6 +1526,8 @@ class OtaManager:
         changed = h != self.config_hash or mtime != self.config_mtime
         if await self._adopt_external_flash(cfg, h, mtime):
             changed = True
+        if await self._refresh_toolchain():   # v1.27
+            changed = True
         imgs = await self.hass.async_add_executor_job(firmware_stats, self.firmware_dir)   # v1.16.2
         await self.async_refresh_backups()   # v1.18
         if imgs != self.fw_images:
@@ -1474,6 +1536,52 @@ class OtaManager:
         self.config_mtime = mtime
         if await self._refresh_changes(cfg) or changed:
             self._notify()
+
+    # ================= v1.27: новая версия ESPHome Builder / платформы esp32 =================
+    async def _refresh_toolchain(self) -> bool:
+        """Чем собрана прошивка на датчике и какая версия ESPHome сейчас в аддоне. True — что-то изменилось."""
+        changed = False
+        fv = self.firmware_version or ""
+        sha = fv.rsplit("-", 1)[-1] if "-" in fv else None
+        if sha and len(sha) == 8 and (self.toolchain or {}).get("sha") != sha:
+            tc = await self.hass.async_add_executor_job(find_toolchain, self.firmware_dir, sha)
+            if not tc:
+                tc = {"sha": sha}
+                # прошили мимо интеграции, датчик в сервисном режиме — версия ESPHome из реестра устройств
+                if self.wifi is not None and self.wifi.device_id:
+                    from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
+
+                    dev = dr.async_get(self.hass).async_get(self.wifi.device_id)
+                    m = re.search(r"ESPHome (\S+?)\)?$", (dev.sw_version or "") if dev else "")
+                    if m:
+                        tc["esphome"] = m.group(1)
+            tc["sha"] = sha
+            if tc != self.toolchain:
+                self.toolchain = tc
+                self._save()
+                changed = True
+        if time.monotonic() - self._builder_checked >= BUILDER_CHECK_S:
+            self._builder_checked = time.monotonic()
+            from .builder import BuildError, addon_versions  # noqa: PLC0415
+
+            try:
+                info = await addon_versions(self.hass)
+            except (BuildError, Exception) as err:  # noqa: BLE001 — без Supervisor просто не предлагаем
+                _LOGGER.debug("%s: ESPHome Builder version: %s", self.name, err)
+                info = {}
+            if info != self.builder_info:
+                self.builder_info = info
+                changed = True
+        return changed
+
+    @property
+    def toolchain_update(self) -> str | None:
+        """Версия ESPHome в аддоне, если она новее той, которой собрана прошивка на датчике."""
+        now = self.builder_info.get("version")
+        was = (self.toolchain or {}).get("esphome")
+        if now and was and version_key(now) and version_key(was) and version_key(now) > version_key(was):
+            return now
+        return None
 
     # ================= v1.17.0: ключ API для ESPHome-устройства датчика =================
     async def async_sync_api_key(self) -> None:
@@ -2553,6 +2661,8 @@ class OtaManager:
     def _flash_success(self, channel: str) -> None:
         self._own_flash_at = time.monotonic()
         size = len(self._ota.image.data) if self._ota is not None else None
+        if self._ota is not None:   # v1.27: чем собран прошитый образ (ESPHome / ESP-IDF)
+            self.toolchain = image_toolchain(self._ota.image.data) or None
         self._ota = None
         # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
         self._need_read = True

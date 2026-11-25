@@ -55,6 +55,18 @@ async def _sv(session: aiohttp.ClientSession, method: str, path: str, body: dict
         return js.get("data") or {}
 
 
+async def addon_versions(hass: HomeAssistant) -> dict:
+    """v1.27: версия аддона ESPHome Builder (= версия ESPHome, которой он собирает) и доступное обновление."""
+    session = async_get_clientsession(hass)
+    addons = (await _sv(session, "get", "/addons")).get("addons", [])
+    addon = next((a for a in addons if a.get("slug", "").endswith("_esphome") or a.get("slug") == "esphome"), None)
+    if addon is None:
+        return {}
+    info = await _sv(session, "get", f"/addons/{addon['slug']}/info")
+    return {"version": info.get("version"), "version_latest": info.get("version_latest"),
+            "update_available": bool(info.get("update_available")), "slug": addon["slug"]}
+
+
 class _Builder:
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass

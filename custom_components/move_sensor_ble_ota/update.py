@@ -53,7 +53,9 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
         if m.firmware_version is None:
             return None
         if not m.new_build_label:
-            return self.installed_version
+            # v1.27: YAML тот же, но в HA новый ESPHome Builder (новая платформа esp32) — пересобрать
+            tc = m.toolchain_update
+            return f"{self.installed_version} · ESPHome {tc}" if tc else self.installed_version
         if m.fw_version_new and m.fw_version_new != m.fw_version_flashed:
             return f"{m.fw_version_new} · new build"                # версия из CHANGELOG прошивки
         return m.new_build_label
@@ -77,6 +79,11 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             return f"{m.status}: {m.progress} %"
         if m.error:
             return f"Ошибка: {m.error}"[:250]
+        if self.latest_version and self.latest_version != self.installed_version and m.toolchain_update \
+                and not m.new_build_label:
+            was = (m.toolchain or {}).get("esphome")
+            return (f"ESPHome Builder обновлён: прошивка датчика собрана в ESPHome {was}, сейчас {m.toolchain_update} "
+                    "(новая платформа esp32). «Установить» пересоберёт и прошьёт.")[:250]
         if self.latest_version and self.latest_version != self.installed_version:
             line = fwnotes.summary_line(m.fw_sections, m.fw_changes)
             if line:
@@ -102,7 +109,13 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
                 "backup": (" · ".join(x for x in (b.get("fw_version"),
                                                   self.mgr.build_label(b.get("firmware_version"))
                                                   or b.get("firmware_version")) if x) if b else None),
-                "backups": len(self.mgr.backups)}
+                "backups": len(self.mgr.backups),
+                # v1.27: чем собрана прошивка на датчике и что сейчас в ESPHome Builder
+                "esphome_flashed": (self.mgr.toolchain or {}).get("esphome"),
+                "esp_idf_flashed": (self.mgr.toolchain or {}).get("idf"),
+                "esphome_builder": self.mgr.builder_info.get("version"),
+                "esphome_builder_latest": self.mgr.builder_info.get("version_latest"),
+                "esphome_update": self.mgr.toolchain_update}
 
     async def async_release_notes(self) -> str | None:
         m = self.mgr
@@ -115,6 +128,18 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             lines = fwnotes.render_user(m.fw_sections, m.fw_changes)
         else:   # обновления нет — что в прошивке на датчике (верхний раздел её CHANGELOG)
             lines = fwnotes.render_user(m.fw_current_section, None) if m.fw_current_section else []
+        tc = m.toolchain_update
+        if pending and tc:   # v1.27
+            t = m.toolchain or {}
+            lines = [
+                "### Новый ESPHome Builder",
+                f"В Home Assistant стоит ESPHome **{tc}**, а прошивка на датчике собрана в ESPHome "
+                f"{t.get('esphome') or '?'}" + (f" (ESP-IDF {t['idf']})" if t.get("idf") else "") + ". "
+                "Вместе с ESPHome обновляется и платформа esp32 (ESP-IDF). «Установить» пересоберёт прошивку "
+                "новой версией и прошьёт датчик — настройки сохранятся.",
+                "",
+                *lines,
+            ]
         tech = fwnotes.render(m.fw_changes, m.fw_changed_since, fmt)
         lines += [*tech, ""] if tech else []
         lines += [
@@ -127,6 +152,12 @@ class FirmwareUpdate(OtaEntity, UpdateEntity):
             f"- На датчике: {m.build_label(m.firmware_version)} (`{m.firmware_version}`)",
             f"- YAML сейчас: `{m.config_hash}`, прошит: `{m.flashed_hash}`",
         ]
+        t = m.toolchain or {}
+        if t.get("esphome") or t.get("idf"):
+            lines.append(f"- Собрана в: ESPHome {t.get('esphome') or '?'}" + (f" · ESP-IDF {t['idf']}" if t.get("idf") else ""))
+        if m.builder_info.get("version"):
+            lines.append(f"- ESPHome Builder сейчас: {m.builder_info['version']}"
+                         + (f" (доступно {m.builder_info['version_latest']})" if m.builder_info.get("update_available") else ""))
         if m.last_flash_summary:
             lines.append(f"- Последняя прошивка: {m.last_flash_summary}")
         elif m.last_result:
