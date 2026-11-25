@@ -146,9 +146,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mgr.hider = DuplicateHider(hass, entry, mgr)
     await mgr.hider.async_start()
     entry.async_on_unload(mgr.hider.stop)
-    from .panel import async_update_panel  # noqa: PLC0415
+    from .panel import VERSION, async_update_panel  # noqa: PLC0415
 
     await async_update_panel(hass)
+    # v1.29: новая версия интеграции сразу видна в Marketplace (сам он проверяет раз в 48 ч)
+    from . import selfupdate  # noqa: PLC0415
+
+    selfupdate.async_start(hass, VERSION)
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True
 
@@ -245,6 +249,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         await async_update_panel(hass)   # v1.15: убрать датчик с панели (или панель, если датчиков нет)
         if not _managers(hass):
+            from . import selfupdate  # noqa: PLC0415
+
+            selfupdate.async_stop(hass)
             hass.services.async_remove(DOMAIN, SERVICE_FLASH)
             hass.services.async_remove(DOMAIN, SERVICE_CANCEL)
             hass.services.async_remove(DOMAIN, SERVICE_READ_SETTINGS)

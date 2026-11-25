@@ -138,6 +138,9 @@ const I18N = {
   },
 };
 let LANG = "en";
+// v1.29: version of this file (from ?v= in its URL) — after an integration update an open browser tab keeps
+// the old panel until a reload; the panel config carries the new version, so reload once when they differ
+const SELF_VERSION = (() => { try { return new URL(import.meta.url).searchParams.get("v"); } catch (e) { return null; } })();
 const langOf = (hass) => String((hass && ((hass.locale && hass.locale.language) || hass.language)) || "en").toLowerCase().split(/[-_]/)[0];
 function tr(text, vars) {
   const s = (I18N[LANG] && I18N[LANG][text]) || text;
@@ -246,6 +249,12 @@ class MoveSensorBlePanel extends HTMLElement {
 
   set panel(panel) {
     const cfg = (panel && panel.config) || {};
+    if (SELF_VERSION && cfg.version && cfg.version !== SELF_VERSION) {
+      const key = `msb-panel-reload-${cfg.version}`;
+      let done = false;
+      try { done = sessionStorage.getItem(key) === "1"; sessionStorage.setItem(key, "1"); } catch (e) { done = true; }
+      if (!done) { location.reload(); return; }
+    }
     const changed = JSON.stringify(cfg) !== JSON.stringify(this._config || null);
     this._config = cfg;
     if (changed && this._hass) this._render();
