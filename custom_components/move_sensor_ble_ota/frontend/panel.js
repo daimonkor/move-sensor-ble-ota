@@ -671,6 +671,7 @@ class MoveSensorBlePanel extends HTMLElement {
     if (this._attention && this._attention.isConnected) this._fillAttention();
     if (this._fwNote && this._fwNote.isConnected) this._fillFwNote();
     this._fillVer();
+    if (this._auSwitch && this._auSwitch.isConnected) this._fillAutoUpdate();
     this._fillSince();
     if (this._sync && this._sync.isConnected) {
       const st = this._st("settings_status");
@@ -796,6 +797,15 @@ class MoveSensorBlePanel extends HTMLElement {
     else location.hash = "about";
   }
 
+  _fillAutoUpdate() {
+    const sw = this._auSwitch;
+    if (!sw) return;
+    const st = this._hass && this._auId && this._hass.states[this._auId];
+    const on = !!(st && st.state === "on");
+    if (sw.checked !== on) sw.checked = on;
+    sw.disabled = !st || st.state === "unavailable";
+  }
+
   _addonUpdate() {
     const e = this._addonEntity();
     if (!e || e.state !== "on") return null;
@@ -833,18 +843,28 @@ class MoveSensorBlePanel extends HTMLElement {
         ae ? this._el("button", { class: "textbtn", text: tr("Update"), onclick: () => this._moreInfo(ae.entity_id) }) : null,
       ]) : this._el("div", { class: "note", text: tr("This is the latest version.") }),
     ]);
+    // v1.29.2: auto-update — a row in this card, like the «Auto update» toggle on an add-on page
+    const auId = this._id("integration_auto_update");
+    if (auId) {
+      const sw = document.createElement("ha-switch");
+      sw.addEventListener("change", () => {
+        this._hass.callService("switch", sw.checked ? "turn_on" : "turn_off", { entity_id: auId });
+      });
+      this._auSwitch = sw;
+      this._auId = auId;
+      head.querySelector(".aboutcard").appendChild(this._el("div", { class: "aurow" }, [
+        this._el("ha-icon", { icon: "mdi:update" }),
+        this._el("div", { class: "autext" }, [
+          this._el("div", { text: tr("Auto-update") }),
+          this._el("div", { class: "note", text: tr("New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.") }),
+        ]),
+        sw,
+      ]));
+      this._fillAutoUpdate();
+    }
     if (upd) head.classList.add("updcard");
     main.appendChild(head);
 
-    // v1.29.2: auto-update, like the «Auto update» toggle on an add-on page
-    const auId = this._id("integration_auto_update");
-    if (auId) {
-      const auCard = this._card({ type: "entities", entities: [{ entity: auId, name: tr("Auto-update"), icon: "mdi:update" }] });
-      main.appendChild(this._el("div", { class: "aublock" }, [
-        auCard,
-        this._el("p", { class: "note", text: tr("New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.") }),
-      ]));
-    }
 
     // versions of everything involved
     const fw = this._st("firmware");
@@ -1044,8 +1064,11 @@ const STYLE = `
   .bigicon { --mdc-icon-size: 40px; color: var(--primary-color); }
   .aname { font-size: 20px; font-weight: 500; }
   .vbadge { border: 1px solid var(--divider-color); border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 500; white-space: nowrap; }
-  .aublock { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
-  .aublock > p.note { padding: 0 var(--ha-space-4, 16px); }
+  .aurow { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding-top: var(--ha-space-3, 12px);
+           border-top: 1px solid var(--divider-color); }
+  .aurow ha-icon { color: var(--secondary-text-color); flex: none; }
+  .autext { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .aurow ha-switch { flex: none; }
   .ah2 { font-size: 16px; font-weight: 500; margin: 0; }
   .vtable { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--ha-space-4, 16px); font-size: 14px; }
   .vk { color: var(--secondary-text-color); }
