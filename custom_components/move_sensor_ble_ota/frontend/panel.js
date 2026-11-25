@@ -52,6 +52,7 @@ const I18N = {
     "Motion has been “detected” for too long. The motion sensor may be stuck.": "Движение «обнаружено» слишком долго. Возможно, датчик движения завис.",
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Открыть прошивку",
+    "Integration update v{v} is available": "Доступно обновление интеграции v{v}",
     "About": "О дополнении", "Version {v} is available.": "Доступна версия {v}.", "Open update": "Открыть обновление",
     "This is the latest version.": "Установлена последняя версия.",
     "Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.": "Интеграция Home Assistant для датчика движения Move Sensor BLE: данные и настройки по Bluetooth или Wi-Fi, обновление прошивки по Bluetooth через Bluetooth-прокси ESPHome.",
@@ -114,6 +115,7 @@ const I18N = {
     "Motion has been “detected” for too long. The motion sensor may be stuck.": "Рух «виявлено» занадто довго. Можливо, датчик руху завис.",
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Відкрити прошивку",
+    "Integration update v{v} is available": "Доступне оновлення інтеграції v{v}",
     "About": "Про доповнення", "Version {v} is available.": "Доступна версія {v}.", "Open update": "Відкрити оновлення",
     "This is the latest version.": "Встановлено останню версію.",
     "Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.": "Інтеграція Home Assistant для датчика руху Move Sensor BLE: дані й налаштування через Bluetooth або Wi-Fi, оновлення прошивки через Bluetooth за допомогою Bluetooth-проксі ESPHome.",
@@ -404,18 +406,20 @@ class MoveSensorBlePanel extends HTMLElement {
       if (this._config && this._config.version) {
         this._verBtn = this._el("button", { class: "ver", title: tr("About"), onclick: () => { location.hash = "about"; } });
         head.appendChild(this._verBtn);
-        this._fillVer();
       }
       root.appendChild(head);
 
       const tabs = this._el("div", { class: "tabs", role: "tablist", "aria-label": tr("Panel sections") });
       for (const t of TABS) {
-        tabs.appendChild(this._el("button", {
+        const b = this._el("button", {
           role: "tab", "aria-selected": t.id === this._tab ? "true" : "false", class: t.id === this._tab ? "tab on" : "tab",
           text: tr(t.label), onclick: () => { location.hash = t.id; },
-        }));
+        });
+        if (t.id === "about") { this._aboutTab = b; b.appendChild(this._el("span", { class: "dot", hidden: true })); }
+        tabs.appendChild(b);
       }
       root.appendChild(tabs);
+      this._fillVer();   // after the tabs: the «About» dot lives there
 
       const main = this._el("div", { class: "content" });
       root.appendChild(main);
@@ -705,6 +709,9 @@ class MoveSensorBlePanel extends HTMLElement {
     const stuck = this._st("pir_stuck");
     if (!silent && stuck && stuck.state === "on") items.push({ icon: "mdi:motion-sensor-off", text: tr("Motion has been “detected” for too long. The motion sensor may be stuck.") });
     const fw = this._st("firmware");
+    const aupd = this._addonUpdate();   // v1.28.1: обновление самой интеграции (Marketplace)
+    if (aupd) items.push({ icon: "mdi:puzzle-plus-outline", text: tr("Integration update v{v} is available", { v: aupd }) + ".",
+                           action: tr("Update"), go: () => this._openAddonUpdate() });
     const tcu = this._fwUpdateInfo();
     if (tcu) {
       items.push({ icon: "mdi:chip", text: tcu.text, sub: tcu.how, btn: tcu.busy ? null : "update" });
@@ -748,7 +755,29 @@ class MoveSensorBlePanel extends HTMLElement {
     if (!b || !this._config || !this._config.version) return;
     const upd = this._addonUpdate();
     const text = upd ? `v${this._config.version} → v${upd}` : `v${this._config.version}`;
-    if (b.textContent !== text) { b.textContent = text; b.className = upd ? "ver upd" : "ver"; }
+    if (b.dataset.text !== text) {
+      b.dataset.text = text;
+      b.className = upd ? "ver upd" : "ver";
+      b.title = upd ? tr("Integration update v{v} is available", { v: upd }) : tr("About");
+      b.innerHTML = "";
+      if (upd) b.appendChild(this._el("ha-icon", { icon: "mdi:arrow-up-circle" }));
+      b.appendChild(this._el("span", { text }));
+    }
+    const dot = this._aboutTab && this._aboutTab.querySelector(".dot");
+    if (dot) dot.hidden = !upd;
+    if (this._updShown !== undefined && this._updShown !== !!upd && this._tab === "about" && !this._sheet) {
+      this._updShown = !!upd;
+      this._render();
+      return;
+    }
+    this._updShown = !!upd;
+  }
+
+  // the Marketplace update dialog of the integration (Install button lives there)
+  _openAddonUpdate() {
+    const e = this._addonEntity();
+    if (e) this._moreInfo(e.entity_id);
+    else location.hash = "about";
   }
 
   _addonUpdate() {
@@ -773,7 +802,7 @@ class MoveSensorBlePanel extends HTMLElement {
     // header: name, version, update
     const upd = this._addonUpdate();
     const ae = this._addonEntity();
-    main.appendChild(card([
+    const head = card([
       this._el("div", { class: "abouthead" }, [
         this._el("ha-icon", { icon: "mdi:motion-sensor", class: "bigicon" }),
         this._el("div", {}, [
@@ -783,11 +812,13 @@ class MoveSensorBlePanel extends HTMLElement {
         this._el("span", { class: upd ? "vbadge upd" : "vbadge", text: `v${ver}` }),
       ]),
       upd ? this._el("div", { class: "attrow" }, [
-        this._el("ha-icon", { icon: "mdi:package-up" }),
+        this._el("ha-icon", { icon: "mdi:arrow-up-circle" }),
         this._el("span", { text: tr("Version {v} is available.", { v: upd }) }),
-        ae ? this._el("button", { class: "textbtn", text: tr("Open update"), onclick: () => this._moreInfo(ae.entity_id) }) : null,
+        ae ? this._el("button", { class: "textbtn", text: tr("Update"), onclick: () => this._moreInfo(ae.entity_id) }) : null,
       ]) : this._el("div", { class: "note", text: tr("This is the latest version.") }),
-    ]));
+    ]);
+    if (upd) head.classList.add("updcard");
+    main.appendChild(head);
 
     // versions of everything involved
     const fw = this._st("firmware");
@@ -970,9 +1001,17 @@ const STYLE = `
   .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--secondary-text-color); font: inherit;
          font-size: 14px; font-weight: 500; padding: 0 var(--ha-space-4, 16px); min-height: 48px; cursor: pointer; }
   .tab.on { color: var(--primary-color); border-bottom-color: var(--primary-color); }
-  .ver { margin-inline-start: auto; background: none; border: 1px solid var(--divider-color); border-radius: 12px; color: var(--secondary-text-color);
-         font: inherit; font-size: 12px; font-weight: 500; padding: 2px 10px; cursor: pointer; }
-  .ver.upd, .vbadge.upd { color: var(--warning-color); border-color: var(--warning-color); }
+  .ver { margin-inline-start: auto; flex: none; display: inline-flex; align-items: center; gap: 4px; background: none;
+         border: 1px solid var(--divider-color); border-radius: 14px; color: var(--secondary-text-color);
+         font: inherit; font-size: 12px; font-weight: 500; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+  .ver ha-icon { --mdc-icon-size: 16px; }
+  .ver.upd { color: var(--text-primary-color, #fff); background: var(--warning-color); border-color: var(--warning-color); }
+  .vbadge.upd { color: var(--warning-color); border-color: var(--warning-color); }
+  .tab { position: relative; }
+  .tab .dot { position: absolute; top: 12px; inset-inline-end: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--warning-color); }
+  .tab .dot[hidden] { display: none; }
+  ha-card.updcard { border: 1px solid var(--warning-color); }
+  ha-card.updcard .attrow ha-icon { color: var(--warning-color); }
   .aboutcard { padding: var(--ha-space-4, 16px); display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); }
   .abouthead { display: flex; align-items: flex-start; gap: var(--ha-space-3, 12px); }
   .abouthead > div { flex: 1; display: flex; flex-direction: column; gap: 4px; }
