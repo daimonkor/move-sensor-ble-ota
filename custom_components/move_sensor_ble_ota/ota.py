@@ -1138,14 +1138,26 @@ class OtaManager:
         hi, lo = AUTO_WINDOW_RSSI
         raw = 0 if med >= hi else (1 if med >= lo else 2)
         cur = self.window_level
+        if cur is None:
+            # v1.29.2: без истории (чистая установка) — от окон, что уже стоят на датчике, а не с нуля:
+            # иначе первые 5 пакетов у порога сразу укорачивали окна без гистерезиса
+            cur = self._applied_window_level()
         if cur is not None and raw < cur:
-            # к лучшему уровню — только с запасом (гистерезис), чтобы не дёргать датчик
+            # к лучшему уровню — только с запасом (гистерезис) и по полной выборке, чтобы не дёргать датчик
             thr = hi if raw == 0 else lo
-            if med < thr + AUTO_WINDOW_HYST_DB:
+            if med < thr + AUTO_WINDOW_HYST_DB or len(self.rssi_hist) < AUTO_WINDOW_SAMPLES:
                 raw = cur
         if self.window_boost_until and self.window_boost_until > dt_util.utcnow():
             raw = min(raw + 1, len(AUTO_WINDOW_LEVELS) - 1)
         return raw
+
+    def _applied_window_level(self) -> int | None:
+        """Уровень AUTO_WINDOW_LEVELS, окна которого сейчас стоят на датчике (None — свои значения)."""
+        m, c = self.applied.get("motion_window"), self.applied.get("climate_window")
+        for i, (lm, lc) in enumerate(AUTO_WINDOW_LEVELS):
+            if same_value("motion_window", lm, m) and same_value("climate_window", lc, c):
+                return i
+        return None
 
     def _auto_window(self) -> None:
         if not self.auto_window or not self.window_supported:
