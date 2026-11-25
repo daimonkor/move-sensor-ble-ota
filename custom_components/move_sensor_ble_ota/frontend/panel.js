@@ -839,10 +839,11 @@ class MoveSensorBlePanel extends HTMLElement {
     // v1.29.2: auto-update, like the «Auto update» toggle on an add-on page
     const auId = this._id("integration_auto_update");
     if (auId) {
-      main.appendChild(this._card({ type: "entities", entities: [
-        { entity: auId, name: tr("Auto-update"), icon: "mdi:update" },
-        { type: "text", name: "", text: tr("New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.") },
-      ] }));
+      const auCard = this._card({ type: "entities", entities: [{ entity: auId, name: tr("Auto-update"), icon: "mdi:update" }] });
+      main.appendChild(this._el("div", { class: "aublock" }, [
+        auCard,
+        this._el("p", { class: "note", text: tr("New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.") }),
+      ]));
     }
 
     // versions of everything involved
@@ -1043,6 +1044,8 @@ const STYLE = `
   .bigicon { --mdc-icon-size: 40px; color: var(--primary-color); }
   .aname { font-size: 20px; font-weight: 500; }
   .vbadge { border: 1px solid var(--divider-color); border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .aublock { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
+  .aublock > p.note { padding: 0 var(--ha-space-4, 16px); }
   .ah2 { font-size: 16px; font-weight: 500; margin: 0; }
   .vtable { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--ha-space-4, 16px); font-size: 14px; }
   .vk { color: var(--secondary-text-color); }
