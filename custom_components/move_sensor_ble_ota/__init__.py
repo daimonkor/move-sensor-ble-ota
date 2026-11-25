@@ -152,7 +152,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # v1.29: новая версия интеграции сразу видна в Marketplace (сам он проверяет раз в 48 ч)
     from . import selfupdate  # noqa: PLC0415
 
-    selfupdate.async_start(hass, await async_load_version(hass))
+    await selfupdate.async_start(hass, await async_load_version(hass))
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True
 

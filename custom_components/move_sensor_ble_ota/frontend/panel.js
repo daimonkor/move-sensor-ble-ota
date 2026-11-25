@@ -53,6 +53,8 @@ const I18N = {
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Открыть прошивку",
     "Integration update v{v} is available": "Доступно обновление интеграции v{v}",
+    "Auto-update": "Автообновление",
+    "New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.": "Новые версии показываются всегда. С автообновлением они ещё и устанавливаются сами; чтобы начать ими пользоваться, перезапустите Home Assistant.",
     "About": "О дополнении", "Version {v} is available.": "Доступна версия {v}.", "Open update": "Открыть обновление",
     "This is the latest version.": "Установлена последняя версия.",
     "Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.": "Интеграция Home Assistant для датчика движения Move Sensor BLE: данные и настройки по Bluetooth или Wi-Fi, обновление прошивки по Bluetooth через Bluetooth-прокси ESPHome.",
@@ -116,6 +118,8 @@ const I18N = {
     "Firmware {v} is available.": "Доступна прошивка {v}.",
     "Open firmware": "Відкрити прошивку",
     "Integration update v{v} is available": "Доступне оновлення інтеграції v{v}",
+    "Auto-update": "Автооновлення",
+    "New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.": "Нові версії показуються завжди. З автооновленням вони ще й встановлюються самі; щоб почати ними користуватися, перезапустіть Home Assistant.",
     "About": "Про доповнення", "Version {v} is available.": "Доступна версія {v}.", "Open update": "Відкрити оновлення",
     "This is the latest version.": "Встановлено останню версію.",
     "Home Assistant integration for the Move Sensor BLE motion sensor: data and settings over Bluetooth or Wi-Fi, firmware updates over Bluetooth through ESPHome Bluetooth proxies.": "Інтеграція Home Assistant для датчика руху Move Sensor BLE: дані й налаштування через Bluetooth або Wi-Fi, оновлення прошивки через Bluetooth за допомогою Bluetooth-проксі ESPHome.",
@@ -199,6 +203,7 @@ const LAYOUT_KEYS = new Set([
   ...GROUPS.flatMap((g) => [...g.rows, ...g.more]),
   ...SECTIONS.flatMap((s) => s.keys || []),
   "firmware", "ota_status", "ota_progress", "firmware_version", "ota_flash", "ota_build_flash", "ota_cancel",
+  "integration_auto_update",   // v1.29.2: on the «About» tab
 ]);
 
 class MoveSensorBlePanel extends HTMLElement {
@@ -754,6 +759,8 @@ class MoveSensorBlePanel extends HTMLElement {
   _addonEntity() {
     const st = (this._hass && this._hass.states) || {};
     const own = new Set(Object.values((this._dev && this._dev.ids) || {}));
+    const cfgId = this._config && this._config.addon_update;   // v1.29.2: from the integration (Marketplace registry)
+    if (cfgId && st[cfgId]) return st[cfgId];
     if (st["update.move_sensor_ble_ota"]) return st["update.move_sensor_ble_ota"];
     return Object.values(st).find((s) => s.entity_id.startsWith("update.") && !own.has(s.entity_id)
       && /^Move Sensor BLE OTA/i.test((s.attributes && s.attributes.friendly_name) || "")) || null;
@@ -828,6 +835,15 @@ class MoveSensorBlePanel extends HTMLElement {
     ]);
     if (upd) head.classList.add("updcard");
     main.appendChild(head);
+
+    // v1.29.2: auto-update, like the «Auto update» toggle on an add-on page
+    const auId = this._id("integration_auto_update");
+    if (auId) {
+      main.appendChild(this._card({ type: "entities", entities: [
+        { entity: auId, name: tr("Auto-update"), icon: "mdi:update" },
+        { type: "text", name: "", text: tr("New versions are always shown. With auto-update on, they are also installed by themselves; restart Home Assistant to start using them.") },
+      ] }));
+    }
 
     // versions of everything involved
     const fw = this._st("firmware");

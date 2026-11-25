@@ -1,4 +1,4 @@
-# Unit tests without Home Assistant: BLE custom block parsing, version string, firmware fingerprint.
+# Unit tests without Home Assistant: BLE block, versions, fingerprint, firmware toolchain, auto window, self-update.
 name: Tests
 
 on:

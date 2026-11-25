@@ -134,8 +134,10 @@ def _config(hass: HomeAssistant) -> dict:
             "wifi": wifi_ids, "configure": f"/config/integrations/integration/{DOMAIN}",
             "strip": sorted(strip, key=len, reverse=True),
         })
+    from .selfupdate import update_entity_id  # noqa: PLC0415
+
     return {"devices": devices, "version": VERSION, "repo": REPO_URL,
-            "docs": "/move_sensor_ble_ota/docs/"}
+            "docs": "/move_sensor_ble_ota/docs/", "addon_update": update_entity_id(hass)}
 
 
 async def async_update_panel(hass: HomeAssistant) -> None:

@@ -304,6 +304,9 @@
       },
       "auto_window": {
         "name": "Auto advertising window"
+      },
+      "integration_auto_update": {
+        "name": "Auto-update integration"
       }
     },
     "button": {
