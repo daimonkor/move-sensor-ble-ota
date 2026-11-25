@@ -876,6 +876,8 @@ class OtaManager:
         self._rollback: dict | None = None         # v1.18: идёт откат на эту копию
         # v1.27: чем собрана прошивка на датчике ({"esphome", "idf", "sha"}) и версия аддона ESPHome Builder
         self.toolchain: dict | None = None
+        # прошит, но датчик ещё не перезагрузился с ним: чем собран этот образ (до подтверждения версией)
+        self.toolchain_pending: dict | None = None
         self.builder_info: dict = {}
         self._builder_checked: float = -1e9
 
@@ -890,6 +892,8 @@ class OtaManager:
         self.target = data.get("target") or dict(self.applied)   # миграция со старых версий
         self.flashed_hash = data.get("flashed_hash")
         self.toolchain = data.get("toolchain") if isinstance(data.get("toolchain"), dict) else None
+        tp = data.get("toolchain_pending")
+        self.toolchain_pending = tp if isinstance(tp, dict) else None
         self.last_flash = data.get("last_flash") if isinstance(data.get("last_flash"), dict) else None
         ts_k = data.get("key_ok_at")
         self.key_ok_at = dt_util.parse_datetime(ts_k) if ts_k else None
@@ -968,6 +972,7 @@ class OtaManager:
                 "rev": {"seen": self.rev_seen, "own": self.rev_own, "capable": self.rev_capable},
                 "flashed_hash": self.flashed_hash,
                 "toolchain": self.toolchain,
+                "toolchain_pending": self.toolchain_pending,
                 "last_flash": self.last_flash,
                 "key_ok_at": self.key_ok_at.isoformat() if self.key_ok_at else None,
                 # v1.15: задание прошивки переживает перезапуск HA (файл + срок ожидания окна)
@@ -1396,6 +1401,7 @@ class OtaManager:
                 self.last_flash = {"at": now.isoformat(), "channel": None, "seconds": 0, "speed_kbs": None,
                                    "bytes": len(image.data), "result": "already_on_sensor"}
             self.toolchain = image_toolchain(image.data) or self.toolchain
+            self.toolchain_pending = None
             self.error = None
             self._set(ST_SUCCESS, progress=100, started=now, finished=now)
             self._save()
@@ -1543,6 +1549,11 @@ class OtaManager:
         changed = False
         fv = self.firmware_version or ""
         sha = fv.rsplit("-", 1)[-1] if "-" in fv else None
+        tp = self.toolchain_pending
+        if sha and tp and tp.get("sha") == sha:   # датчик перезагрузился с прошитым образом
+            self.toolchain, self.toolchain_pending = tp, None
+            self._save()
+            changed = True
         if sha and len(sha) == 8 and (self.toolchain or {}).get("sha") != sha:
             tc = await self.hass.async_add_executor_job(find_toolchain, self.firmware_dir, sha)
             if not tc:
@@ -1579,6 +1590,9 @@ class OtaManager:
         """Версия ESPHome в аддоне, если она новее той, которой собрана прошивка на датчике."""
         now = self.builder_info.get("version")
         was = (self.toolchain or {}).get("esphome")
+        pend = (self.toolchain_pending or {}).get("esphome")
+        if pend and version_key(pend) and version_key(now) and version_key(pend) >= version_key(now):
+            return None   # новый образ уже прошит, ждём перезагрузку датчика
         if now and was and version_key(now) and version_key(was) and version_key(now) > version_key(was):
             return now
         return None
@@ -2662,7 +2676,9 @@ class OtaManager:
         self._own_flash_at = time.monotonic()
         size = len(self._ota.image.data) if self._ota is not None else None
         if self._ota is not None:   # v1.27: чем собран прошитый образ (ESPHome / ESP-IDF)
-            self.toolchain = image_toolchain(self._ota.image.data) or None
+            # v1.27.1: до перезагрузки датчик ещё сообщает старую версию — образ ждёт подтверждения,
+            # а «Обновить» уже не предлагается (раньше проверка раз в 5 мин возвращала карточку)
+            self.toolchain_pending = image_toolchain(self._ota.image.data) or None
         self._ota = None
         # при следующем пробуждении перечитать версию и настройки — видно, что встала новая сборка
         self._need_read = True
