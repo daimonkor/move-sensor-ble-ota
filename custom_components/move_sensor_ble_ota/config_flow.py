@@ -19,6 +19,8 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResu
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
+
+from .devreg import find_device
 from homeassistant.helpers.selector import (
     BooleanSelector,
     FileSelector,
@@ -102,7 +104,7 @@ class MoveSensorBleOtaFlow(ConfigFlow, domain=DOMAIN):
         for info in bluetooth.async_discovered_service_info(self.hass, connectable=False):
             if BTHOME_UUID in info.service_data or BTHOME_UUID in info.service_uuids:
                 # имя из реестра устройств (BTHome-устройство в HA), а не BLE-имя: датчик его не рекламирует
-                dev = dev_reg.async_get_device(connections={(dr.CONNECTION_BLUETOOTH, info.address)})
+                dev = find_device(dev_reg, connections={(dr.CONNECTION_BLUETOOTH, info.address)})
                 name = (dev and (dev.name_by_user or dev.name)) or (
                     info.name if info.name and info.name.replace("-", ":").upper() != info.address else None
                 )

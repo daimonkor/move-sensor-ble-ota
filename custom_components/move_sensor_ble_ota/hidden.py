@@ -37,6 +37,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
+from .devreg import find_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ class DuplicateHider:
                     continue
                 out.append((ent, _ESPHOME_DATA.get(suf)))
         # BTHome-устройство того же датчика (и шаблоны, привязанные к нему)
-        bt = dev_reg.async_get_device(identifiers={("bluetooth", self.mgr.address)})
+        bt = find_device(dev_reg, identifiers={("bluetooth", self.mgr.address)})
         if bt is not None:
             for ent in er.async_entries_for_device(ent_reg, bt.id, include_disabled_entities=True):
                 if ent.platform == DOMAIN:

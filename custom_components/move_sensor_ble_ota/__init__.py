@@ -146,13 +146,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mgr.hider = DuplicateHider(hass, entry, mgr)
     await mgr.hider.async_start()
     entry.async_on_unload(mgr.hider.stop)
-    from .panel import VERSION, async_update_panel  # noqa: PLC0415
+    from .panel import async_load_version, async_update_panel  # noqa: PLC0415
 
     await async_update_panel(hass)
     # v1.29: новая версия интеграции сразу видна в Marketplace (сам он проверяет раз в 48 ч)
     from . import selfupdate  # noqa: PLC0415
 
-    selfupdate.async_start(hass, VERSION)
+    selfupdate.async_start(hass, await async_load_version(hass))
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True
 
@@ -173,7 +173,9 @@ def _remove_radio_device(hass: HomeAssistant, address: str) -> None:
     from homeassistant.helpers import device_registry as dr, entity_registry as er  # noqa: PLC0415
 
     dev_reg = dr.async_get(hass)
-    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"{address}_radio")})
+    from .devreg import find_device  # noqa: PLC0415
+
+    dev = find_device(dev_reg, identifiers={(DOMAIN, f"{address}_radio")})
     if dev is None:
         return
     if er.async_entries_for_device(er.async_get(hass), dev.id, include_disabled_entities=True):

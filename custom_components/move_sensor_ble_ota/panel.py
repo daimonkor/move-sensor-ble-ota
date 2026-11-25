@@ -29,7 +29,8 @@ REPO_URL = "https://github.com/daimonkor/move-sensor-ble-ota"
 
 
 def _read_version() -> str:
-    """v1.28: версия интеграции из manifest.json — на панель (вкладка «О дополнении») и в ?v= у panel.js."""
+    """v1.28: версия интеграции из manifest.json — на панель (вкладка «О дополнении») и в ?v= у panel.js.
+    v1.29.1: читается в executor (async_load_version), не при импорте в цикле событий."""
     try:
         with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as f:
             return str(json.load(f).get("version") or "?")
@@ -37,7 +38,14 @@ def _read_version() -> str:
         return "?"
 
 
-VERSION = _read_version()
+VERSION = "?"
+
+
+async def async_load_version(hass: HomeAssistant) -> str:
+    global VERSION  # noqa: PLW0603 — один раз на запуск
+    if VERSION == "?":
+        VERSION = await hass.async_add_executor_job(_read_version)
+    return VERSION
 
 
 def _remove_own(hass: HomeAssistant) -> None:
@@ -133,6 +141,7 @@ def _config(hass: HomeAssistant) -> dict:
 async def async_update_panel(hass: HomeAssistant) -> None:
     """Зарегистрировать/обновить/убрать панель (по галочке и наличию датчиков)."""
     _remove_own(hass)
+    await async_load_version(hass)
     if not hass.data.get(DOMAIN):   # v1.17.1: панель всегда (убрать из меню — «Изменить боковую панель» HA)
         return
     if not hass.data.get(_STALE_DONE):   # настройка «показывать панель» из убранного пункта «Вид» больше не нужна

@@ -103,13 +103,16 @@ class WifiChannel:
     def resolve(self) -> None:
         dev_reg = dr.async_get(self.hass)
         ent_reg = er.async_get(self.hass)
-        esp_entries = {e.entry_id for e in self.hass.config_entries.async_entries("esphome")}
+        # v1.29.1: устройства каждой записи ESPHome (без устаревших devices.values() и
+        # DeviceEntry.config_entries — у устройства теперь одна запись)
         found = None
-        for dev in dev_reg.devices.values():
-            if not esp_entries.intersection(dev.config_entries):
-                continue
-            if any(c[0] == dr.CONNECTION_NETWORK_MAC and c[1].lower() == self.mac for c in dev.connections):
-                found = dev
+        found_entry = None
+        for esp in self.hass.config_entries.async_entries("esphome"):
+            for dev in dr.async_entries_for_config_entry(dev_reg, esp.entry_id):
+                if any(c[0] == dr.CONNECTION_NETWORK_MAC and c[1].lower() == self.mac for c in dev.connections):
+                    found, found_entry = dev, esp.entry_id
+                    break
+            if found is not None:
                 break
         old = (self.device_id, tuple(sorted(self.entities.items())))
         if found is None:
@@ -119,7 +122,7 @@ class WifiChannel:
             self.all_entities = {}
         else:
             self.device_id = found.id
-            self.entry_id = next(iter(esp_entries.intersection(found.config_entries)))
+            self.entry_id = found_entry
             self.entities = {}
             self.all_entities = {}
             for ent in er.async_entries_for_device(ent_reg, found.id, include_disabled_entities=True):
