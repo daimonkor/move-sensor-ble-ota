@@ -27,6 +27,10 @@ const I18N = {
     "History and settings": "История и настройки",
     "Tap a card for its history and settings. Press and hold for the standard Home Assistant dialog.": "Нажмите на карточку — история и настройки. Удерживайте — стандартное окно Home Assistant.",
     "Show more": "Показать ещё", "Show less": "Свернуть",
+    "Applies on the next wake": "Применится при пробуждении",
+    "Applies on the next wake · the sensor has {v} now": "Применится при пробуждении · сейчас на датчике: {v}",
+    "What changes on the next wake": "Что поменяется при пробуждении",
+    "Show what changes": "Показать, что поменяется", "Off": "Выключен",
     "Changes reach the sensor over Bluetooth on its next wake, or right away while Wi-Fi service mode is on.": "Изменения попадут в датчик по Bluetooth при следующем пробуждении, а в сервисном режиме Wi-Fi — сразу.",
     "For tuning and troubleshooting. The sensor works fine with the defaults.": "Для тонкой настройки и поиска неисправностей. Датчик нормально работает с настройками по умолчанию.",
     "Configure": "Настроить", "Open": "Открыть",
@@ -92,6 +96,10 @@ const I18N = {
     "History and settings": "Історія та налаштування",
     "Tap a card for its history and settings. Press and hold for the standard Home Assistant dialog.": "Натисніть на картку — історія та налаштування. Утримуйте — стандартне вікно Home Assistant.",
     "Show more": "Показати більше", "Show less": "Згорнути",
+    "Applies on the next wake": "Застосується під час пробудження",
+    "Applies on the next wake · the sensor has {v} now": "Застосується під час пробудження · зараз на датчику: {v}",
+    "What changes on the next wake": "Що зміниться під час пробудження",
+    "Show what changes": "Показати, що зміниться", "Off": "Вимкнено",
     "Changes reach the sensor over Bluetooth on its next wake, or right away while Wi-Fi service mode is on.": "Зміни потраплять у датчик через Bluetooth під час наступного пробудження, а в сервісному режимі Wi-Fi — одразу.",
     "For tuning and troubleshooting. The sensor works fine with the defaults.": "Для тонкого налаштування та пошуку несправностей. Датчик нормально працює з налаштуваннями за замовчуванням.",
     "Configure": "Налаштувати", "Open": "Відкрити",
@@ -352,6 +360,89 @@ class MoveSensorBlePanel extends HTMLElement {
     return this._infoCard(key);
   }
 
+  // a setting card + «applies on the next wake» tag under it; _fillPending() lights both up
+  // while Home Assistant still waits for the sensor to take the new value (entity attribute «pending»)
+  _setEl(key) {
+    const c = this._settingCard(key);
+    if (!c) return null;
+    const tag = this._el("div", { class: "pendtag", hidden: true },
+      [this._el("ha-icon", { icon: "mdi:timer-sand" }), this._el("span")]);
+    const wrap = this._el("div", { class: "setwrap" }, [this._card(c), tag]);
+    this._pendEls.push({ id: this._id(key), wrap, tag, key: null });
+    return wrap;
+  }
+
+  // value the sensor still has (attribute applied_value), formatted like the entity state
+  _fmtVal(st, v) {
+    if (v === undefined || v === null || v === "") return "";
+    const sw = st.entity_id.startsWith("switch.");
+    if (sw) v = v === true || v === "on" || v === 1 ? "on" : "off";
+    try { return this._hass.formatEntityState(st, String(v)); } catch (e) { /* older frontend */ }
+    if (sw) return tr(v === "on" ? "On" : "Off");
+    const u = st.attributes.unit_of_measurement;
+    return u ? `${v} ${u}` : String(v);
+  }
+
+  // every setting entity of the sensor that HA has changed and the sensor hasn't confirmed yet
+  _pendingList() {
+    const ids = (this._dev && this._dev.ids) || {};
+    const out = [];
+    for (const [k, id] of Object.entries(ids)) {
+      if (!k.startsWith("setting_")) continue;
+      const st = this._hass && this._hass.states[id];
+      if (!st || !st.attributes || st.attributes.pending !== true) continue;
+      out.push({ id, name: this._name(id), was: this._fmtVal(st, st.attributes.applied_value),
+                 now: this._fmtVal(st, st.state) });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  _fillPending() {
+    if (!this._hass) return;
+    const list = this._pendingList();
+    const byId = new Map(list.map((p) => [p.id, p]));
+    this._pendEls = (this._pendEls || []).filter((p) => p.wrap.isConnected);
+    for (const p of this._pendEls) {
+      const it = byId.get(p.id);
+      const k = it ? `1|${it.was}|${LANG}` : "0";
+      if (k === p.key) continue;
+      p.key = k;
+      p.wrap.classList.toggle("pend", !!it);
+      p.tag.hidden = !it;
+      p.tag.querySelector("span").textContent = !it ? ""
+        : (it.was ? tr("Applies on the next wake · the sensor has {v} now", { v: it.was }) : tr("Applies on the next wake"));
+    }
+    // counter on the Settings tab: visible from Overview / Advanced too
+    if (this._setTab) {
+      const c = this._setTab.querySelector(".cnt");
+      if (c) { c.hidden = !list.length; c.textContent = list.length ? String(list.length) : ""; }
+      this._setTab.title = list.length ? tr("What changes on the next wake") : "";
+    }
+    // ⓘ next to «Saved…»: tooltip + tap-to-open list «Keep time: 30 s → 60 s»
+    if (this._syncInfo && this._syncInfo.isConnected) {
+      const lines = list.map((p) => `${p.name}: ${p.was ? p.was + " → " : ""}${p.now}`);
+      this._syncInfo.hidden = !list.length;
+      this._syncInfo.title = list.length ? `${tr("What changes on the next wake")}:\n${lines.join("\n")}` : "";
+      this._syncInfo.setAttribute("aria-label", tr("Show what changes"));
+      this._syncInfo.setAttribute("aria-expanded", this._pendOpen && list.length ? "true" : "false");
+      const show = !!(this._pendOpen && list.length);
+      const key = show ? lines.join("|") + LANG : "";
+      if (this._pendList.dataset.k !== key) {
+        this._pendList.dataset.k = key;
+        this._pendList.innerHTML = "";
+        for (const p of list) {
+          this._pendList.appendChild(this._el("li", {}, [
+            this._el("span", { class: "pn", text: p.name }),
+            p.was ? this._el("span", { class: "pw", text: p.was }) : null,
+            p.was ? this._el("ha-icon", { icon: "mdi:arrow-right" }) : null,
+            this._el("span", { class: "pv", text: p.now })]));
+        }
+      }
+      this._pendList.hidden = !show;
+    }
+    return list;
+  }
+
   _infoCard(key) {
     const id = this._id(key);
     if (!id) return null;
@@ -407,6 +498,7 @@ class MoveSensorBlePanel extends HTMLElement {
     try {
       this._helpers = this._helpers || (await window.loadCardHelpers());
       this._cards = [];
+      this._pendEls = [];
       const root = this.shadowRoot;
       root.innerHTML = "";
       root.appendChild(this._el("style", { text: STYLE }));
@@ -429,6 +521,7 @@ class MoveSensorBlePanel extends HTMLElement {
           role: "tab", "aria-selected": t.id === this._tab ? "true" : "false", class: t.id === this._tab ? "tab on" : "tab",
           text: tr(t.label), onclick: () => { location.hash = t.id; },
         });
+        if (t.id === "settings") { this._setTab = b; b.appendChild(this._el("span", { class: "cnt", hidden: true })); }
         if (t.id === "about") { this._aboutTab = b; b.appendChild(this._el("span", { class: "dot", hidden: true })); }
         tabs.appendChild(b);
       }
@@ -511,13 +604,19 @@ class MoveSensorBlePanel extends HTMLElement {
   }
 
   _settings(main) {
-    this._sync = this._el("div", { class: "sync", role: "status" });
+    // «Saved…» + ⓘ: hover shows what changes (title), tap opens the list (phones have no hover)
+    this._syncText = this._el("span");
+    this._syncInfo = this._el("button", { class: "syncinfo", hidden: true, "aria-expanded": this._pendOpen ? "true" : "false",
+      onclick: () => { this._pendOpen = !this._pendOpen; this._fillPending(); } }, [this._el("ha-icon", { icon: "mdi:information-outline" })]);
+    this._pendList = this._el("ul", { class: "pendlist", hidden: true });
+    this._sync = this._el("div", { class: "sync", role: "status" }, [this._syncText, this._syncInfo]);
     main.appendChild(this._sync);
+    main.appendChild(this._pendList);
     const cols = this._el("div", { class: "groups" });
     for (const g of GROUPS) {
       const col = this._el("section", { class: "group", "aria-label": tr(g.title) });
       col.appendChild(this._el("h2", { text: tr(g.title) }));
-      for (const k of g.rows) { const c = this._settingCard(k); if (c) col.appendChild(this._card(c)); }
+      for (const k of g.rows) { const el = this._setEl(k); if (el) col.appendChild(el); }
       const more = g.more.filter((k) => this._id(k));
       if (more.length) {
         const open = !!this._more[g.title];
@@ -525,7 +624,7 @@ class MoveSensorBlePanel extends HTMLElement {
           class: "textbtn", "aria-expanded": open ? "true" : "false", text: open ? tr("Show less") : tr("Show more"),
           onclick: () => { this._more[g.title] = !open; this._render(); },
         }));
-        if (open) for (const k of more) col.appendChild(this._card(this._settingCard(k)));
+        if (open) for (const k of more) { const el = this._setEl(k); if (el) col.appendChild(el); }
       }
       cols.appendChild(col);
     }
@@ -563,7 +662,10 @@ class MoveSensorBlePanel extends HTMLElement {
         this._fillWifi();
       } else {
         const keys = [...sec.keys, ...(sec.id === "diagnostics" ? extra : [])];
-        for (const k of keys) { const c = this._infoCard(k); if (c) body.appendChild(this._card(c)); }
+        for (const k of keys) {
+          if (k.startsWith("setting_")) { const el = this._setEl(k); if (el) body.appendChild(el); continue; }
+          const c = this._infoCard(k); if (c) body.appendChild(this._card(c));
+        }
         if (sec.id === "diagnostics") {
           body.appendChild(this._card({ type: "entities", entities: [{
             type: "button", name: tr("Configure"), icon: "mdi:cog", action_name: tr("Open"),
@@ -673,12 +775,13 @@ class MoveSensorBlePanel extends HTMLElement {
     this._fillVer();
     if (this._auSwitch && this._auSwitch.isConnected) this._fillAutoUpdate();
     this._fillSince();
+    this._fillPending();
     if (this._sync && this._sync.isConnected) {
       const st = this._st("settings_status");
       const s = st ? st.state : "";
       const txt = { in_sync: "All settings are applied.", waiting: "Saved. The sensor picks the changes up on its next wake (motion wakes it).",
                     not_read: "The sensor's settings haven't been read yet.", error: "The sensor didn't accept the last change. Try again." }[s] || "";
-      this._sync.textContent = txt ? tr(txt) : "";
+      if (this._syncText) this._syncText.textContent = txt ? tr(txt) : "";
       this._sync.className = "sync " + (s || "none");
     }
     // Section headers (firmware version, Bluetooth "seen …", …) follow the entities without a re-render:
@@ -1013,13 +1116,14 @@ class MoveSensorBlePanel extends HTMLElement {
     if (info.length) body.appendChild(this._card({ type: "glance", show_name: true, show_state: true,
       entities: sh.info.filter((k) => this._id(k)).map((k) => ({ entity: this._id(k), name: SHORT[k] ? tr(SHORT[k]) : this._name(this._id(k)) })) }));
     body.appendChild(this._el("h3", { text: tr("Settings") }));
-    for (const k of sh.settings) { const c = this._settingCard(k); if (c) body.appendChild(this._card(c)); }
+    for (const k of sh.settings) { const el = this._setEl(k); if (el) body.appendChild(el); }
     this._sheetBody = body;
     dlg.appendChild(body);
     scrim.appendChild(dlg);
     this.shadowRoot.appendChild(scrim);
     this._sheetEl = scrim;
     this._keyboard();
+    this._fillPending();
     setTimeout(() => close.focus(), 0);
     // keep a focused field above the on-screen keyboard
     body.addEventListener("focusin", (e) => {
@@ -1056,6 +1160,10 @@ const STYLE = `
   .tab { position: relative; }
   .tab .dot { position: absolute; top: 12px; inset-inline-end: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--warning-color); }
   .tab .dot[hidden] { display: none; }
+  .tab .cnt { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+              margin-inline-start: 6px; border-radius: 9px; font-size: 11px; font-weight: 600; box-sizing: border-box;
+              color: var(--text-primary-color, #fff); background: var(--info-color, var(--primary-color)); }
+  .tab .cnt[hidden] { display: none; }
   ha-card.updcard { border: 1px solid var(--warning-color); }
   ha-card.updcard .attrow ha-icon { color: var(--warning-color); }
   .aboutcard { padding: var(--ha-space-4, 16px); display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); }
@@ -1116,6 +1224,25 @@ const STYLE = `
   .sync { color: var(--secondary-text-color); }
   .sync.waiting { color: var(--info-color, var(--primary-color)); }
   .sync.error { color: var(--error-color); }
+  .sync { display: flex; align-items: center; gap: var(--ha-space-1, 4px); flex-wrap: wrap; }
+  .syncinfo { width: 32px; height: 32px; border-radius: 16px; border: 0; background: none; color: inherit; cursor: pointer;
+              display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .syncinfo:hover { background: var(--secondary-background-color); }
+  .syncinfo[hidden], .pendlist[hidden], .pendtag[hidden] { display: none; }
+  .syncinfo ha-icon { --mdc-icon-size: 20px; }
+  .pendlist { margin: 0; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); list-style: none; display: flex; flex-direction: column; gap: 6px;
+              border-radius: var(--ha-card-border-radius, 12px); border: 1px solid var(--info-color, var(--primary-color));
+              background: rgba(var(--rgb-info-color, 3, 155, 229), 0.08); font-size: 14px; }
+  .pendlist li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pendlist .pn { font-weight: 500; margin-inline-end: 4px; }
+  .pendlist .pw { color: var(--secondary-text-color); text-decoration: line-through; }
+  .pendlist .pv { color: var(--info-color, var(--primary-color)); font-weight: 500; }
+  .pendlist ha-icon { --mdc-icon-size: 16px; color: var(--secondary-text-color); }
+  .setwrap { display: flex; flex-direction: column; gap: 4px; }
+  .setwrap.pend > :first-child { --ha-card-border-color: var(--info-color, var(--primary-color)); --ha-card-border-width: 2px; }
+  .pendtag { display: flex; align-items: center; gap: 4px; padding: 0 var(--ha-space-1, 4px); font-size: 12px; line-height: 16px;
+             color: var(--info-color, var(--primary-color)); }
+  .pendtag ha-icon { --mdc-icon-size: 16px; flex: none; }
   /* content padding lives on our grid: on the panel itself it stays visible (an empty 16 px strip) while collapsed */
   ha-expansion-panel { --expansion-panel-summary-padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); --expansion-panel-content-padding: 0;
                        background: var(--card-background-color); border-radius: var(--ha-card-border-radius, 12px); }

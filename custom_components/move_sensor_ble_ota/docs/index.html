@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.29.3</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.30.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -383,6 +383,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <h2><span class="ic bg-amber"><svg class="i"><use href="#i-cog"/></svg></span>Настройки датчика</h2>
   <p class="lead">Меняешь значение в HA — оно уходит в ближайшее пробуждение и применяется как из сервисного режима
     (проверка min/max, сохранение во флеш).</p>
+  <p class="lead">С v1.30: на панели (вкладка «Настройки») изменённые, но ещё не применённые настройки подсвечены рамкой с подписью «Применится при пробуждении · сейчас на датчике: …», на вкладке «Настройки» — счётчик таких настроек, а значок <b>ⓘ</b> рядом с «Сохранено…» показывает список «было → станет» (наведение — подсказка, нажатие — список).</p>
   <table>
     <tr><th>Настройка</th><th>Диапазон</th><th>Когда действует</th></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-hourglass"/></svg>Detect delay</div></td><td>0–5000 мс</td><td>со следующего срабатывания PIR</td></tr>

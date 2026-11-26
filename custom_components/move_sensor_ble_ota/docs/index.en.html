@@ -186,7 +186,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.29.3</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.30.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -384,6 +384,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
   <h2><span class="ic bg-amber"><svg class="i"><use href="#i-cog"/></svg></span>Sensor settings</h2>
   <p class="lead">Change a value in HA — it is sent at the next wake-up and applied just like from service mode
     (min/max check, saved to flash).</p>
+  <p class="lead">Since v1.30: on the panel (Settings tab) settings that are changed but not applied yet get a highlighted frame and the note “Applies on the next wake · the sensor has … now”, the Settings tab shows how many there are, and the <b>ⓘ</b> next to “Saved…” lists them as “was → will be” (hover for a tooltip, tap for the list).</p>
   <table>
     <tr><th>Setting</th><th>Range</th><th>Takes effect</th></tr>
     <tr><td><div class="cell"><svg class="i" style="color:var(--amber)"><use href="#i-hourglass"/></svg>Detect delay</div></td><td>0–5000 ms</td><td>from the next PIR trigger</td></tr>
