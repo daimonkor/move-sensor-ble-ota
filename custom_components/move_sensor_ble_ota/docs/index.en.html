@@ -186,7 +186,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Over-the-air firmware updates and remote settings for a battery motion sensor — over Bluetooth,
          through ESPHome Bluetooth proxies. The sensor sleeps, no Wi-Fi needed.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.31.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.32.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -520,6 +520,10 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <div><b>Last power loss<span class="kind t-slate">sensor</span></b><small>The latest power failure from the sensor's own log (firmware 1.10.0+): what happened (power fully removed, short dip, brownout, firmware crash) and what the sensor was doing — asleep, waking up, transmitting, blinking, connected to HA, in Wi-Fi service mode. Attributes: <code>text</code> — a line in the Home Assistant language with the time, battery voltage, wake number and USB; <code>entries</code> — the last 8 cases. Every new case goes to the HA logbook.</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
       <div><b>Power loss count<span class="kind t-slate">sensor</span></b><small>How many power failures and firmware crashes the sensor has logged in total — for graphs and statistics.</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Power report<span class="kind t-slate">sensor</span></b><small>A conclusion about the latest power failure (v1.32): the log entry plus what the integration saw around it — whether Home Assistant heard other Bluetooth devices during the silence (reception was fine or the proxy was down), packets, losses and signal in the hour before, the window settings. The state is a verdict code (<code>cut_asleep</code>, <code>cut_under_load</code>, <code>dip</code>, <code>brownout</code>, <code>low_battery</code>, <code>usb_powered</code>, <code>crash</code>), the <code>text</code> attribute is the report in the Home Assistant language with a hint on what to measure. On the panel: the «Power failures» card in Diagnostics. Rebuild with the <b>Build power report</b> button or the <code>power_report</code> action.</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Power test<span class="kind t-slate">sensor</span></b><small>Power test (v1.32): the <b>Run power test</b> button on the panel (10 minutes) or the <code>power_test</code> action (minutes, 0 cancels). The sensor wakes every 30 seconds for that time; the integration counts packets, lost packets, reboots and new power-log entries. The result is <code>passed</code> / <code>failed</code> with a line in the <code>text</code> attribute and a logbook entry. The command goes over Bluetooth on the next wake.</small></div></div>
   </div>
 
   <h3>Settings</h3>

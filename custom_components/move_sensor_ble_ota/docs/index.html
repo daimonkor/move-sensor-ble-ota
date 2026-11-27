@@ -185,7 +185,7 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <p>Прошивка по воздуху и удалённые настройки для батарейного датчика движения — по Bluetooth,
          через Bluetooth-прокси ESPHome. Датчик спит, Wi-Fi не нужен.</p>
       <div class="badges">
-        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.31.0</span>
+        <span class="badge"><svg class="i"><use href="#i-tag"/></svg>v1.32.0</span>
         <span class="badge"><svg class="i"><use href="#i-bt"/></svg>BLE · BTHome</span>
         <span class="badge"><svg class="i"><use href="#i-chip"/></svg>XIAO ESP32-C3 · ESPHome</span>
         <span class="badge"><svg class="i"><use href="#i-box"/></svg>Home Assistant 2026.3+</span>
@@ -519,6 +519,10 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <div><b>Last power loss<span class="kind t-slate">sensor</span></b><small>Последний сбой питания из журнала датчика (прошивка 1.10.0+): что случилось (питание пропало полностью, короткий провал, brownout, сбой прошивки) и чем датчик был занят — спал, просыпался, передавал пакет, мигал, был подключён HA, работал по Wi-Fi. В атрибутах: <code>text</code> — строка на языке Home Assistant с временем, напряжением батареи, номером пробуждения и USB; <code>entries</code> — последние 8 случаев. Каждый новый случай попадает в журнал событий HA.</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
       <div><b>Power loss count<span class="kind t-slate">sensor</span></b><small>Сколько сбоев питания и сбоев прошивки датчик записал всего — для графиков и статистики.</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Power report<span class="kind t-slate">sensor</span></b><small>Вывод о последнем сбое питания (v1.32): запись журнала плюс то, что интеграция видела вокруг — слышал ли Home Assistant другие Bluetooth-устройства во время тишины (приём работал или упал прокси), пакеты, потери и сигнал за час до сбоя, настройки окон. Состояние — код вывода (<code>cut_asleep</code>, <code>cut_under_load</code>, <code>dip</code>, <code>brownout</code>, <code>low_battery</code>, <code>usb_powered</code>, <code>crash</code>), атрибут <code>text</code> — отчёт на языке Home Assistant с подсказкой, что измерить. На панели — карточка «Сбои питания» в Diagnostics. Пересобрать: кнопка <b>Build power report</b> или служба <code>power_report</code>.</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Power test<span class="kind t-slate">sensor</span></b><small>Тест питания (v1.32): кнопка <b>Run power test</b> на панели (10 минут) или служба <code>power_test</code> (minutes, 0 — отмена). Датчик это время просыпается раз в 30 секунд, интеграция считает пакеты, потери, перезагрузки и новые записи журнала. Итог — <code>passed</code> / <code>failed</code> и строка в атрибуте <code>text</code>, запись в журнале событий. Команда уходит по Bluetooth в ближайшее пробуждение.</small></div></div>
   </div>
 
   <h3>Настройки</h3>
