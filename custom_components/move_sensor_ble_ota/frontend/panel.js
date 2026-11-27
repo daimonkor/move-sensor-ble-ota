@@ -20,9 +20,11 @@ const I18N = {
     "On the charger. Days left comes back once it is unplugged.": "На зарядке. Прогноз «Осталось дней» вернётся после снятия с зарядки.", "Last motion": "Последнее движение",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Сброс Wi-Fi",
     "Blink LED": "Мигнуть LED", "Read": "Прочитать", "Reset": "Сбросить", "Press": "Нажать",
-    "Build": "Собрать", "Run 10 min": "Запустить на 10 мин", "Power failures": "Сбои питания",
-    "Report on the latest failure": "Отчёт о последнем сбое", "Power log (latest first)": "Журнал (новые сверху)",
-    "Power test": "Тест питания", "No power failures logged yet.": "Сбоев питания пока не записано.",
+    "Build": "Собрать", "Run": "Запустить", "Power": "Питание",
+    "No power failures": "Сбоев питания не было", "check in progress": "идёт проверка",
+    "Sensor came back": "Датчик вернулся", "failures in total": "всего сбоев", "What to do": "Что сделать",
+    "Power check": "Проверка питания", "Details": "Подробности", "Check the power (10 minutes)": "Проверить питание (10 минут)",
+    "Power log (latest first)": "Журнал (новые сверху)",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Сбросить Wi-Fi датчика на сеть, зашитую в прошивку?",
     "Panel sections": "Разделы панели",
     "No Move Sensor BLE sensors are set up.": "Датчики Move Sensor BLE не настроены.",
@@ -92,9 +94,11 @@ const I18N = {
     "On the charger. Days left comes back once it is unplugged.": "На зарядці. Прогноз «Залишилось днів» повернеться після зняття з зарядки.", "Last motion": "Останній рух",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Скидання Wi-Fi",
     "Blink LED": "Блимнути LED", "Read": "Прочитати", "Reset": "Скинути", "Press": "Натиснути",
-    "Build": "Зібрати", "Run 10 min": "Запустити на 10 хв", "Power failures": "Збої живлення",
-    "Report on the latest failure": "Звіт про останній збій", "Power log (latest first)": "Журнал (нові зверху)",
-    "Power test": "Тест живлення", "No power failures logged yet.": "Збоїв живлення поки не записано.",
+    "Build": "Зібрати", "Run": "Запустити", "Power": "Живлення",
+    "No power failures": "Збоїв живлення не було", "check in progress": "триває перевірка",
+    "Sensor came back": "Датчик повернувся", "failures in total": "усього збоїв", "What to do": "Що зробити",
+    "Power check": "Перевірка живлення", "Details": "Подробиці", "Check the power (10 minutes)": "Перевірити живлення (10 хвилин)",
+    "Power log (latest first)": "Журнал (нові зверху)",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Скинути Wi-Fi датчика на мережу, вшиту в прошивку?",
     "Panel sections": "Розділи панелі",
     "No Move Sensor BLE sensors are set up.": "Датчики Move Sensor BLE не налаштовані.",
@@ -198,8 +202,11 @@ const SECTIONS = [
   { id: "wifi", title: "Wi-Fi (service mode)", icon: "mdi:wifi" },
   { id: "calibration", title: "Calibration", icon: "mdi:tune-vertical",
     keys: ["setting_voltage_factor", "pir_stuck_threshold"] },
+  // v1.32: power failures — tiles, then the report as text and the two actions as full-width rows
+  { id: "power", title: "Power", icon: "mdi:power-plug-battery-outline",
+    keys: [] },
   { id: "diagnostics", title: "Diagnostics", icon: "mdi:stethoscope",
-    keys: ["device_id", "voltage", "battery_remaining", "last_reset_reason", "last_power_loss", "power_loss_count", "power_report_build", "power_test", "power_test_run", "brownout_count", "crash_count",
+    keys: ["device_id", "voltage", "battery_remaining", "last_reset_reason", "brownout_count", "crash_count",
            "ota_key", "settings_status", "settings_change", "settings_read", "wifi_reset"] },
 ];
 
@@ -210,8 +217,7 @@ const CONTROL = {
 };
 const SHORT = { battery_days_left: "Days left", battery_remaining: "Remaining", voltage: "Voltage",
                 last_motion: "Last motion", pir_stuck: "PIR stuck", wifi_reset: "Reset Wi-Fi" };
-const ACTION_NAMES = { identify: "Blink LED", settings_read: "Read", wifi_reset: "Reset",
-                       power_report_build: "Build", power_test_run: "Run 10 min" };
+const ACTION_NAMES = { identify: "Blink LED", settings_read: "Read", wifi_reset: "Reset" };
 const DANGER = { wifi_reset: "Reset Wi-Fi on the sensor to the network built into its firmware?" };
 const LAYOUT_KEYS = new Set([
   ...Object.values(SHEETS).flatMap((s) => [s.entity, ...s.info, ...s.settings]),
@@ -219,6 +225,7 @@ const LAYOUT_KEYS = new Set([
   ...SECTIONS.flatMap((s) => s.keys || []),
   "firmware", "ota_status", "ota_progress", "firmware_version", "ota_flash", "ota_build_flash", "ota_cancel",
   "integration_auto_update",   // v1.29.2: on the «About» tab
+  "power_report", "power_report_build", "power_test_run", "last_power_loss", "power_loss_count", "power_test",   // v1.32: in the «Power» section, not as tiles
 ]);
 
 class MoveSensorBlePanel extends HTMLElement {
@@ -673,17 +680,34 @@ class MoveSensorBlePanel extends HTMLElement {
           if (k.startsWith("setting_")) { const el = this._setEl(k); if (el) body.appendChild(el); continue; }
           const c = this._infoCard(k); if (c) body.appendChild(this._card(c));
         }
-        if (sec.id === "diagnostics" && this._id("power_report") && this._id("last_power_loss")) {
-          // v1.32: отчёт о сбое, журнал и итог теста питания — текстом, из атрибутов сущностей
-          const rep = this._id("power_report"), log = this._id("last_power_loss"), test = this._id("power_test");
-          const md = [
-            `**${tr("Report on the latest failure")}**`, "",
-            `{% set l = state_attr('${rep}', 'lines') or [] %}{% if l %}{% for x in l %}- {{ x }}\n{% endfor %}{% else %}${tr("No power failures logged yet.")}{% endif %}`,
-            "", `**${tr("Power log (latest first)")}**`, "",
-            `{% set e = state_attr('${log}', 'entries') or [] %}{% if e %}{% for x in e %}{{ loop.index }}. {{ x }}\n{% endfor %}{% else %}—{% endif %}`,
-          ];
-          if (test) md.push("", `**${tr("Power test")}**: {{ state_attr('${test}', 'text') or states('${test}') }}`);
-          body.appendChild(this._wide(this._card({ type: "markdown", title: tr("Power failures"), content: md.join("\n") })));
+        if (sec.id === "power") {
+          // v1.33: plain words first — what happened, why, what to do, then one check with its result.
+          // Journal lines and numbers are folded under «Details». Jinja keeps the card live.
+          const rep = this._id("power_report"), log = this._id("last_power_loss"), test = this._id("power_test"), cnt = this._id("power_loss_count");
+          if (rep) {
+            const md = [
+              `### {{ state_attr('${rep}', 'title') or '${tr("No power failures")}' }}`,
+              `{% set w = state_attr('${rep}', 'when') %}{% if w %}<small>${tr("Sensor came back")}: {{ w }}${cnt ? ` · ${tr("failures in total")}: {{ states('${cnt}') }}` : ""}</small>{% endif %}`,
+              "", `{{ state_attr('${rep}', 'cause') or '' }}`, "",
+              `{% set st = state_attr('${rep}', 'steps') or [] %}{% if st %}**${tr("What to do")}**\n{% for x in st %}\n{{ loop.index }}. {{ x }}{% endfor %}{% endif %}`,
+            ];
+            if (test) md.push("", `**${tr("Power check")}.** {{ state_attr('${test}', 'simple') or states('${test}') }}`);
+            md.push("", `<details><summary>${tr("Details")}</summary>`, "",
+              `{% set l = state_attr('${rep}', 'lines') or [] %}{% for x in l %}- {{ x }}\n{% endfor %}`);
+            if (log) md.push("", `**${tr("Power log (latest first)")}**`, "",
+              `{% set e = state_attr('${log}', 'entries') or [] %}{% if e %}{% for x in e %}{{ loop.index }}. {{ x }}\n{% endfor %}{% else %}—{% endif %}`);
+            if (test) md.push("", `{% set tt = state_attr('${test}', 'text') %}{% if tt %}**${tr("Power check")}**: {{ tt }}{% endif %}`);
+            md.push("", "</details>");
+            const card = this._card({ type: "markdown", content: md.join("\n") });
+            card.classList.add("report");
+            body.appendChild(this._wide(card));
+          }
+          // one action, full width: the name never gets cut
+          const rows = [["power_test_run", "Check the power (10 minutes)", "Run"]]
+            .filter(([k]) => this._id(k))
+            .map(([k, name, act]) => ({ type: "button", entity: this._id(k), name: tr(name), action_name: tr(act),
+              tap_action: { action: "perform-action", perform_action: "button.press", target: { entity_id: this._id(k) } } }));
+          if (rows.length) body.appendChild(this._wide(this._card({ type: "entities", entities: rows })));
         }
         if (sec.id === "diagnostics") {
           body.appendChild(this._card({ type: "entities", entities: [{
@@ -717,6 +741,11 @@ class MoveSensorBlePanel extends HTMLElement {
     }
     if (id === "wifi") return this._wifiState().title;
     if (id === "calibration") return fmt("setting_voltage_factor") ? tr("Voltage factor {v}", { v: fmt("setting_voltage_factor") }) : "";
+    if (id === "power") {
+      const r = val("power_report"), t = val("power_test");
+      const run = t && ["pending", "running"].includes(t.state);
+      return [r && r.attributes.title ? r.attributes.title : tr("No power failures"), run ? tr("check in progress") : ""].filter(Boolean).join(" · ");
+    }
     if (id === "diagnostics") return [fmt("last_reset_reason") && tr("Last reset: {v}", { v: fmt("last_reset_reason") }), fmt("voltage")].filter(Boolean).join(" · ");
     return "";
   }
@@ -1272,6 +1301,9 @@ const STYLE = `
      background, and its 16 px padding replaces ours so the row icons line up with the section icon */
   .secgrid > .wide { --ha-card-border-width: 0; --ha-card-background: transparent; --ha-card-box-shadow: none;
                      margin: 0 calc(-1 * var(--ha-space-4, 16px)); }
+  /* v1.32: the power report is plain text — keep lines readable on a wide screen, compact on a phone */
+  .secgrid > .report { max-width: 760px; margin-inline: 0; --ha-card-border-radius: var(--ha-border-radius-lg, 12px);
+                       line-height: 1.45; overflow-wrap: anywhere; }
   /* a note in a section lines up with the section title (icon 24 px + its 8 px gap), not with the icon */
   .secgrid > p.note { padding-inline-start: calc(24px + var(--ha-space-2, 8px)); }
   .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center;
@@ -1290,6 +1322,9 @@ const STYLE = `
   @keyframes up { from { transform: translateY(48px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @media (max-width: 600px) {
+    .secgrid { grid-template-columns: minmax(0, 1fr); padding-inline: var(--ha-space-2, 8px); }
+    .secgrid > .wide { margin: 0 calc(-1 * var(--ha-space-2, 8px)); }
+    .secgrid > .report { font-size: 14px; }
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); }
     .tab { flex: 1 1 0; padding: 0 var(--ha-space-2, 8px); }
     .tabs { padding: 0; }

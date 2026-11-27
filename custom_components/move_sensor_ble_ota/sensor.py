@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -24,6 +25,7 @@ from .const import (
     ST_SUCCESS,
     ST_WAITING,
 )
+from . import powerlog
 from .entity import OtaEntity
 
 
@@ -247,7 +249,10 @@ class PowerReportSensor(OtaEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         r = self.mgr.power_report
-        return {"text": r.get("text"), "lines": r.get("lines") or [], "built": r.get("built"), "context": r.get("ctx")}
+        log = self.mgr.power_log
+        # v1.33: вывод простыми словами — что случилось, почему, что сделать (панель показывает его первым)
+        return {**powerlog.simple(log[0] if log else None, self.mgr.hass.config.language),
+                "text": r.get("text"), "lines": r.get("lines") or [], "built": r.get("built"), "context": r.get("ctx")}
 
 
 class PowerTestSensor(OtaEntity, SensorEntity):
@@ -267,9 +272,12 @@ class PowerTestSensor(OtaEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         t = self.mgr.power_test
-        return {k: t.get(k) for k in ("text", "minutes", "requested", "started", "until", "finished", "packets",
+        until = dt_util.parse_datetime(t["until"]) if t.get("until") else None   # хранится в UTC, человеку — местное
+        shown = {**t, "until": dt_util.as_local(until).isoformat()} if until else t
+        return {"simple": powerlog.test_simple(shown, self.mgr.hass.config.language),
+                **{k: t.get(k) for k in ("text", "minutes", "requested", "started", "until", "finished", "packets",
                                       "expected", "lost", "reboots", "new_entries", "battery_min", "battery_max",
-                                      "reason")}
+                                      "reason")}}
 
 
 class LastSeenSensor(OtaEntity, SensorEntity):

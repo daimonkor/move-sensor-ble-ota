@@ -303,3 +303,135 @@ def test_result(res: dict, lang: str = "en") -> str:
                        r=res.get("reboots", 0), n=res.get("new_entries", 0),
                        a=res.get("battery_min", "?"), b=res.get("battery_max", "?"))
     return f"{s[0] if res.get('passed') else s[1]}: {body}"
+
+
+# ---------------------------------------------------------------- простой вывод для панели (v1.33)
+# Три вещи без терминов: что случилось, почему, что сделать. Подробности (строка журнала, приём, цифры)
+# остаются в report()["lines"] — панель прячет их под «Подробности».
+_S = {
+    "en": {
+        "none": ("No power failures", "The sensor has not logged a single power failure.", []),
+        "usb_powered": ("Restarted while on USB", "The sensor was connected to a computer, so the battery is not involved.",
+                        ["Nothing to do if you were plugging the cable yourself."]),
+        "low_battery": ("The battery ran down", "It was at {v} V before the sensor switched off.",
+                        ["Charge the sensor over USB."]),
+        "brownout": ("The battery cannot hold the load", "The voltage sagged while the sensor was working: a weak battery or a poor contact.",
+                     ["Charge the sensor.", "If it happens again, check the battery connector."]),
+        "crash": ("Firmware fault, power is fine", "The sensor restarted by itself; the battery is not the cause.",
+                  ["Update the firmware.", "If it repeats, connect USB and look at the log."]),
+        "dip": ("Power flickered", "It vanished for a moment and came back — this looks like a poor contact.",
+                ["Check the battery connector and the power switch.", "Run the power check below."]),
+        "cut_under_load": ("Power was lost while the sensor was working", "The battery protection tripped or a contact opened at that moment.",
+                           ["Switch the sensor off and on with the power switch.", "Run the power check below.",
+                            "If the check fails, check the battery connector and wires."]),
+        "cut_asleep": ("Power was lost while the sensor slept", "The radio and the LED are not the cause — most likely a poor contact or a short in the battery wiring.",
+                       ["Switch the sensor off and on with the power switch. If the LED blinks, the battery protection had tripped.",
+                        "Check the battery connector, the power switch and the wire to the board.",
+                        "Run the power check below."]),
+        "unknown": ("The cause could not be determined", "The sensor restarted, but there is not enough data.",
+                    ["Run the power check below."]),
+        "t_idle": "The check has not been run yet.",
+        "t_pending": "Waiting for the sensor to get in touch (up to a few minutes)…",
+        "t_running": "Checking until {t}: the sensor wakes up every 30 seconds.",
+        "t_passed": "Passed: in {m} minutes the sensor never switched off.",
+        "t_power": "Failed: the sensor switched off during the check ({r} times). The problem is in the power — follow the steps above.",
+        "t_link": "Failed: only {p} of {e} packets arrived. Power did not fail — the link is weak, move the sensor closer to the receiver.",
+        "t_not_started": "The check did not start: the sensor did not get in touch.",
+        "t_interrupted": "The check was interrupted by a Home Assistant restart.",
+    },
+    "ru": {
+        "none": ("Сбоев питания не было", "Датчик не записал ни одного сбоя питания.", []),
+        "usb_powered": ("Перезапуск на USB", "Датчик был подключён к компьютеру, батарея ни при чём.",
+                        ["Ничего делать не нужно, если ты сам переподключал кабель."]),
+        "low_battery": ("Батарея разрядилась", "Перед отключением на ней было {v} В.",
+                        ["Заряди датчик через USB."]),
+        "brownout": ("Батарея не держит нагрузку", "Напряжение просело во время работы: слабая батарея или плохой контакт.",
+                     ["Заряди датчик.", "Если повторится — проверь разъём батареи."]),
+        "crash": ("Сбой прошивки, питание в порядке", "Датчик перезапустился сам, батарея ни при чём.",
+                  ["Обнови прошивку.", "Если повторяется — подключи USB и посмотри лог."]),
+        "dip": ("Питание моргнуло", "Пропало на мгновение и вернулось — похоже на плохой контакт.",
+                ["Проверь разъём батареи и выключатель.", "Запусти проверку питания ниже."]),
+        "cut_under_load": ("Питание пропало во время работы", "Сработала защита батареи или в этот момент разомкнулся контакт.",
+                           ["Выключи и включи датчик выключателем.", "Запусти проверку питания ниже.",
+                            "Если проверка не пройдена — проверь разъём и провода батареи."]),
+        "cut_asleep": ("Питание пропало, пока датчик спал", "Радио и светодиод ни при чём — скорее всего плохой контакт или замыкание в проводах батареи.",
+                       ["Выключи и включи датчик выключателем. Мигнул светодиод — сработала защита батареи.",
+                        "Проверь разъём батареи, выключатель и провод к плате.",
+                        "Запусти проверку питания ниже."]),
+        "unknown": ("Причину определить не удалось", "Датчик перезапустился, но данных мало.",
+                    ["Запусти проверку питания ниже."]),
+        "t_idle": "Проверка ещё не запускалась.",
+        "t_pending": "Ждём, пока датчик выйдет на связь (до нескольких минут)…",
+        "t_running": "Идёт проверка до {t}: датчик просыпается каждые 30 секунд.",
+        "t_passed": "Пройдена: за {m} минут датчик ни разу не выключился.",
+        "t_power": "Не пройдена: датчик выключался во время проверки ({r} раз). Проблема в питании — выполни шаги выше.",
+        "t_link": "Не пройдена: дошло только {p} пакетов из {e}. Питание не падало — слабая связь, поднеси датчик ближе к приёмнику.",
+        "t_not_started": "Проверка не началась: датчик не вышел на связь.",
+        "t_interrupted": "Проверка прервана перезапуском Home Assistant.",
+    },
+    "uk": {
+        "none": ("Збоїв живлення не було", "Датчик не записав жодного збою живлення.", []),
+        "usb_powered": ("Перезапуск на USB", "Датчик був підключений до комп'ютера, батарея ні до чого.",
+                        ["Нічого робити не треба, якщо ти сам перепідключав кабель."]),
+        "low_battery": ("Батарея розрядилася", "Перед вимкненням на ній було {v} В.",
+                        ["Заряди датчик через USB."]),
+        "brownout": ("Батарея не тримає навантаження", "Напруга просіла під час роботи: слабка батарея або поганий контакт.",
+                     ["Заряди датчик.", "Якщо повториться — перевір роз'єм батареї."]),
+        "crash": ("Збій прошивки, живлення в порядку", "Датчик перезапустився сам, батарея ні до чого.",
+                  ["Онови прошивку.", "Якщо повторюється — підключи USB і подивися лог."]),
+        "dip": ("Живлення блимнуло", "Зникло на мить і повернулося — схоже на поганий контакт.",
+                ["Перевір роз'єм батареї та вимикач.", "Запусти перевірку живлення нижче."]),
+        "cut_under_load": ("Живлення зникло під час роботи", "Спрацював захист батареї або в цей момент розімкнувся контакт.",
+                           ["Вимкни й увімкни датчик вимикачем.", "Запусти перевірку живлення нижче.",
+                            "Якщо перевірку не пройдено — перевір роз'єм і дроти батареї."]),
+        "cut_asleep": ("Живлення зникло, поки датчик спав", "Радіо і світлодіод ні до чого — найімовірніше поганий контакт або замикання в дротах батареї.",
+                       ["Вимкни й увімкни датчик вимикачем. Блимнув світлодіод — спрацював захист батареї.",
+                        "Перевір роз'єм батареї, вимикач і дріт до плати.",
+                        "Запусти перевірку живлення нижче."]),
+        "unknown": ("Причину визначити не вдалося", "Датчик перезапустився, але даних мало.",
+                    ["Запусти перевірку живлення нижче."]),
+        "t_idle": "Перевірку ще не запускали.",
+        "t_pending": "Чекаємо, поки датчик вийде на зв'язок (до кількох хвилин)…",
+        "t_running": "Триває перевірка до {t}: датчик прокидається кожні 30 секунд.",
+        "t_passed": "Пройдено: за {m} хвилин датчик жодного разу не вимкнувся.",
+        "t_power": "Не пройдено: датчик вимикався під час перевірки ({r} разів). Проблема в живленні — виконай кроки вище.",
+        "t_link": "Не пройдено: дійшло лише {p} пакетів із {e}. Живлення не падало — слабкий зв'язок, піднеси датчик ближче до приймача.",
+        "t_not_started": "Перевірка не почалася: датчик не вийшов на зв'язок.",
+        "t_interrupted": "Перевірку перервано перезапуском Home Assistant.",
+    },
+}
+
+
+def simple(entry: dict | None, lang: str = "en") -> dict:
+    """Вывод простыми словами: title (что случилось), when, cause (почему), steps (что сделать)."""
+    code = (lang or "en").split("-")[0].lower()
+    s = _S.get(code, _S["en"])
+    if not entry:
+        title, cause, steps = s["none"]
+        return {"title": title, "when": None, "cause": cause, "steps": list(steps)}
+    title, cause, steps = s[verdict(entry)]
+    v = _num(entry["battery_v"], "en" if s is _S["en"] else "x") if entry.get("battery_v") is not None else "?"
+    return {"title": title, "when": _hm(entry.get("after")), "cause": cause.format(v=v), "steps": list(steps)}
+
+
+def test_simple(res: dict | None, lang: str = "en") -> str:
+    """Состояние проверки питания одной понятной фразой (любое состояние, не только итог)."""
+    code = (lang or "en").split("-")[0].lower()
+    s = _S.get(code, _S["en"])
+    res = res or {}
+    st = res.get("state") or "idle"
+    if st == "pending":
+        return s["t_pending"]
+    if st == "running":
+        until = _hm(res.get("until"))
+        return s["t_running"].format(t=until[6:] if until else "?")
+    if st == "passed":
+        return s["t_passed"].format(m=res.get("minutes", "?"))
+    if st == "failed":
+        if res.get("reason") in ("not_started", "interrupted"):
+            return s["t_" + res["reason"]]
+        r = (res.get("reboots") or 0) + (res.get("new_entries") or 0)
+        if r:
+            return s["t_power"].format(r=max(res.get("reboots") or 0, res.get("new_entries") or 0))
+        return s["t_link"].format(p=res.get("packets", 0), e=res.get("expected", "?"))
+    return s["t_idle"]

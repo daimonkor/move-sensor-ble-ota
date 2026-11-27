@@ -118,3 +118,27 @@ def test_power_test_summary():
     assert powerlog.test_result(res, "ru").startswith("пройден: 10 мин, 19 пакетов из примерно 20, потеряно 1")
     assert powerlog.test_result({**res, "passed": False, "reboots": 2}, "en").startswith("failed: 10 min")
     assert "2 reboots" in powerlog.test_result({**res, "passed": False, "reboots": 2}, "de")
+
+
+# ---- v1.33: plain-words summary for the panel
+def test_simple_summary():
+    s = powerlog.simple(powerlog.decode(_entry()), "ru")
+    assert s["title"] and s["cause"] and s["steps"]
+    assert powerlog.simple(None, "en") == {"title": "No power failures", "when": None,
+                                           "cause": "The sensor has not logged a single power failure.", "steps": []}
+    for lang in ("en", "ru", "uk", "de"):
+        for stage in range(1, 10):
+            for reset in (1, 9, 4, 5):
+                for flags in (0, 1):
+                    r = powerlog.simple(powerlog.decode(_entry(stage=stage, reset=reset, flags=flags)), lang)
+                    assert r["title"] and "{" not in r["cause"]
+
+
+def test_power_check_phrase():
+    assert "30" in powerlog.test_simple({"state": "running", "until": "2026-11-28T01:15:00+02:00"}, "ru")
+    assert "01:15" in powerlog.test_simple({"state": "running", "until": "2026-11-28T01:15:00+02:00"}, "en")
+    assert powerlog.test_simple({"state": "passed", "minutes": 10}, "ru").startswith("Пройдена")
+    assert "питании" in powerlog.test_simple({"state": "failed", "reboots": 2, "packets": 20, "expected": 20}, "ru")
+    assert "link is weak" in powerlog.test_simple({"state": "failed", "packets": 5, "expected": 20}, "en")
+    assert powerlog.test_simple({"state": "failed", "reason": "not_started"}, "uk")
+    assert powerlog.test_simple(None, "en") and powerlog.test_simple({}, "ru")
