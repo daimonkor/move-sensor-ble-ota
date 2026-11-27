@@ -516,6 +516,10 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <div><b>Crash count<span class="kind t-red">sensor</span></b><small>Firmware faults: panic + watchdog (details in attributes)</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
       <div><b>Last reset reason<span class="kind t-slate">sensor</span></b><small>Reason of the last boot that wasn't a wake from sleep: power on, brownout, software, panic…</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Last power loss<span class="kind t-slate">sensor</span></b><small>The latest power failure from the sensor's own log (firmware 1.10.0+): what happened (power fully removed, short dip, brownout, firmware crash) and what the sensor was doing — asleep, waking up, transmitting, blinking, connected to HA, in Wi-Fi service mode. Attributes: <code>text</code> — a line in the Home Assistant language with the time, battery voltage, wake number and USB; <code>entries</code> — the last 8 cases. Every new case goes to the HA logbook.</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Power loss count<span class="kind t-slate">sensor</span></b><small>How many power failures and firmware crashes the sensor has logged in total — for graphs and statistics.</small></div></div>
   </div>
 
   <h3>Settings</h3>

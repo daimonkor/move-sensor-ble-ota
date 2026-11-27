@@ -515,6 +515,10 @@ a.badge{color:inherit;text-decoration:none}a.badge:hover{filter:brightness(1.15)
       <div><b>Crash count<span class="kind t-red">sensor</span></b><small>Збої прошивки: panic + watchdog (докладно — в атрибутах)</small></div></div>
     <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
       <div><b>Last reset reason<span class="kind t-slate">sensor</span></b><small>Причина останнього завантаження «не зі сну»: power on, brownout, software, panic…</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Last power loss<span class="kind t-slate">sensor</span></b><small>Останній збій живлення з журналу датчика (прошивка 1.10.0+): що сталося (живлення зникло повністю, короткий провал, brownout, збій прошивки) і чим датчик був зайнятий — спав, прокидався, передавав пакет, блимав, був підключений HA, працював по Wi-Fi. В атрибутах: <code>text</code> — рядок мовою Home Assistant з часом, напругою батареї, номером пробудження та USB; <code>entries</code> — останні 8 випадків. Кожен новий випадок потрапляє до журналу подій HA.</small></div></div>
+    <div class="card ent"><span class="ico t-slate"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div><b>Power loss count<span class="kind t-slate">sensor</span></b><small>Скільки збоїв живлення та збоїв прошивки датчик записав загалом — для графіків і статистики.</small></div></div>
   </div>
 
   <h3>Налаштування</h3>
