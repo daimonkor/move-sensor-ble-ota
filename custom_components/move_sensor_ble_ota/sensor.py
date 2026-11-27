@@ -32,6 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_add_entities([
         SettingsStatusSensor(mgr),   # v1.15: OTA status / progress / Firmware version -> сущность «Firmware»
         BrownoutCountSensor(mgr), CrashCountSensor(mgr), LastResetReasonSensor(mgr), LastSeenSensor(mgr),
+        PowerLossSensor(mgr), PowerLossCountSensor(mgr),   # v1.31: журнал сбоев питания
         BatteryDaysLeftSensor(mgr), BatteryRemainingSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
         LastMotionSensor(mgr),
         DataSensor(mgr, "temperature", "Temperature", SensorDeviceClass.TEMPERATURE, "°C", 1),
@@ -192,6 +193,40 @@ class LastResetReasonSensor(OtaEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return _diag_attrs(self.mgr)
+
+
+class PowerLossSensor(OtaEntity, SensorEntity):
+    """v1.31: последний сбой питания из журнала датчика (прошивка 1.10.0+): вид сбоя и стадия, на которой он
+    застал датчик. Атрибуты: text — строка на языке HA, entries — последние 8 записей, last — поля записи."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:power-plug-off-outline"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "last_power_loss", "Last power loss")
+
+    @property
+    def native_value(self) -> str | None:
+        return self.mgr.power_loss_state
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return self.mgr.power_loss_attrs
+
+
+class PowerLossCountSensor(OtaEntity, SensorEntity):
+    """v1.31: сколько сбоев питания / крашей датчик записал в журнал всего — для графиков и статистики."""
+
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:counter"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "power_loss_count", "Power loss count")
+
+    @property
+    def native_value(self) -> int | None:
+        return self.mgr.power_log_total
 
 
 class LastSeenSensor(OtaEntity, SensorEntity):

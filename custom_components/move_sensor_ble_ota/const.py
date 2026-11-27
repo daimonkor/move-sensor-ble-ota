@@ -53,6 +53,7 @@ CMD_GET_SETTINGS = 0x10
 CMD_SET_SETTINGS = 0x11
 CMD_GET_BATTERY = 0x15   # v1.19: ёмкость (мА·ч) и порог «низкого» заряда (%), ответ 6 байт
 CMD_SET_BATTERY = 0x16
+CMD_DIAG_LOG = 0x17      # v1.31: журнал сбоев питания (прошивка 1.10.0+), см. powerlog.py
 RSP_ACK = 0x84
 
 # коды статуса датчика -> текст

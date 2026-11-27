@@ -33,8 +33,9 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from . import fwnotes
+from . import fwnotes, powerlog
 from .const import (
+    CMD_DIAG_LOG,
     CMD_ABORT,
     CONF_SILENT_AFTER,
     CMD_AUTH,
@@ -816,6 +817,11 @@ class OtaManager:
         self._need_diag = False
         self._last_wake: int | None = None
         self._diag_deferred = False        # перезагрузка была на почти пустой батарее — прочитать позже
+        # --- журнал сбоев питания (v1.31, прошивка 1.10.0+): последние 8 записей, новые — первыми
+        self.power_log: list[dict] = []
+        self.power_log_total: int | None = None   # сколько записей датчик сделал всего (None — ещё не читали)
+        self._seen_before: datetime | None = None  # время предыдущего пакета (до текущего)
+        self._reboot_gap: tuple[str | None, str] | None = None   # последний пакет до перезагрузки / первый после
         self._rebooted_after_flash = False  # после success видели сброс Wake count
         # --- сброс Wi-Fi на сеть из прошивки (команда 0x12), ждёт окна как настройки
         self.wifi_reset: dict = {}          # {"state": pending|sent|error, "requested", "done", "error"}
@@ -913,6 +919,8 @@ class OtaManager:
         ts_d = data.get("diag_seen")
         self.diag_seen = dt_util.parse_datetime(ts_d) if ts_d else None
         self._need_diag = self.diag is None
+        self.power_log = list(data.get("power_log") or [])
+        self.power_log_total = data.get("power_log_total")
         self.wifi_reset = data.get("wifi_reset") or {}
         self.test_mode = data.get("test_mode") or {}
         self.stats = data.get("stats") or {}
@@ -984,6 +992,8 @@ class OtaManager:
                 "firmware_seen": self.firmware_seen.isoformat() if self.firmware_seen else None,
                 "diag": self.diag,
                 "diag_seen": self.diag_seen.isoformat() if self.diag_seen else None,
+                "power_log": self.power_log,
+                "power_log_total": self.power_log_total,
                 "last_seen": self.last_seen.isoformat() if self.last_seen else None,
                 "last_seen_info": self.last_seen_info,
                 "stats": self.stats,
@@ -2087,6 +2097,9 @@ class OtaManager:
             # Уменьшился (и это не переполнение u16) -> перезагрузка -> прочитать DIAG.
             if prev is not None and wake < prev and not (prev > WAKE_MASK - 100 and wake < 100):
                 _LOGGER.info("%s: wake count %d -> %d, device rebooted", self.name, prev, wake)
+                # v1.31: время для журнала сбоев питания — у датчика часов нет
+                self._reboot_gap = (self._seen_before.isoformat() if self._seen_before else None,
+                                    dt_util.now().isoformat())
                 self._diag_deferred = True
                 self._auth_unblock("device rebooted")
                 if self.status == ST_SUCCESS:
@@ -2122,6 +2135,7 @@ class OtaManager:
             self.ble_rssi = int(service_info.rssi)
             self.rssi_hist = (self.rssi_hist + [int(service_info.rssi)])[-AUTO_WINDOW_SAMPLES * 2:]
             self._auto_window()
+        self._seen_before = self.last_seen
         self.last_seen = now
         self.last_seen_info = {
             "packet_id": pid,
@@ -3008,6 +3022,77 @@ class OtaManager:
         self._save()
         self._notify()
         _LOGGER.info("%s: reset diagnostics: %s", self.name, diag)
+        await self._read_power_log(command)
+
+    # ================= журнал сбоев питания (v1.31) =================
+    async def _read_power_log(self, command) -> None:
+        """Забрать новые записи журнала. Прошивка до 1.10.0 отвечает «неверная команда» — молча выходим
+        (не запоминаем: после обновления прошивки журнал появится сам)."""
+        async def ask(back: int) -> bytes | None:
+            try:
+                rsp = await command(bytes([CMD_DIAG_LOG, back]), timeout=3.0)
+            except asyncio.TimeoutError:
+                return None
+            return rsp if len(rsp) >= 4 and rsp[1] == 0 else None
+
+        rsp = await ask(0)
+        if rsp is None:
+            return
+        total = rsp[2] | (rsp[3] << 8)
+        known = self.power_log_total
+        first = known is None
+        if not first and total == known:
+            return
+        if not first and total < known:   # флеш датчика стёрли — журнал начался заново
+            self.power_log, known = [], 0
+        count = min(total if first else total - known, powerlog.LOG_SIZE)
+        fresh: list[dict] = []
+        for back in range(count):
+            if back:
+                rsp = await ask(back)
+                if rsp is None:
+                    break
+            entry = powerlog.decode(rsp[4:4 + powerlog.ENTRY_SIZE])
+            if entry is None:
+                break
+            entry["read_at"] = dt_util.now().isoformat()
+            fresh.append(entry)
+        if not first and fresh:
+            # время знает только HA: последний пакет до сбоя и первый после — к самой новой записи
+            gap, self._reboot_gap = self._reboot_gap, None
+            if gap is not None:
+                fresh[0]["before"], fresh[0]["after"] = gap
+            else:
+                fresh[0]["after"] = dt_util.now().isoformat()
+        seen = {e.get("seq") for e in fresh}
+        self.power_log = (fresh + [e for e in self.power_log if e.get("seq") not in seen])[:powerlog.LOG_SIZE]
+        self.power_log_total = total
+        self._save()
+        self._notify()
+        if first:
+            return
+        lang = self.hass.config.language
+        for entry in reversed(fresh):
+            line = powerlog.text(entry, lang)
+            _LOGGER.warning("%s: power log #%s: %s", self.name, entry.get("seq"), powerlog.text(entry, "en"))
+            self.hass.bus.async_fire(f"{DOMAIN}_power_loss", {"name": self.name, "address": self.address,
+                                                             "text": line, **entry})
+            self.hass.async_create_task(self.hass.services.async_call(
+                "logbook", "log", {"name": self.name, "message": line, "domain": DOMAIN}, blocking=False))
+
+    @property
+    def power_loss_state(self) -> str | None:
+        return powerlog.state(self.power_log[0]) if self.power_log else None
+
+    @property
+    def power_loss_attrs(self) -> dict:
+        lang = self.hass.config.language
+        return {
+            "text": powerlog.text(self.power_log[0], lang) if self.power_log else None,
+            "entries": [powerlog.text(e, lang) for e in self.power_log],
+            "total": self.power_log_total,
+            "last": self.power_log[0] if self.power_log else None,
+        }
 
     async def _sync_battery(self, command, bpend: dict) -> tuple[dict, int | None] | None:
         """v1.19: ёмкость и порог батареи — своя команда (ответ 6 байт, влезает в любой MTU).

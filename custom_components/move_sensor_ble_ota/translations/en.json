@@ -193,6 +193,12 @@
       "last_reset_reason": {
         "name": "Last reset reason"
       },
+      "last_power_loss": {
+        "name": "Last power loss"
+      },
+      "power_loss_count": {
+        "name": "Power loss count"
+      },
       "last_seen": {
         "name": "Last seen"
       },

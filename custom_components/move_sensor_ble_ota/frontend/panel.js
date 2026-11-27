@@ -193,7 +193,7 @@ const SECTIONS = [
   { id: "calibration", title: "Calibration", icon: "mdi:tune-vertical",
     keys: ["setting_voltage_factor", "pir_stuck_threshold"] },
   { id: "diagnostics", title: "Diagnostics", icon: "mdi:stethoscope",
-    keys: ["device_id", "voltage", "battery_remaining", "last_reset_reason", "brownout_count", "crash_count",
+    keys: ["device_id", "voltage", "battery_remaining", "last_reset_reason", "last_power_loss", "power_loss_count", "brownout_count", "crash_count",
            "ota_key", "settings_status", "settings_change", "settings_read", "wifi_reset"] },
 ];
 
