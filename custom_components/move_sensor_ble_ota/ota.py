@@ -18,6 +18,7 @@ import shutil
 import struct
 import time
 import zlib
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -822,6 +823,11 @@ class OtaManager:
         self.power_log_total: int | None = None   # сколько записей датчик сделал всего (None — ещё не читали)
         self._seen_before: datetime | None = None  # время предыдущего пакета (до текущего)
         self._reboot_gap: tuple[str | None, str] | None = None   # последний пакет до перезагрузки / первый после
+        # --- v1.32: отчёт о сбое и тест питания
+        self.power_report: dict = {}    # powerlog.report(): verdict, lines, text + built, seq, ctx
+        self.power_test: dict = {}      # state: idle / pending / running / passed / failed
+        self._pkt_hist: deque = deque(maxlen=900)      # (ts, packet id, wake, rssi, battery, temperature) — в памяти
+        self._ble_others: deque = deque(maxlen=1500)   # (ts, сколько других BLE-устройств слышно) — раз в минуту
         self._rebooted_after_flash = False  # после success видели сброс Wake count
         # --- сброс Wi-Fi на сеть из прошивки (команда 0x12), ждёт окна как настройки
         self.wifi_reset: dict = {}          # {"state": pending|sent|error, "requested", "done", "error"}
@@ -921,6 +927,10 @@ class OtaManager:
         self._need_diag = self.diag is None
         self.power_log = list(data.get("power_log") or [])
         self.power_log_total = data.get("power_log_total")
+        self.power_report = data.get("power_report") or {}
+        self.power_test = data.get("power_test") or {}
+        if self.power_test.get("state") in ("pending", "running"):   # Home Assistant перезапустили посреди теста
+            self.power_test.update(state="failed", passed=False, reason="interrupted")
         self.wifi_reset = data.get("wifi_reset") or {}
         self.test_mode = data.get("test_mode") or {}
         self.stats = data.get("stats") or {}
@@ -994,6 +1004,8 @@ class OtaManager:
                 "diag_seen": self.diag_seen.isoformat() if self.diag_seen else None,
                 "power_log": self.power_log,
                 "power_log_total": self.power_log_total,
+                "power_report": self.power_report,
+                "power_test": self.power_test,
                 "last_seen": self.last_seen.isoformat() if self.last_seen else None,
                 "last_seen_info": self.last_seen_info,
                 "stats": self.stats,
@@ -2144,6 +2156,10 @@ class OtaManager:
             "rssi": service_info.rssi,
             "source": service_info.source,
         }
+        # v1.32: история пакетов для отчёта о сбое и счёт теста питания
+        self._pkt_hist.append((now.timestamp(), pid, parsed.get("wake"), service_info.rssi, parsed.get("battery"),
+                               parsed.get("temperature")))
+        self._power_test_packet(pid, parsed.get("wake"), parsed.get("battery"), now)
         self._save()
         self._notify()
 
@@ -2333,6 +2349,8 @@ class OtaManager:
             self._save()
             self._notify()
         self._check_missed_climate()
+        self._sample_ble_others()
+        self._power_test_tick()
         if self.auth_block is not None and time.monotonic() >= self._auth_check_at:
             self._auth_check_at = time.monotonic() + AUTH_KEY_CHECK_S
             self.hass.async_create_task(self._auth_recheck())
@@ -3057,20 +3075,26 @@ class OtaManager:
                 break
             entry["read_at"] = dt_util.now().isoformat()
             fresh.append(entry)
-        if not first and fresh:
-            # время знает только HA: последний пакет до сбоя и первый после — к самой новой записи
+        timed = False
+        if fresh:
+            # время знает только HA: последний пакет до сбоя и первый после — к самой новой записи.
+            # v1.32: и при самом первом чтении журнала, если перезагрузку датчика мы видели сами
             gap, self._reboot_gap = self._reboot_gap, None
             if gap is not None:
                 fresh[0]["before"], fresh[0]["after"] = gap
-            else:
+                timed = True
+            elif not first:
                 fresh[0]["after"] = dt_util.now().isoformat()
+                timed = True
         seen = {e.get("seq") for e in fresh}
         self.power_log = (fresh + [e for e in self.power_log if e.get("seq") not in seen])[:powerlog.LOG_SIZE]
         self.power_log_total = total
+        self._build_power_report()
         self._save()
         self._notify()
         if first:
-            return
+            # записи из журнала, которых мы не застали, в логбук не пишем; ту, что случилась при нас, — пишем
+            fresh = fresh[:1] if timed else []
         lang = self.hass.config.language
         for entry in reversed(fresh):
             line = powerlog.text(entry, lang)
@@ -3079,6 +3103,131 @@ class OtaManager:
                                                              "text": line, **entry})
             self.hass.async_create_task(self.hass.services.async_call(
                 "logbook", "log", {"name": self.name, "message": line, "domain": DOMAIN}, blocking=False))
+
+    # ================= отчёт о сбое и тест питания (v1.32) =================
+    def _sample_ble_others(self) -> None:
+        """Раз в минуту: сколько других BLE-устройств Home Assistant слышал за последние 90 с.
+        По этому отчёт отличает «замолчал датчик» от «упал приём» (прокси, роутер)."""
+        try:
+            mono = time.monotonic()
+            n = sum(1 for si in bluetooth.async_discovered_service_info(self.hass, connectable=False)
+                    if si.address != self.address and mono - si.time < 90)
+        except Exception:  # noqa: BLE001
+            return
+        self._ble_others.append((time.time(), n))
+
+    def _report_ctx(self, entry: dict) -> dict:
+        def ts(iso: str | None) -> float | None:
+            try:
+                return datetime.fromisoformat(iso).timestamp() if iso else None
+            except ValueError:
+                return None
+
+        before, after = ts(entry.get("before")), ts(entry.get("after"))
+        ctx: dict = {k: self.value(k) for k in ("motion_window", "climate_window", "climate_interval")}
+        if before and after:
+            others = [n for t, n in self._ble_others if before + 45 <= t <= after - 15]
+            if others:
+                ctx["others_max"], ctx["others_min"] = max(others), min(others)
+        end = before or after
+        if end:
+            hist = [h for h in self._pkt_hist if end - 3600 <= h[0] <= end + 1]
+            if hist:
+                lost = 0
+                for a, b in zip(hist, hist[1:]):
+                    if a[1] is not None and b[1] is not None and not (a[2] is not None and b[2] is not None and b[2] < a[2]):
+                        d = (b[1] - a[1]) % 256
+                        if 1 < d < 30:
+                            lost += d - 1
+                rssi = sorted(h[3] for h in hist[-10:] if h[3] is not None and h[3] > -127)
+                temps = [h[5] for h in hist if h[5] is not None]
+                ctx.update(packets=len(hist), lost=lost, rssi_median=rssi[len(rssi) // 2] if rssi else None,
+                           temperature=temps[-1] if temps else None)
+        return ctx
+
+    def _build_power_report(self) -> None:
+        entry = self.power_log[0] if self.power_log else None
+        ctx: dict = {}
+        if entry:
+            ctx = self._report_ctx(entry)
+            old = self.power_report if self.power_report.get("seq") == entry.get("seq") else {}
+            # тот же сбой, отчёт пересобирают позже: чего уже нет в памяти — берём из прошлого отчёта
+            ctx = {**(old.get("ctx") or {}), **{k: v for k, v in ctx.items() if v is not None}}
+        rep = powerlog.report(entry, ctx, self.hass.config.language)
+        self.power_report = {**rep, "built": dt_util.now().isoformat(), "seq": entry.get("seq") if entry else None,
+                             "ctx": ctx}
+
+    async def async_build_power_report(self) -> dict:
+        self._build_power_report()
+        self._save()
+        self._notify()
+        return self.power_report
+
+    async def async_start_power_test(self, minutes: int = 10) -> None:
+        """Тест питания: N минут датчик просыпается раз в 30 с (быстрый тест прошивки), а мы считаем пакеты,
+        потери, перезагрузки и новые записи журнала. minutes = 0 — отменить."""
+        if minutes <= 0:
+            self.power_test = {"state": "idle"}
+            await self.async_set_test_mode(False, 0)
+            return
+        self.power_test = {"state": "pending", "minutes": int(minutes), "requested": dt_util.now().isoformat(),
+                           "log_total": self.power_log_total or 0}
+        await self.async_set_test_mode(True, int(minutes))
+
+    def _power_test_packet(self, pid, wake, battery, now: datetime) -> None:
+        t = self.power_test
+        state = t.get("state")
+        if state == "pending" and self.test_mode.get("state") == "active":
+            from datetime import timedelta  # noqa: PLC0415
+
+            t.update(state="running", started=now.isoformat(),
+                     until=(now + timedelta(minutes=int(t.get("minutes", 10)))).isoformat(),
+                     packets=0, lost=0, reboots=0, last_pid=pid, last_wake=wake,
+                     battery_min=battery, battery_max=battery)
+            return
+        if state != "running":
+            return
+        t["packets"] = t.get("packets", 0) + 1
+        lp, lw = t.get("last_pid"), t.get("last_wake")
+        if wake is not None and lw is not None and wake < lw and not (lw > WAKE_MASK - 100 and wake < 100):
+            t["reboots"] = t.get("reboots", 0) + 1
+        elif pid is not None and lp is not None:
+            d = (pid - lp) % 256
+            if 1 < d < 30:
+                t["lost"] = t.get("lost", 0) + d - 1
+        t["last_pid"], t["last_wake"] = pid, wake
+        if battery is not None:
+            t["battery_min"] = battery if t.get("battery_min") is None else min(t["battery_min"], battery)
+            t["battery_max"] = battery if t.get("battery_max") is None else max(t["battery_max"], battery)
+
+    def _power_test_tick(self) -> None:
+        t = self.power_test
+        state = t.get("state")
+        now = dt_util.utcnow()
+        minutes = int(t.get("minutes", 10))
+        if state == "pending":
+            req = dt_util.parse_datetime(t["requested"]) if t.get("requested") else None
+            if req is not None and (now - req).total_seconds() > (minutes + 20) * 60:
+                t.update(state="failed", passed=False, reason="not_started", finished=dt_util.now().isoformat())
+                self._save()
+                self._notify()
+            return
+        if state != "running":
+            return
+        until = dt_util.parse_datetime(t["until"]) if t.get("until") else None
+        if until is None or now < until:
+            return
+        expected = minutes * 2
+        new_entries = max(0, (self.power_log_total or 0) - int(t.get("log_total", 0)))
+        passed = t.get("reboots", 0) == 0 and new_entries == 0 and t.get("packets", 0) >= expected * 0.7
+        t.update(state="passed" if passed else "failed", passed=passed, expected=expected, new_entries=new_entries,
+                 finished=dt_util.now().isoformat())
+        t["text"] = powerlog.test_result(t, self.hass.config.language)
+        _LOGGER.warning("%s: power test %s", self.name, powerlog.test_result(t, "en"))
+        self._save()
+        self._notify()
+        self.hass.async_create_task(self.hass.services.async_call(
+            "logbook", "log", {"name": self.name, "message": t["text"], "domain": DOMAIN}, blocking=False))
 
     @property
     def power_loss_state(self) -> str | None:

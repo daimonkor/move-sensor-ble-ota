@@ -20,6 +20,9 @@ const I18N = {
     "On the charger. Days left comes back once it is unplugged.": "На зарядке. Прогноз «Осталось дней» вернётся после снятия с зарядки.", "Last motion": "Последнее движение",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Сброс Wi-Fi",
     "Blink LED": "Мигнуть LED", "Read": "Прочитать", "Reset": "Сбросить", "Press": "Нажать",
+    "Build": "Собрать", "Run 10 min": "Запустить на 10 мин", "Power failures": "Сбои питания",
+    "Report on the latest failure": "Отчёт о последнем сбое", "Power log (latest first)": "Журнал (новые сверху)",
+    "Power test": "Тест питания", "No power failures logged yet.": "Сбоев питания пока не записано.",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Сбросить Wi-Fi датчика на сеть, зашитую в прошивку?",
     "Panel sections": "Разделы панели",
     "No Move Sensor BLE sensors are set up.": "Датчики Move Sensor BLE не настроены.",
@@ -89,6 +92,9 @@ const I18N = {
     "On the charger. Days left comes back once it is unplugged.": "На зарядці. Прогноз «Залишилось днів» повернеться після зняття з зарядки.", "Last motion": "Останній рух",
     "PIR stuck": "PIR завис", "Reset Wi-Fi": "Скидання Wi-Fi",
     "Blink LED": "Блимнути LED", "Read": "Прочитати", "Reset": "Скинути", "Press": "Натиснути",
+    "Build": "Зібрати", "Run 10 min": "Запустити на 10 хв", "Power failures": "Збої живлення",
+    "Report on the latest failure": "Звіт про останній збій", "Power log (latest first)": "Журнал (нові зверху)",
+    "Power test": "Тест живлення", "No power failures logged yet.": "Збоїв живлення поки не записано.",
     "Reset Wi-Fi on the sensor to the network built into its firmware?": "Скинути Wi-Fi датчика на мережу, вшиту в прошивку?",
     "Panel sections": "Розділи панелі",
     "No Move Sensor BLE sensors are set up.": "Датчики Move Sensor BLE не налаштовані.",
@@ -193,7 +199,7 @@ const SECTIONS = [
   { id: "calibration", title: "Calibration", icon: "mdi:tune-vertical",
     keys: ["setting_voltage_factor", "pir_stuck_threshold"] },
   { id: "diagnostics", title: "Diagnostics", icon: "mdi:stethoscope",
-    keys: ["device_id", "voltage", "battery_remaining", "last_reset_reason", "last_power_loss", "power_loss_count", "brownout_count", "crash_count",
+    keys: ["device_id", "voltage", "battery_remaining", "last_reset_reason", "last_power_loss", "power_loss_count", "power_report_build", "power_test", "power_test_run", "brownout_count", "crash_count",
            "ota_key", "settings_status", "settings_change", "settings_read", "wifi_reset"] },
 ];
 
@@ -204,7 +210,8 @@ const CONTROL = {
 };
 const SHORT = { battery_days_left: "Days left", battery_remaining: "Remaining", voltage: "Voltage",
                 last_motion: "Last motion", pir_stuck: "PIR stuck", wifi_reset: "Reset Wi-Fi" };
-const ACTION_NAMES = { identify: "Blink LED", settings_read: "Read", wifi_reset: "Reset" };
+const ACTION_NAMES = { identify: "Blink LED", settings_read: "Read", wifi_reset: "Reset",
+                       power_report_build: "Build", power_test_run: "Run 10 min" };
 const DANGER = { wifi_reset: "Reset Wi-Fi on the sensor to the network built into its firmware?" };
 const LAYOUT_KEYS = new Set([
   ...Object.values(SHEETS).flatMap((s) => [s.entity, ...s.info, ...s.settings]),
@@ -665,6 +672,18 @@ class MoveSensorBlePanel extends HTMLElement {
         for (const k of keys) {
           if (k.startsWith("setting_")) { const el = this._setEl(k); if (el) body.appendChild(el); continue; }
           const c = this._infoCard(k); if (c) body.appendChild(this._card(c));
+        }
+        if (sec.id === "diagnostics" && this._id("power_report") && this._id("last_power_loss")) {
+          // v1.32: отчёт о сбое, журнал и итог теста питания — текстом, из атрибутов сущностей
+          const rep = this._id("power_report"), log = this._id("last_power_loss"), test = this._id("power_test");
+          const md = [
+            `**${tr("Report on the latest failure")}**`, "",
+            `{% set l = state_attr('${rep}', 'lines') or [] %}{% if l %}{% for x in l %}- {{ x }}\n{% endfor %}{% else %}${tr("No power failures logged yet.")}{% endif %}`,
+            "", `**${tr("Power log (latest first)")}**`, "",
+            `{% set e = state_attr('${log}', 'entries') or [] %}{% if e %}{% for x in e %}{{ loop.index }}. {{ x }}\n{% endfor %}{% else %}—{% endif %}`,
+          ];
+          if (test) md.push("", `**${tr("Power test")}**: {{ state_attr('${test}', 'text') or states('${test}') }}`);
+          body.appendChild(this._wide(this._card({ type: "markdown", title: tr("Power failures"), content: md.join("\n") })));
         }
         if (sec.id === "diagnostics") {
           body.appendChild(this._card({ type: "entities", entities: [{

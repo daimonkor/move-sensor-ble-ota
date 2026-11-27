@@ -18,7 +18,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     mgr = hass.data[DOMAIN][entry.entry_id]
     # v1.15: Flash / Build & flash / Cancel заменены сущностью обновления «Firmware» (update.py);
     # службы flash / build_and_flash / cancel остаются
-    async_add_entities([ReadSettingsButton(mgr), ResetWifiButton(mgr), IdentifyButton(mgr)])
+    async_add_entities([ReadSettingsButton(mgr), ResetWifiButton(mgr), IdentifyButton(mgr),
+                        PowerReportButton(mgr), PowerTestButton(mgr)])   # v1.32
 
 
 class FlashButton(OtaEntity, ButtonEntity):
@@ -84,6 +85,32 @@ class IdentifyButton(OtaEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.mgr.async_request_identify()
+
+
+class PowerReportButton(OtaEntity, ButtonEntity):
+    """v1.32: пересобрать отчёт о последнем сбое питания (сенсор «Power report»)."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:clipboard-pulse-outline"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "power_report_build", "Build power report")
+
+    async def async_press(self) -> None:
+        await self.mgr.async_build_power_report()
+
+
+class PowerTestButton(OtaEntity, ButtonEntity):
+    """v1.32: тест питания на 10 минут (сенсор «Power test»). Команда уходит по BLE в ближайшее пробуждение."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:battery-heart-variant"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "power_test_run", "Run power test")
+
+    async def async_press(self) -> None:
+        await self.mgr.async_start_power_test(10)
 
 
 class ResetWifiButton(OtaEntity, ButtonEntity):

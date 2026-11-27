@@ -171,6 +171,30 @@
           "description": "How long to wait for the wake window, minutes."
         }
       }
+    },
+    "power_test": {
+      "name": "Power test",
+      "description": "The sensor wakes every 30 s for N minutes; the integration counts packets, lost packets, reboots and new power-log entries. The result is in the «Power test» sensor.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "0 = cancel."
+        }
+      }
+    },
+    "power_report": {
+      "name": "Power report",
+      "description": "Rebuilds the report on the latest power failure and returns it with the power log.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Sensor",
+          "description": "Needed only if several sensors are configured."
+        }
+      }
     }
   },
   "entity": {
@@ -198,6 +222,12 @@
       },
       "power_loss_count": {
         "name": "Power loss count"
+      },
+      "power_report": {
+        "name": "Power report"
+      },
+      "power_test": {
+        "name": "Power test"
       },
       "last_seen": {
         "name": "Last seen"
@@ -324,6 +354,12 @@
       },
       "identify": {
         "name": "Identify"
+      },
+      "power_report_build": {
+        "name": "Build power report"
+      },
+      "power_test_run": {
+        "name": "Run power test"
       }
     },
     "update": {

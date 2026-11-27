@@ -144,6 +144,8 @@ SST_ERROR = "error"
 SERVICE_READ_SETTINGS = "read_settings"
 SERVICE_RESET_WIFI = "reset_wifi"
 SERVICE_ROLLBACK = "rollback"   # v1.18: прошить последнюю резервную копию
+SERVICE_POWER_TEST = "power_test"       # v1.32: тест питания N минут (0 = отменить)
+SERVICE_POWER_REPORT = "power_report"   # v1.32: отчёт о последнем сбое питания (с ответом)
 SERVICE_FAST_TEST = "fast_test"   # отладка: просыпаться раз в 30 с N минут (0 = выкл), без UI
 
 # ---- диагностика сбросов (DIAG). Порядок счётчиков — как в ответе 0x89.

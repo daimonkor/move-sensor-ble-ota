@@ -103,3 +103,27 @@ rollback:
           min: 1
           max: 1440
           unit_of_measurement: min
+
+power_test:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota
+    minutes:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: min
+
+power_report:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: move_sensor_ble_ota

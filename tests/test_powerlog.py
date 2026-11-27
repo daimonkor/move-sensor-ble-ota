@@ -67,3 +67,54 @@ def test_text_languages_and_times():
     assert powerlog.text(e, "de") == powerlog.text(e, "en")   # unknown language -> English
     del e["before"], e["after"]
     assert powerlog.text(e, "en").startswith("time unknown")
+
+
+# ---- v1.32: verdict, failure report, power-test summary
+def test_verdicts():
+    d = powerlog.decode
+    assert powerlog.verdict(d(_entry())) == "cut_asleep"
+    assert powerlog.verdict(d(_entry(stage=4))) == "cut_under_load"                 # flash says «transmitting»
+    assert powerlog.verdict(d(_entry(rtc=0x80 | 5, stage=3))) == "dip"              # RTC kept -> short dip
+    assert powerlog.verdict(d(_entry(flags=0x01))) == "usb_powered"
+    assert powerlog.verdict(d(_entry(vb=100))) == "low_battery"                     # 3.50 V
+    assert powerlog.verdict(d(_entry(reset=9))) == "brownout"
+    assert powerlog.verdict(d(_entry(reset=4))) == "crash"
+    assert powerlog.verdict(d(_entry(reset=4, flags=0x01))) == "crash"              # a crash is a crash, USB or not
+    assert powerlog.verdict(d(_entry(has_state=0))) == "unknown"
+    assert powerlog.verdict(None) == "unknown"
+    assert set(powerlog.VERDICTS) >= {powerlog.verdict(d(_entry(stage=s))) for s in range(1, 10)}
+
+
+def test_report_lines():
+    e = powerlog.decode(_entry())
+    e.update(before="2026-11-27T23:17:38+02:00", after="2026-11-27T23:40:26+02:00")
+    ctx = {"others_max": 14, "others_min": 9, "packets": 12, "lost": 0, "rssi_median": -78, "temperature": 11.3,
+           "motion_window": 1500, "climate_window": 2500, "climate_interval": 5}
+    r = powerlog.report(e, ctx, "ru")
+    assert r["verdict"] == "cut_asleep" and r["text"] == "\n".join(r["lines"]) and len(r["lines"]) == 5
+    assert r["lines"][0].startswith("27.11 23:17 → 23:40")
+    assert "радио и светодиод ни при чём" in r["lines"][1]
+    assert "слышал 14 других" in r["lines"][2]
+    assert "12 пакетов, потеряно 0, сигнал -78 dBm, 11,3 °C; окна 1500/2500 мс, климат раз в 5 мин" in r["lines"][3]
+    assert "До подключения USB" in r["lines"][4]
+    assert "no other Bluetooth devices" in powerlog.report(e, {"others_max": 0}, "en")["lines"][2]
+    assert "No reception data" in powerlog.report(e, {}, "en")["lines"][2]
+    usb = powerlog.report(powerlog.decode(_entry(flags=0x01)), {}, "en")
+    assert usb["verdict"] == "usb_powered" and len(usb["lines"]) == 3            # no «measure it» hint for USB
+    for lang in ("en", "ru", "uk", "de"):
+        for stage in range(1, 10):
+            for reset in (1, 4, 6, 9):
+                assert powerlog.report(powerlog.decode(_entry(stage=stage, reset=reset)), ctx, lang)["text"]
+
+
+def test_report_without_entries():
+    r = powerlog.report(None, None, "ru")
+    assert r["verdict"] == "none" and "ни одного сбоя" in r["text"]
+
+
+def test_power_test_summary():
+    res = {"passed": True, "minutes": 10, "packets": 19, "expected": 20, "lost": 1, "reboots": 0, "new_entries": 0,
+           "battery_min": 86, "battery_max": 87}
+    assert powerlog.test_result(res, "ru").startswith("пройден: 10 мин, 19 пакетов из примерно 20, потеряно 1")
+    assert powerlog.test_result({**res, "passed": False, "reboots": 2}, "en").startswith("failed: 10 min")
+    assert "2 reboots" in powerlog.test_result({**res, "passed": False, "reboots": 2}, "de")

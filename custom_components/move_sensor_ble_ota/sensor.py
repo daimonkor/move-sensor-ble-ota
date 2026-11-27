@@ -33,6 +33,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         SettingsStatusSensor(mgr),   # v1.15: OTA status / progress / Firmware version -> сущность «Firmware»
         BrownoutCountSensor(mgr), CrashCountSensor(mgr), LastResetReasonSensor(mgr), LastSeenSensor(mgr),
         PowerLossSensor(mgr), PowerLossCountSensor(mgr),   # v1.31: журнал сбоев питания
+        PowerReportSensor(mgr), PowerTestSensor(mgr),       # v1.32: отчёт о сбое и тест питания
         BatteryDaysLeftSensor(mgr), BatteryRemainingSensor(mgr), MotionEventsTodaySensor(mgr), WakesTodaySensor(mgr), DeviceIdSensor(mgr),
         LastMotionSensor(mgr),
         DataSensor(mgr, "temperature", "Temperature", SensorDeviceClass.TEMPERATURE, "°C", 1),
@@ -227,6 +228,48 @@ class PowerLossCountSensor(OtaEntity, SensorEntity):
     @property
     def native_value(self) -> int | None:
         return self.mgr.power_log_total
+
+
+class PowerReportSensor(OtaEntity, SensorEntity):
+    """v1.32: вывод о последнем сбое питания: запись журнала + что интеграция видела вокруг (приём других
+    BLE-устройств, пакеты и сигнал за час до сбоя). Состояние — код вывода, атрибут text — отчёт на языке HA."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:clipboard-pulse-outline"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "power_report", "Power report")
+
+    @property
+    def native_value(self) -> str | None:
+        return self.mgr.power_report.get("verdict")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        r = self.mgr.power_report
+        return {"text": r.get("text"), "lines": r.get("lines") or [], "built": r.get("built"), "context": r.get("ctx")}
+
+
+class PowerTestSensor(OtaEntity, SensorEntity):
+    """v1.32: тест питания — датчик N минут просыпается раз в 30 с, интеграция считает пакеты, потери,
+    перезагрузки и новые записи журнала. idle / pending / running / passed / failed."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:battery-heart-variant"
+
+    def __init__(self, mgr) -> None:
+        super().__init__(mgr, "power_test", "Power test")
+
+    @property
+    def native_value(self) -> str:
+        return self.mgr.power_test.get("state") or "idle"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        t = self.mgr.power_test
+        return {k: t.get(k) for k in ("text", "minutes", "requested", "started", "until", "finished", "packets",
+                                      "expected", "lost", "reboots", "new_entries", "battery_min", "battery_max",
+                                      "reason")}
 
 
 class LastSeenSensor(OtaEntity, SensorEntity):

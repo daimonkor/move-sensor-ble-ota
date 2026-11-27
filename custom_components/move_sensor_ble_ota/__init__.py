@@ -47,6 +47,8 @@ from .const import (
     SERVICE_READ_SETTINGS,
     SERVICE_RESET_WIFI,
     SERVICE_FAST_TEST,
+    SERVICE_POWER_REPORT,
+    SERVICE_POWER_TEST,
     SERVICE_ROLLBACK,
 )
 from .hidden import DuplicateHider, async_unhide_on_remove
@@ -341,6 +343,26 @@ def _register_services(hass: HomeAssistant) -> None:
         await _pick(hass, call.data.get(ATTR_ENTRY_ID)).async_request_wifi_reset()
 
     hass.services.async_register(DOMAIN, SERVICE_RESET_WIFI, reset_wifi, schema=CANCEL_SCHEMA)
+
+    # v1.32: тест питания и отчёт о сбое (те же действия, что кнопки на панели)
+    async def power_test(call: ServiceCall) -> ServiceResponse:
+        mgr = _pick(hass, call.data.get(ATTR_ENTRY_ID))
+        await mgr.async_start_power_test(call.data["minutes"])
+        return {"power_test": mgr.power_test}
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_POWER_TEST, power_test,
+        schema=vol.Schema({vol.Optional(ATTR_ENTRY_ID): cv.string,
+                           vol.Optional("minutes", default=10): vol.All(vol.Coerce(int), vol.Range(min=0, max=120))}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    async def power_report(call: ServiceCall) -> ServiceResponse:
+        mgr = _pick(hass, call.data.get(ATTR_ENTRY_ID))
+        return {"power_report": await mgr.async_build_power_report(), "power_log": mgr.power_log}
+
+    hass.services.async_register(DOMAIN, SERVICE_POWER_REPORT, power_report, schema=CANCEL_SCHEMA,
+                                 supports_response=SupportsResponse.OPTIONAL)
 
     # отладка: быстрый тест (датчик без движения просыпается раз в 30 с), minutes=0 — выключить
     async def fast_test(call: ServiceCall) -> ServiceResponse:

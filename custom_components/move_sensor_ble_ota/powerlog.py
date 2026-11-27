@@ -172,3 +172,134 @@ def text(entry: dict, lang: str = "en") -> str:
         except ValueError:
             pass
     return " · ".join(parts)
+
+
+# ---------------------------------------------------------------- отчёт о сбое (v1.32)
+# Вывод по записи журнала и тому, что интеграция видела вокруг сбоя. ctx (всё необязательно):
+#   others_min / others_max — сколько других BLE-устройств слышал Home Assistant за минуту во время паузы
+#   packets, lost            — пакеты датчика за час до сбоя: принято / потеряно (по номерам пакетов)
+#   rssi_median, temperature — сигнал и температура перед сбоем
+#   motion_window, climate_window, climate_interval — настройки на тот момент
+VERDICTS = ("usb_powered", "low_battery", "brownout", "crash", "dip", "cut_under_load", "cut_asleep", "unknown")
+_LOAD_STAGES = ("awake", "transmitting", "led_on", "window_done", "ble_client", "boot", "battery_measured")
+
+_D = {
+    "en": {
+        "usb_powered": "A computer was on USB, so the battery is not involved: check the board, the USB socket and the cable.",
+        "low_battery": "The battery was low ({v} V): this looks like discharge. Charge it and watch the percentage.",
+        "brownout": "The voltage sagged slowly (brownout): a weak battery or a high-resistance contact in the power path.",
+        "crash": "The firmware crashed or hung — this is not a power failure. Connect USB and look at the log.",
+        "dip": "Power dipped for a moment and came back: a loose contact (battery connector, power switch, the wire to the BAT+ pad) or a tug on the USB cable.",
+        "cut_under_load": "Power was cut while the sensor was working ({stage}): either the load tripped the battery protection or a contact opened at that moment. Repeat the power test; if it fails again, add a 100–220 µF capacitor after the power switch.",
+        "cut_asleep": "Power was cut while the sensor slept, so the radio and the LED are not the cause: look for a loose contact or a short in the battery path (battery protection, connector, power switch, the wire to the BAT+ pad).",
+        "unknown": "Not enough data for a conclusion.",
+        "rx_ok": "Reception was fine: Home Assistant heard {n} other Bluetooth devices during the silence, so it was the sensor that went quiet.",
+        "rx_down": "Home Assistant heard no other Bluetooth devices during the silence: the Bluetooth proxy or the router may have been down as well.",
+        "rx_unknown": "No reception data for that time (Home Assistant was restarted or the report is older than a day).",
+        "before": "The hour before: {p} packets, {l} lost, signal {r} dBm, {t} °C; windows {mw}/{cw} ms, climate every {ci} min.",
+        "check": "Before plugging in USB: switch the power off for 3 s and on. If the LED blinks, the battery protection had tripped (a short somewhere). If not, measure between «+» and «−» of the PIR header: about 4 V — power does not reach the board (the BAT+ wire); about 0 V — battery, connector or power switch.",
+        "none": "The sensor has logged no power failures yet.",
+    },
+    "ru": {
+        "usb_powered": "Компьютер был на USB, значит банка ни при чём: проверь плату, гнездо USB и кабель.",
+        "low_battery": "Батарея была разряжена ({v} В): похоже на разряд. Заряди и понаблюдай за процентом.",
+        "brownout": "Напряжение просело медленно (brownout): слабая банка или контакт с большим сопротивлением в цепи питания.",
+        "crash": "Прошивка упала или зависла — это не сбой питания. Подключи USB и посмотри лог.",
+        "dip": "Питание провалилось на мгновение и вернулось: плавающий контакт (разъём банки, выключатель, провод к площадке BAT+) или рывок кабеля USB.",
+        "cut_under_load": "Питание пропало, когда датчик работал ({stage}): либо нагрузка выбила защиту банки, либо в этот момент разомкнулся контакт. Повтори тест питания; если упадёт снова — поставь конденсатор 100–220 мкФ после выключателя.",
+        "cut_asleep": "Питание пропало, когда датчик спал, значит радио и светодиод ни при чём: ищи плавающий контакт или замыкание в цепи банки (плата защиты, разъём, выключатель, провод к площадке BAT+).",
+        "unknown": "Данных для вывода не хватает.",
+        "rx_ok": "Приём работал: за время тишины Home Assistant слышал {n} других Bluetooth-устройств, то есть замолчал именно датчик.",
+        "rx_down": "За время тишины Home Assistant не слышал и другие Bluetooth-устройства: мог упасть прокси или роутер.",
+        "rx_unknown": "Данных о приёме за это время нет (Home Assistant перезапускался или отчёт старше суток).",
+        "before": "За час до сбоя: {p} пакетов, потеряно {l}, сигнал {r} dBm, {t} °C; окна {mw}/{cw} мс, климат раз в {ci} мин.",
+        "check": "До подключения USB: выключи питание на 3 с и включи. Мигнул светодиод — была закрыта защита банки (где-то коротит). Не мигнул — измерь между «+» и «−» гребёнки PIR: около 4 В — питание не доходит до платы (провод к BAT+); около 0 В — банка, разъём или выключатель.",
+        "none": "Датчик ещё не записал ни одного сбоя питания.",
+    },
+    "uk": {
+        "usb_powered": "Комп'ютер був на USB, тож батарея ні до чого: перевір плату, гніздо USB і кабель.",
+        "low_battery": "Батарея була розряджена ({v} В): схоже на розряд. Заряди й поспостерігай за відсотком.",
+        "brownout": "Напруга просіла повільно (brownout): слабка батарея або контакт із великим опором у колі живлення.",
+        "crash": "Прошивка впала або зависла — це не збій живлення. Підключи USB і подивися лог.",
+        "dip": "Живлення провалилося на мить і повернулося: плаваючий контакт (роз'єм батареї, вимикач, дріт до площадки BAT+) або ривок кабелю USB.",
+        "cut_under_load": "Живлення зникло, коли датчик працював ({stage}): або навантаження вибило захист батареї, або в цей момент розімкнувся контакт. Повтори тест живлення; якщо впаде знову — постав конденсатор 100–220 мкФ після вимикача.",
+        "cut_asleep": "Живлення зникло, коли датчик спав, тож радіо і світлодіод ні до чого: шукай плаваючий контакт або замикання в колі батареї (плата захисту, роз'єм, вимикач, дріт до площадки BAT+).",
+        "unknown": "Даних для висновку бракує.",
+        "rx_ok": "Прийом працював: за час тиші Home Assistant чув {n} інших Bluetooth-пристроїв, тобто замовк саме датчик.",
+        "rx_down": "За час тиші Home Assistant не чув й інші Bluetooth-пристрої: міг упасти проксі або роутер.",
+        "rx_unknown": "Даних про прийом за цей час немає (Home Assistant перезапускався або звіт старший за добу).",
+        "before": "За годину до збою: {p} пакетів, втрачено {l}, сигнал {r} dBm, {t} °C; вікна {mw}/{cw} мс, клімат раз на {ci} хв.",
+        "check": "До підключення USB: вимкни живлення на 3 с і ввімкни. Блимнув світлодіод — був закритий захист батареї (десь коротить). Не блимнув — виміряй між «+» і «−» гребінки PIR: близько 4 В — живлення не доходить до плати (дріт до BAT+); близько 0 В — батарея, роз'єм або вимикач.",
+        "none": "Датчик ще не записав жодного збою живлення.",
+    },
+}
+
+
+def verdict(entry: dict | None) -> str:
+    """Код вывода по записи журнала (один из VERDICTS)."""
+    if not entry:
+        return "unknown"
+    kind, stage = entry.get("kind"), entry.get("stage")
+    if kind in ("crash", "watchdog"):
+        return "crash"
+    if entry.get("usb_host"):
+        return "usb_powered"
+    v = entry.get("battery_v")
+    if v is not None and v < 3.6:
+        return "low_battery"
+    if kind == "brownout":
+        return "brownout"
+    if kind == "power_dip":
+        return "dip"
+    if kind == "power_removed":
+        if stage in ("asleep", "service_mode"):
+            return "cut_asleep" if stage == "asleep" else "cut_under_load"
+        if stage in _LOAD_STAGES:
+            return "cut_under_load"
+    return "unknown"
+
+
+def report(entry: dict | None, ctx: dict | None = None, lang: str = "en") -> dict:
+    """Отчёт о последнем сбое: код вывода и строки на языке Home Assistant."""
+    code = (lang or "en").split("-")[0].lower()
+    d = _D.get(code, _D["en"])
+    t = _T.get(code, _T["en"])
+    lg = "en" if d is _D["en"] else "x"
+    if not entry:
+        return {"verdict": "none", "lines": [d["none"]], "text": d["none"]}
+    ctx = ctx or {}
+    v = verdict(entry)
+    lines = [text(entry, lang)]
+    lines.append(d[v].format(v=_num(entry["battery_v"], lg) if entry.get("battery_v") is not None else "?",
+                             stage=t.get(entry.get("stage"), t["unknown"])))
+    if ctx.get("others_max") is None:
+        lines.append(d["rx_unknown"])
+    elif ctx["others_max"] > 0:
+        lines.append(d["rx_ok"].format(n=ctx["others_max"]))
+    else:
+        lines.append(d["rx_down"])
+    if ctx.get("packets"):
+        def show(x, nd=0):
+            return "?" if x is None else (f"{x:.{nd}f}" if lg == "en" else f"{x:.{nd}f}".replace(".", ","))
+        lines.append(d["before"].format(p=ctx["packets"], l=ctx.get("lost", 0), r=show(ctx.get("rssi_median")),
+                                        t=show(ctx.get("temperature"), 1), mw=show(ctx.get("motion_window")),
+                                        cw=show(ctx.get("climate_window")), ci=show(ctx.get("climate_interval"))))
+    if v in ("cut_asleep", "cut_under_load", "dip", "brownout", "unknown"):
+        lines.append(d["check"])
+    return {"verdict": v, "lines": lines, "text": "\n".join(lines)}
+
+
+def test_result(res: dict, lang: str = "en") -> str:
+    """Итог теста питания одной строкой."""
+    code = (lang or "en").split("-")[0].lower()
+    s = {
+        "en": ("passed", "failed", "{m} min, {p} packets of about {e} expected, {l} lost, {r} reboots, {n} new power-log entries, battery {a}–{b} %"),
+        "ru": ("пройден", "не пройден", "{m} мин, {p} пакетов из примерно {e}, потеряно {l}, перезагрузок {r}, новых записей о сбое {n}, батарея {a}–{b} %"),
+        "uk": ("пройдено", "не пройдено", "{m} хв, {p} пакетів із приблизно {e}, втрачено {l}, перезавантажень {r}, нових записів про збій {n}, батарея {a}–{b} %"),
+    }.get(code)
+    if s is None:
+        s = ("passed", "failed", "{m} min, {p} packets of about {e} expected, {l} lost, {r} reboots, {n} new power-log entries, battery {a}–{b} %")
+    body = s[2].format(m=res.get("minutes"), p=res.get("packets", 0), e=res.get("expected", 0), l=res.get("lost", 0),
+                       r=res.get("reboots", 0), n=res.get("new_entries", 0),
+                       a=res.get("battery_min", "?"), b=res.get("battery_max", "?"))
+    return f"{s[0] if res.get('passed') else s[1]}: {body}"
