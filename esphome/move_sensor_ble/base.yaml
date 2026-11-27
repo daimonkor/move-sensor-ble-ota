@@ -29,7 +29,7 @@
 substitutions:
   # Версия прошивки (2026-11-16, 1.4.0): её показывает интеграция HA рядом с номером сборки, она же в
   # move_sensor_ble/CHANGELOG.md. Поднимает tools/changelog.py release X.Y.Z (руками — тоже здесь).
-  fw_version: "1.9.2"
+  fw_version: "1.10.0"
   # Значения по умолчанию — их переопределяет файл датчика в корне esphome/
   # (move-sensor-ble-<Device ID>.yaml: name, friendly_name, mac_suffix: "false").
   name: move-sensor-ble
@@ -85,6 +85,7 @@ esphome:
     - priority: 1000
       then:
         - lambda: |-
+            id(bth_ota).diag_mark(1);   // 1.10.0: журнал сбоев питания - стадия «старт»
             gpio_hold_dis((gpio_num_t) ${led_gpio});
             // IDF держит (gpio_hold) пины пробуждения с подтяжкой на время сна; снимаем, чтобы
             // binary_sensor pir_raw снова поставил свою (pulldown) — иначе после пробуждения
@@ -99,6 +100,7 @@ esphome:
             ms::bat_phase = 1;
             id(vbat).update();
             ms::bat_phase = 2;
+            id(bth_ota).diag_mark(2);   // журнал сбоев питания: батарея измерена
             // версия сборки (как «Build Version») — HA читает её по BLE (move_sensor_ble_ota)
             id(build_version_text).update();
             id(bth_ota).set_build_version(id(build_version_text).state);
@@ -768,8 +770,11 @@ number:
     # v1.15: реальная правка (не восстановление) -> номер правки +1 (rev_commit)
     set_action:
       - lambda: "if (ms::boot_done && ms::setting_changed(x, id(vbat_factor).state)) ms::rev_pending = true;"
+    # 1.10.0: только после загрузки. Раньше замер запускался и при восстановлении значения из флеша -
+    # до готовности АЦП: 64 строки «ADC read failed with error 258» на каждом старте. Замер на старте
+    # делает on_boot (priority 550) уже с восстановленным коэффициентом.
     on_value:
-      - lambda: "id(vbat).update();"
+      - lambda: "if (ms::boot_done) id(vbat).update();"
 
   # 1.6.0: батарея — ёмкость и порог «низкого» заряда для li_battery. Меняются на сайте датчика /
   # в ESPHome (сервисный режим) и из HA по BLE (интеграция, команда 0x16). Во флеше.
@@ -1121,6 +1126,10 @@ script:
                    ms::occupied, ms::pir_held,
                    (ms::occupied && !ms::keep_pending()) ? (long long) ms::remaining_ms() : -1LL);
           id(wake_reason).publish_state(why);
+          // 1.10.0: журнал сбоев питания - «проснулся» в NVS (после замера батареи, до работы радио)
+          ms::diag_cause = (cause == ESP_SLEEP_WAKEUP_TIMER) ? 1 : (by_service ? 3 : (cause == ESP_SLEEP_WAKEUP_GPIO ? 2 : 0));
+          if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) id(bth_ota).diag_log_dump();
+          id(diag_save).execute(3, 0, 0);
           // 2026-11-15: проснулись, а «занято» ещё держится (RTC) — восстановить состояние сущности.
           // Иначе после сна Occupancy без значения: BTHome не кладёт её в пакеты, сайт и ESPHome
           // показывают «нет движения», хотя датчик считает «занято» и ждёт Keep time.
@@ -1292,6 +1301,31 @@ script:
           const uint8_t cd[4] = {(uint8_t) (w & 0xFF), (uint8_t) (w >> 8), ms::settings_rev, mc};
           id(bth).set_custom_data(0xFFFF, cd, sizeof(cd));
 
+  # 1.10.0: журнал сбоев питания - сохранить состояние в NVS (стадии 3 проснулся, 8 засыпаю, 9 сервис).
+  # Батарея и A0 - замер на старте этого пробуждения (до радио). На A0 стоит C3 100 нФ с делителем
+  # 2 x 1 МОм (~50 мс), быстрые провалы он не видит - поэтому замеров «под нагрузкой» нет.
+  - id: diag_save
+    parameters:
+      stage: int
+      sleep_kind: int
+      sleep_s: int
+    then:
+      - lambda: |-
+          uint8_t f = 0;
+          if (ms::usb_host()) f |= 0x01;
+          if (id(bat).is_charging()) f |= 0x02;
+          if (ms::occupied) f |= 0x04;
+          if (ms::pir_held) f |= 0x08;
+          if (ms::bat_low) f |= 0x10;
+          f |= (uint8_t) ((sleep_kind & 3) << 5);
+          if (id(service_mode)) f |= 0x80;
+          const float v = ms::bat_v_boot;
+          const float k = id(vbat_factor).state;
+          const uint16_t vb = (std::isnan(v) || v <= 0) ? 0 : (uint16_t) (v * 1000.0f);
+          const uint16_t a0 = (vb == 0 || std::isnan(k) || k < 0.1f) ? 0 : (uint16_t) (v / k * 1000.0f);
+          id(bth_ota).diag_save((uint8_t) stage, ms::diag_cause, f, vb, a0, (uint16_t) (ms::wake_count & 0xFFFF),
+                                (uint16_t) (sleep_s < 0 ? 0 : (sleep_s > 65535 ? 65535 : sleep_s)));
+
   # Публикация состояния: один BTHome-пакет со всем сразу
   - id: send_state
     parameters:
@@ -1317,7 +1351,13 @@ script:
           if (led) id(tx_motion) = true;   // led = реальное событие (занято / освободилось)
           // 1.4.2: мигаем только на «занято» (новое движение); на «освободилось» — нет,
           // как у серийных датчиков (Shelly BLU Motion, Aqara P1, Hue)
-          if (led && state) id(blink).execute(1);
+          // 1.10.0: в рабочем режиме вспышка - после окна рекламы (go_sleep), а не вместе с пакетом:
+          // старт радио, пакет и LED разнесены по времени. В сервисном режиме (не спит) - сразу.
+          if (led && state) {
+            if (id(service_mode)) id(blink).execute(1);
+            else ms::blink_after_tx = true;
+          }
+          id(bth_ota).diag_mark(4);   // журнал сбоев питания: пакет в эфир
           // 2026-11-16: собрать пакет через 80 мс — SHT41 (~10 мс) и остальные значения уже в нём
           id(bth).send_now(80);
 
@@ -1341,7 +1381,17 @@ script:
                       float w = id(tx_motion) ? id(motion_window).state : id(climate_window).state;
                       uint32_t def_ms = std::isnan(w) ? ${tx_window_ms} : (uint32_t) w;
                       return ms::tx_window_ms(def_ms);
-                  - lambda: "id(tx_pending) = false; id(tx_motion) = false;"
+                  - lambda: "id(tx_pending) = false; id(tx_motion) = false; id(bth_ota).diag_mark(6);"
+                  # 1.10.0: вспышка «занято» - после окна рекламы
+                  - if:
+                      condition:
+                        lambda: "return ms::blink_after_tx;"
+                      then:
+                        - lambda: "ms::blink_after_tx = false;"
+                        - script.execute:
+                            id: blink
+                            count: 1
+                        - script.wait: blink
             # после загрузки НЕ от сна (питание, ресет, OTA) не засыпаем раньше 15 с аптайма,
             # чтобы safe_mode успел подтвердить прошивку (boot_is_good_after: 15s).
             # Пробуждения от PIR/таймера сюда не попадают — батарея не тратится.
@@ -1413,6 +1463,24 @@ script:
                 #if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP && !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
                 gpio_deep_sleep_hold_en();
                 #endif
+                // 1.10.0: журнал сбоев питания - «засыпаю» в NVS: вид сна и через сколько ждать пробуждения
+                {
+                  const uint32_t ci = ms::climate_interval_ms(id(climate_interval).state);
+                  int kind = 1;                       // до движения (и таймер климата)
+                  int64_t s_ms = ci ? (int64_t) ci : -1;
+                  if (ms::bat_crit) {
+                    kind = 2; s_ms = ms::BAT_CRIT_CHECK_MS;
+                  } else if (ms::pir_held) {
+                    kind = 3; s_ms = ms::cap_sleep_ms(ms::HELD_SAFETY_MS, ci);
+                  } else if (ms::occupied) {
+                    kind = 2; s_ms = ms::remaining_ms();
+                    const int64_t c = ms::climate_left_ms(ci);
+                    if (c < s_ms) s_ms = c;
+                    if (s_ms < 0) s_ms = 0;
+                  }
+                  const int s = s_ms < 0 ? 65535 : (s_ms / 1000 > 65534 ? 65534 : (int) (s_ms / 1000));
+                  id(diag_save).execute(8, kind, s);
+                }
             # 1.4.0: критический разряд — спим BAT_CRIT_CHECK_MS (6 ч), на проверке пакет с батареей;
             # подзарядили (покой >= 3.65 В, li_battery resume) — снова обычная работа. Будит и сервисный переключатель.
             - if:
@@ -1486,6 +1554,7 @@ script:
     then:
       - lambda: |-
           id(service_mode) = true;
+          id(diag_save).execute(9, 0, 0);   // 1.10.0: журнал сбоев питания - сервисный режим
           // счётчик включений переключателя для сброса Wi-Fi (RTC, переживает сон)
           const int64_t now = ms::now_ms();
           if (ms::svc_on_count == 0 || now - ms::svc_first_ms > ${wifi_reset_window_ms}) {
@@ -1629,7 +1698,7 @@ script:
                 count: !lambda "return count;"
                 then:
                   - output.turn_on: dbg_led
-                  - lambda: 'ESP_LOGI("led", "flash ON");'
+                  - lambda: 'ESP_LOGI("led", "flash ON"); id(bth_ota).diag_mark(5);'
                   - delay: 150ms
                   - output.turn_off: dbg_led
                   - lambda: 'ESP_LOGD("led", "flash OFF");'

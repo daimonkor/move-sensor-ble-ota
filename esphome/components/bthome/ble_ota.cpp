@@ -11,7 +11,9 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include <esp_app_desc.h>
+#include <esp_attr.h>
 #include <esp_random.h>
+#include <esp_rom_sys.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <nvs.h>
@@ -47,6 +49,7 @@ enum : uint8_t {
   CMD_SET_SETTINGS = 0x11,
   CMD_GET_BATTERY = 0x15,   // 1.6.0: ёмкость (мА·ч) и порог «низкого» заряда (%) для li_battery
   CMD_SET_BATTERY = 0x16,
+  CMD_DIAG_LOG = 0x17,      // 1.10.0: запись журнала сбоев питания
   RSP_ACK = 0x84,
 };
 
@@ -226,6 +229,70 @@ int BleOta::on_data_write_(struct os_mbuf *om) {
   return 0;
 }
 
+// 1.10.0: метки в RTC-памяти. RTC_NOINIT не обнуляется при загрузке: после сброса без снятия питания
+// значения целы, после полного снятия питания - мусор (magic не сойдётся).
+static RTC_NOINIT_ATTR uint32_t diag_rtc_magic;
+static RTC_NOINIT_ATTR uint8_t diag_rtc_stage;
+static const uint32_t DIAG_RTC_MAGIC = 0x4D534431u;  // "MSD1"
+
+void BleOta::diag_capture_() {
+  if (this->diag_captured_)
+    return;
+  this->diag_captured_ = true;
+  this->diag_prev_rtc_ok_ = diag_rtc_magic == DIAG_RTC_MAGIC;
+  this->diag_prev_stage_ = this->diag_prev_rtc_ok_ ? diag_rtc_stage : 0;
+  diag_rtc_magic = DIAG_RTC_MAGIC;
+}
+
+void BleOta::diag_mark(uint8_t stage) {
+  this->diag_capture_();  // до первой записи: не затереть метку прошлой работы
+  diag_rtc_stage = stage;
+}
+
+void BleOta::diag_save(uint8_t stage, uint8_t cause, uint8_t flags, uint16_t vbat_mv, uint16_t a0_mv,
+                       uint16_t wake, uint16_t sleep_s) {
+  this->diag_mark(stage);
+  // 8 байт = одна запись NVS (32 Б флеша): стадия|причина, флаги, батарея и A0 по 10 мВ, wake, sleep_s
+  const uint8_t vb = vbat_mv < 2500 ? 0 : (vbat_mv > 5050 ? 255 : (uint8_t) ((vbat_mv - 2500) / 10));
+  const uint8_t a0 = a0_mv > 2550 ? 255 : (uint8_t) (a0_mv / 10);
+  const uint64_t st = (uint64_t) ((stage & 0x0F) | ((cause & 0x0F) << 4)) | ((uint64_t) flags << 8) |
+                      ((uint64_t) vb << 16) | ((uint64_t) a0 << 24) | ((uint64_t) wake << 32) |
+                      ((uint64_t) sleep_s << 48);
+  nvs_handle_t h;
+  if (nvs_open("ms_diag", NVS_READWRITE, &h) != ESP_OK)
+    return;
+  nvs_set_u64(h, "st", st);
+  nvs_commit(h);
+  nvs_close(h);
+}
+
+bool BleOta::diag_log_get(uint8_t back, uint8_t *out16) const {
+  const uint16_t have = this->diag_log_n_ < DIAG_LOG_N ? this->diag_log_n_ : DIAG_LOG_N;
+  if (back >= have)
+    return false;
+  const uint16_t idx = (uint16_t) ((this->diag_log_n_ - 1 - back) % DIAG_LOG_N);
+  memcpy(out16, this->diag_log_[idx], DIAG_LOG_SZ);
+  return true;
+}
+
+void BleOta::diag_log_dump() const {
+  static const char *const STAGE[] = {"?", "boot", "battery measured", "awake", "transmitting", "LED on",
+                                      "tx window done", "BLE client", "asleep", "service mode"};
+  uint8_t e[DIAG_LOG_SZ];
+  for (uint8_t b = 0; this->diag_log_get(b, e); b++) {
+    const uint8_t st_stage = e[6] & 0x0F;
+    const uint8_t rtc_stage = e[5] & 0x7F;
+    ESP_LOGW(TAG,
+             "power log #%u: reset %u (rom %u), %s, last saved: %s, last mark: %s, flags 0x%02X, "
+             "battery %u mV, A0 %u mV, wake %u, sleep %u s",
+             (unsigned) (e[1] | (e[2] << 8)), e[3], e[4],
+             (e[5] & 0x80) ? "RTC kept (short dip or reset)" : "RTC lost (power fully removed)",
+             e[14] ? STAGE[st_stage <= 9 ? st_stage : 0] : "none", STAGE[rtc_stage <= 9 ? rtc_stage : 0], e[7],
+             (unsigned) (e[8] ? 2500 + e[8] * 10 : 0), (unsigned) (e[9] * 10), (unsigned) (e[10] | (e[11] << 8)),
+             (unsigned) (e[12] | (e[13] << 8)));
+  }
+}
+
 void BleOta::setup() {
   // причина сброса — до всего остального: при brownout следующая просадка может прийти скоро
   this->diag_boot_();
@@ -242,10 +309,22 @@ void BleOta::setup() {
 // NVS к этому моменту уже инициализирован компонентом bthome (nvs_flash_init в его setup).
 void BleOta::diag_boot_() {
   const esp_reset_reason_t rr = esp_reset_reason();
+  this->diag_capture_();
   nvs_handle_t h;
   if (nvs_open("ms_diag", NVS_READWRITE, &h) != ESP_OK) {
     ESP_LOGW(TAG, "diag: nvs_open failed");
     return;
+  }
+  // 1.10.0: журнал сбоев питания - кольцо из 8 записей
+  {
+    size_t lsz = sizeof(this->diag_log_);
+    uint16_t n = 0;
+    if (nvs_get_blob(h, "log", this->diag_log_, &lsz) != ESP_OK || lsz != sizeof(this->diag_log_) ||
+        nvs_get_u16(h, "logn", &n) != ESP_OK) {
+      memset(this->diag_log_, 0, sizeof(this->diag_log_));
+      n = 0;
+    }
+    this->diag_log_n_ = n;
   }
   size_t sz = sizeof(this->diag_);
   if (nvs_get_blob(h, "cnt", this->diag_, &sz) != ESP_OK || sz != sizeof(this->diag_))
@@ -270,6 +349,27 @@ void BleOta::diag_boot_() {
     this->diag_last_ = (uint8_t) rr;
     nvs_set_blob(h, "cnt", this->diag_, sizeof(this->diag_));
     nvs_set_u8(h, "last", this->diag_last_);
+    // 1.10.0: сбой питания / краш - последнее сохранённое состояние в журнал. Программные сбросы
+    // (OTA, restart) и сбросы от USB/терминала не пишем: они забили бы кольцо.
+    if (idx == DIAG_POWERON || idx == DIAG_BROWNOUT || idx == DIAG_PANIC || idx == DIAG_WDT) {
+      uint64_t st = 0;
+      const bool has_st = nvs_get_u64(h, "st", &st) == ESP_OK;
+      if (this->diag_log_n_ < 0xFFFF)
+        this->diag_log_n_++;
+      uint8_t *e = this->diag_log_[(this->diag_log_n_ - 1) % DIAG_LOG_N];
+      memset(e, 0, DIAG_LOG_SZ);
+      e[0] = 1;  // версия формата
+      e[1] = this->diag_log_n_ & 0xFF;
+      e[2] = this->diag_log_n_ >> 8;
+      e[3] = (uint8_t) rr;
+      e[4] = (uint8_t) esp_rom_get_reset_reason(0);
+      e[5] = (this->diag_prev_rtc_ok_ ? 0x80 : 0) | (this->diag_prev_stage_ & 0x7F);
+      for (int i = 0; i < 8; i++)
+        e[6 + i] = (uint8_t) (st >> (8 * i));
+      e[14] = has_st ? 1 : 0;
+      nvs_set_blob(h, "log", this->diag_log_, sizeof(this->diag_log_));
+      nvs_set_u16(h, "logn", this->diag_log_n_);
+    }
     nvs_commit(h);
     ESP_LOGW(TAG, "reset reason %d: poweron %u brownout %u panic %u wdt %u sw %u other %u", (int) rr,
              this->diag_[DIAG_POWERON], this->diag_[DIAG_BROWNOUT], this->diag_[DIAG_PANIC],
@@ -369,6 +469,7 @@ void BleOta::loop() {
 
   if (this->ev_connected_.exchange(false)) {
     ESP_LOGI(TAG, "client connected (conn %u)", (unsigned) this->conn_handle_.load());
+    this->diag_mark(7);  // журнал сбоев питания: клиент BLE подключён
     this->state_ = ST_IDLE;
     this->nonce_valid_ = false;
     this->conn_start_ms_ = now;
@@ -545,6 +646,26 @@ void BleOta::handle_command_() {
         r[4 + i * 2] = this->diag_[i] >> 8;
       }
       this->reply_(r, 3 + DIAG_N * 2);  // 15 байт — влезает в минимальный MTU (20)
+      break;
+    }
+    // 1.10.0: журнал сбоев питания. Запрос [0x17, back] (back = 0 - последняя запись).
+    // Ответ [0x97, статус, всего u16 LE, запись 16 байт] - 20 байт (минимальный MTU); нет такой
+    // записи - 4 байта. Запись: версия, номер u16, esp_reset_reason, причина ROM,
+    // bit7 «RTC цела» | метка стадии, состояние из NVS 8 байт, «состояние было», резерв.
+    case CMD_DIAG_LOG: {
+      r[0] = 0x97;
+      if (this->state_ == ST_IDLE) {
+        r[1] = ST_NOT_AUTH;
+        this->reply_(r, 2);
+        break;
+      }
+      r[1] = ST_OK;
+      r[2] = this->diag_log_n_ & 0xFF;
+      r[3] = this->diag_log_n_ >> 8;
+      if (this->diag_log_get(len >= 2 ? c[1] : 0, r + 4))
+        this->reply_(r, 4 + DIAG_LOG_SZ);
+      else
+        this->reply_(r, 4);
       break;
     }
     case CMD_BEGIN: {

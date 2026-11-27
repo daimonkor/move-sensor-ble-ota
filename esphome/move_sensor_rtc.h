@@ -7,6 +7,12 @@
 #include <esp_system.h>   // esp_reset_reason() — причина сброса (brownout и т.п.)
 #include <esp_app_desc.h> // esp_app_get_description() — SHA образа в Build Version
 #include <driver/gpio.h>
+#if __has_include(<driver/usb_serial_jtag.h>)
+#include <driver/usb_serial_jtag.h>   // usb_serial_jtag_is_connected() - флаг «USB-хост» в журнале сбоев
+#define MS_HAS_USJ 1
+#else
+#define MS_HAS_USJ 0
+#endif
 #include <sys/time.h>
 #include <cstdint>
 #include <cmath>
@@ -157,6 +163,18 @@ static inline uint32_t cap_sleep_ms(int64_t want_ms, uint32_t ci) {
 //           которую меряем сами: (замер без радио) − (первый замер под Wi-Fi).
 // 1.5.0: сглаженное напряжение покоя, последний %, среднее для пакета — в li_battery (restore: rtc)
 static RTC_DATA_ATTR float bat_factor_used = 0;  // Voltage factor, с которым посчитана история li_battery (2026-11-15)
+
+// ---- Журнал сбоев питания (1.10.0, 2026-11-28): см. components/bthome/ble_ota.h (diag_save).
+static uint8_t diag_cause = 0;        // что разбудило: 0 холодный старт, 1 таймер, 2 PIR, 3 сервисный переключатель
+static bool blink_after_tx = false;   // вспышка «занято» - после окна рекламы, а не вместе с ним
+// компьютер на USB (по кадрам SOF); зарядник без данных так не виден
+static inline bool usb_host() {
+#if MS_HAS_USJ
+  return usb_serial_jtag_is_connected();
+#else
+  return false;
+#endif
+}
 
 static uint8_t bat_phase = 0;   // 0 — до замера на старте, 1 — замер без радио, 2 — радио работает
 static float bat_v_boot = 0;    // замер без радио в этом пробуждении

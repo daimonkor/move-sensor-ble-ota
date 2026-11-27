@@ -88,6 +88,21 @@ class BleOta : public Component {
   uint16_t diag_brownout() const { return this->diag_[DIAG_BROWNOUT]; }
   uint16_t diag_crash() const { return this->diag_[DIAG_PANIC] + this->diag_[DIAG_WDT]; }  // как Crash count в HA
   uint8_t diag_last() const { return this->diag_last_; }
+  // 1.10.0 (2026-11-28): журнал сбоев питания. Последнее состояние датчика пишется в NVS
+  // (ключ "st", 8 байт) на пробуждении и перед сном, метки стадий внутри пробуждения - в RTC-память
+  // (RTC_NOINIT: переживает сброс без снятия питания, теряется при полном снятии). При загрузке после
+  // power on / brownout / panic / watchdog состояние копируется в кольцо из 8 записей (ключ "log").
+  // Стадии: 1 старт, 2 замер батареи, 3 проснулся (NVS), 4 пакет в эфир, 5 LED горит, 6 окно рекламы
+  // закончилось, 7 клиент BLE подключён, 8 засыпаю (NVS), 9 сервисный режим Wi-Fi (NVS).
+  void diag_mark(uint8_t stage);
+  // flags: bit0 USB-хост, bit1 заряд, bit2 занято, bit3 ждём отпускания PIR, bit4 батарея разряжена,
+  // bit5-6 вид сна (1 до движения, 2 таймер, 3 до отпускания PIR), bit7 сервисный режим
+  void diag_save(uint8_t stage, uint8_t cause, uint8_t flags, uint16_t vbat_mv, uint16_t a0_mv, uint16_t wake,
+                 uint16_t sleep_s);
+  uint16_t diag_log_total() const { return this->diag_log_n_; }
+  // back = 0 - последняя запись; false - такой записи нет
+  bool diag_log_get(uint8_t back, uint8_t *out16) const;
+  void diag_log_dump() const;
   // сброс Wi-Fi на сеть из прошивки по команде 0x12 — логика в YAML (флаг + save_wifi_sta)
   void set_wifi_reset_callback(std::function<void()> cb) { this->wifi_reset_cb_ = std::move(cb); }
   void set_test_mode_callback(std::function<void(uint8_t, uint16_t)> cb) { this->test_mode_cb_ = std::move(cb); }
@@ -153,6 +168,7 @@ class BleOta : public Component {
   void reset_session_();
   size_t settings_pack_(uint8_t *out);
   void diag_boot_();  // посчитать причину сброса этой загрузки (NVS)
+  void diag_capture_();  // один раз за загрузку: что осталось в RTC-памяти от прошлой работы
   void settings_apply_(const uint8_t *p, uint8_t mask, size_t len);
 
 #ifdef BLE_OTA_SETTINGS
@@ -184,6 +200,14 @@ class BleOta : public Component {
   enum { DIAG_POWERON = 0, DIAG_BROWNOUT, DIAG_PANIC, DIAG_WDT, DIAG_SW, DIAG_OTHER, DIAG_N };
   uint16_t diag_[DIAG_N]{};
   uint8_t diag_last_{0};
+  // журнал сбоев питания (1.10.0)
+  static const uint8_t DIAG_LOG_N = 8;
+  static const uint8_t DIAG_LOG_SZ = 16;
+  uint8_t diag_log_[DIAG_LOG_N][DIAG_LOG_SZ]{};
+  uint16_t diag_log_n_{0};       // сколько записей сделано всего (кольцо хранит последние 8)
+  bool diag_captured_{false};
+  bool diag_prev_rtc_ok_{false}; // метка в RTC-памяти уцелела: питание не снималось полностью
+  uint8_t diag_prev_stage_{0};   // последняя метка стадии из RTC-памяти
 
   // общее с host task
   std::atomic<uint16_t> conn_handle_{BLE_HS_CONN_HANDLE_NONE};
